@@ -1,0 +1,529 @@
+// CMS form definitions (labels, widgets, defaults) for every collection.
+// Validation stays in schema.ts; this file only describes how to edit.
+import type { z } from 'zod';
+import {
+  ARMOR_CLASSES,
+  ASSET_KINDS,
+  ASSET_PARAM_SCHEMAS,
+  ATTACK_KINDS,
+  BOT_STRATEGIES,
+  DAMAGE_TYPES,
+  ENV_ASSET_KINDS,
+  FORMATIONS,
+  PARTICLE_DIRECTIONS,
+  PARTICLE_SHAPES,
+  PROJECTILE_MODELS,
+  ROLES,
+  UNIT_ASSET_KINDS,
+  type AssetKind,
+  type CollectionName,
+  type ContentBundle,
+} from './schema';
+
+export type Field =
+  | { type: 'section'; label: string }
+  | { type: 'text' | 'textarea' | 'color' | 'bool'; key: string; label: string; help?: string; readOnlyOnEdit?: boolean }
+  | { type: 'number'; key: string; label: string; min?: number; max?: number; step?: number; help?: string }
+  | { type: 'slider'; key: string; label: string; min: number; max: number; step: number; help?: string }
+  | { type: 'range2'; key: string; label: string; min: number; max: number; step: number; help?: string }
+  | { type: 'select'; key: string; label: string; options: readonly string[]; help?: string }
+  | { type: 'ref' | 'refs'; key: string; label: string; collection: CollectionName; kinds?: readonly AssetKind[]; nullable?: boolean; help?: string };
+
+type Doc = Record<string, unknown>;
+
+export interface CollectionSpec {
+  label: string;
+  icon: string;
+  columns: Array<{ key: string; label: string }>;
+  fields(doc: Doc): Field[];
+  blank(bundle: ContentBundle): Doc;
+}
+
+export const ENUM_LABELS: Record<string, string> = {
+  melee: 'Cận chiến',
+  ranged: 'Tầm xa',
+  support: 'Hỗ trợ',
+  siege: 'Công thành',
+  projectile: 'Bắn đạn',
+  breath: 'Phun (hình nón)',
+  heal: 'Hồi máu',
+  blunt: 'Đập',
+  slash: 'Chém',
+  pierce: 'Đâm',
+  fire: 'Lửa',
+  magic: 'Phép',
+  unarmored: 'Không giáp',
+  light: 'Giáp nhẹ',
+  heavy: 'Giáp nặng',
+  beast: 'Quái thú',
+  balanced: 'Cân bằng',
+  rush: 'Xông lên',
+  tank: 'Trâu bò',
+  swarm: 'Bầy đàn',
+  elite: 'Tinh nhuệ',
+  counter: 'Khắc chế',
+  line: 'Hàng ngang',
+  wedge: 'Mũi nhọn',
+  flanks: 'Hai cánh',
+  blob: 'Cụm',
+  scatter: 'Rải rác',
+  up: 'Lên trên',
+  sphere: 'Mọi hướng',
+  hemisphere: 'Nửa cầu trên',
+  forward: 'Theo hướng bắn',
+  cube: 'Khối lập phương',
+  tetra: 'Tứ diện',
+  humanoid: 'Người',
+  horse: 'Ngựa',
+  elephant: 'Voi',
+  dragon: 'Rồng',
+  bird: 'Chim',
+  catapult: 'Máy bắn đá',
+  tree: 'Cây',
+  rock: 'Đá',
+  bush: 'Bụi cây',
+};
+
+const PARAM_LABELS: Record<string, string> = {
+  bulk: 'Độ mập',
+  skin: 'Màu da',
+  shirt: 'Màu áo',
+  pants: 'Màu quần',
+  boots: 'Màu giày',
+  armor: 'Giáp / trang phục',
+  armorColor: 'Màu giáp',
+  head: 'Mũ / đầu',
+  headColor: 'Màu mũ',
+  hair: 'Kiểu tóc',
+  hairColor: 'Màu tóc',
+  beard: 'Râu',
+  brows: 'Lông mày',
+  cape: 'Áo choàng',
+  capeColor: 'Màu áo choàng',
+  weapon: 'Vũ khí cầm tay',
+  offhand: 'Tay trái',
+  woodColor: 'Màu gỗ',
+  metalColor: 'Màu kim loại',
+  orbColor: 'Màu ngọc trượng',
+  shieldColor: 'Màu khiên',
+  coat: 'Màu lông',
+  mane: 'Màu bờm',
+  saddle: 'Màu yên',
+  barding: 'Giáp ngựa',
+  bardingColor: 'Màu giáp ngựa',
+  tusks: 'Có ngà',
+  tuskColor: 'Màu ngà',
+  fur: 'Lông dày (ma mút)',
+  howdah: 'Kiệu trên lưng',
+  blanket: 'Màu thảm',
+  body: 'Màu thân',
+  belly: 'Màu bụng',
+  wing: 'Màu cánh',
+  horn: 'Màu sừng',
+  eye: 'Màu mắt',
+  beak: 'Màu mỏ',
+  wood: 'Gỗ',
+  metal: 'Kim loại',
+  rope: 'Dây thừng',
+  type: 'Loại',
+  trunk: 'Màu thân cây',
+  leaf: 'Màu lá',
+  leaf2: 'Màu lá phụ',
+  height: 'Chiều cao',
+  color: 'Màu chính',
+  color2: 'Màu phụ',
+  roughness: 'Độ gồ ghề',
+  flatness: 'Độ dẹt',
+  berries: 'Có quả mọng',
+  berryColor: 'Màu quả',
+};
+
+interface ZodDefLike {
+  type: string;
+  innerType?: z.ZodType;
+}
+
+/** Form fields generated from the per-kind zod params schema. */
+export function assetParamFields(kind: AssetKind): Field[] {
+  const shape = (ASSET_PARAM_SCHEMAS[kind] as unknown as z.ZodObject).shape as Record<string, z.ZodType>;
+  return Object.entries(shape).map(([key, schema]): Field => {
+    let s = schema as unknown as { _zod: { def: ZodDefLike } };
+    while (s._zod.def.type === 'default' && s._zod.def.innerType) s = s._zod.def.innerType as unknown as typeof s;
+    const label = PARAM_LABELS[key] ?? key;
+    const path = `params.${key}`;
+    switch (s._zod.def.type) {
+      case 'enum':
+        return { type: 'select', key: path, label, options: (s as unknown as { options: string[] }).options };
+      case 'boolean':
+        return { type: 'bool', key: path, label };
+      case 'number': {
+        const n = s as unknown as { minValue: number | null; maxValue: number | null };
+        return { type: 'slider', key: path, label, min: n.minValue ?? 0, max: n.maxValue ?? 10, step: 0.05 };
+      }
+      default:
+        return { type: 'color', key: path, label };
+    }
+  });
+}
+
+export function assetParamDefaults(kind: AssetKind): Record<string, string | number | boolean> {
+  return ASSET_PARAM_SCHEMAS[kind].parse({}) as Record<string, string | number | boolean>;
+}
+
+const first = (list: Array<{ id: string }>) => list[0]?.id ?? '';
+const idField: Field = { type: 'text', key: 'id', label: 'ID', help: 'chữ thường, số, gạch ngang — không đổi được sau khi tạo', readOnlyOnEdit: true };
+const nameField: Field = { type: 'text', key: 'name', label: 'Tên hiển thị' };
+
+export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
+  factions: {
+    label: 'Phe phái',
+    icon: '🚩',
+    columns: [
+      { key: 'icon', label: '' },
+      { key: 'name', label: 'Tên' },
+      { key: 'color', label: 'Màu' },
+      { key: 'order', label: 'Thứ tự' },
+    ],
+    fields: () => [idField, nameField, { type: 'color', key: 'color', label: 'Màu phe' }, { type: 'text', key: 'icon', label: 'Biểu tượng (emoji)' }, { type: 'number', key: 'order', label: 'Thứ tự', step: 1 }],
+    blank: () => ({ id: '', name: 'Phe mới', color: '#888888', icon: '⚔️', order: 9 }),
+  },
+  units: {
+    label: 'Quân lính',
+    icon: '🪖',
+    columns: [
+      { key: 'name', label: 'Tên' },
+      { key: 'factionId', label: 'Phe' },
+      { key: 'role', label: 'Vai trò' },
+      { key: 'cost', label: 'Giá' },
+      { key: 'hp', label: 'Máu' },
+      { key: 'weaponId', label: 'Vũ khí' },
+    ],
+    fields: () => [
+      { type: 'section', label: 'Cơ bản' },
+      idField,
+      nameField,
+      { type: 'ref', key: 'factionId', label: 'Phe', collection: 'factions' },
+      { type: 'select', key: 'role', label: 'Vai trò (bot dùng để xếp đội hình)', options: ROLES },
+      { type: 'number', key: 'cost', label: 'Giá', min: 1, step: 10 },
+      { type: 'textarea', key: 'description', label: 'Mô tả' },
+      { type: 'section', label: 'Chỉ số chiến đấu' },
+      { type: 'number', key: 'hp', label: 'Máu', min: 1, step: 10 },
+      { type: 'slider', key: 'speed', label: 'Tốc độ (m/s)', min: 0, max: 15, step: 0.1 },
+      { type: 'number', key: 'mass', label: 'Khối lượng (người = 1)', min: 0.1, step: 0.1, help: 'càng nặng càng khó bị đánh bay' },
+      { type: 'select', key: 'armorClass', label: 'Loại giáp', options: ARMOR_CLASSES },
+      { type: 'slider', key: 'knockbackResist', label: 'Kháng đẩy lùi', min: 0, max: 1, step: 0.05 },
+      { type: 'slider', key: 'blockChance', label: 'Tỉ lệ đỡ đòn trực diện', min: 0, max: 0.95, step: 0.05 },
+      { type: 'slider', key: 'chargeBonus', label: 'Hệ số xung phong', min: 1, max: 5, step: 0.1 },
+      { type: 'number', key: 'trampleDamage', label: 'Sát thương giẫm đạp / giây', min: 0, step: 5 },
+      { type: 'section', label: 'Va chạm' },
+      { type: 'slider', key: 'radius', label: 'Bán kính (m)', min: 0.2, max: 6, step: 0.05 },
+      { type: 'slider', key: 'height', label: 'Chiều cao (m)', min: 0.3, max: 20, step: 0.1 },
+      { type: 'section', label: 'Vũ khí & mô hình' },
+      { type: 'ref', key: 'weaponId', label: 'Vũ khí', collection: 'weapons' },
+      { type: 'ref', key: 'modelId', label: 'Mô hình', collection: 'assets', kinds: UNIT_ASSET_KINDS },
+      { type: 'ref', key: 'riderModelId', label: 'Người cưỡi', collection: 'assets', kinds: ['humanoid'], nullable: true },
+      { type: 'section', label: 'Bay' },
+      { type: 'bool', key: 'flying', label: 'Biết bay' },
+      { type: 'slider', key: 'altitude', label: 'Độ cao bay (m)', min: 0, max: 40, step: 0.5 },
+    ],
+    blank: (b) => ({
+      id: '',
+      name: 'Lính mới',
+      factionId: first(b.factions),
+      description: '',
+      role: 'melee',
+      cost: 100,
+      hp: 100,
+      speed: 3.5,
+      mass: 1,
+      radius: 0.45,
+      height: 1.8,
+      armorClass: 'unarmored',
+      weaponId: first(b.weapons),
+      modelId: first(b.assets.filter((a) => a.kind === 'humanoid')),
+      riderModelId: null,
+      flying: false,
+      altitude: 0,
+      blockChance: 0,
+      chargeBonus: 1,
+      knockbackResist: 0,
+      trampleDamage: 0,
+    }),
+  },
+  weapons: {
+    label: 'Vũ khí & sát thương',
+    icon: '🗡️',
+    columns: [
+      { key: 'name', label: 'Tên' },
+      { key: 'attack', label: 'Kiểu' },
+      { key: 'damage', label: 'Sát thương' },
+      { key: 'damageType', label: 'Loại' },
+      { key: 'range', label: 'Tầm' },
+      { key: 'cooldown', label: 'Hồi chiêu' },
+    ],
+    fields: () => [
+      { type: 'section', label: 'Cơ bản' },
+      idField,
+      nameField,
+      { type: 'select', key: 'attack', label: 'Kiểu tấn công', options: ATTACK_KINDS },
+      { type: 'section', label: 'Sát thương' },
+      { type: 'number', key: 'damage', label: 'Sát thương mỗi đòn (hồi máu nếu kiểu = Hồi máu)', min: 0, step: 1 },
+      { type: 'select', key: 'damageType', label: 'Loại sát thương', options: DAMAGE_TYPES, help: 'nhân với bảng khắc chế giáp trong Cài đặt' },
+      { type: 'slider', key: 'range', label: 'Tầm (m)', min: 0.3, max: 120, step: 0.1 },
+      { type: 'slider', key: 'minRange', label: 'Tầm tối thiểu (m)', min: 0, max: 60, step: 0.5 },
+      { type: 'slider', key: 'cooldown', label: 'Thời gian hồi (s)', min: 0.05, max: 15, step: 0.05 },
+      { type: 'slider', key: 'windup', label: 'Thời gian vung (s)', min: 0, max: 3, step: 0.05 },
+      { type: 'section', label: 'Hiệu ứng vật lý' },
+      { type: 'number', key: 'knockback', label: 'Lực đẩy lùi', min: 0, step: 1 },
+      { type: 'number', key: 'knockUp', label: 'Lực hất tung', min: 0, step: 0.5 },
+      { type: 'slider', key: 'cleaveArc', label: 'Góc quét (độ, 0 = 1 mục tiêu)', min: 0, max: 360, step: 5 },
+      { type: 'number', key: 'maxTargets', label: 'Số mục tiêu tối đa mỗi đòn', min: 1, step: 1 },
+      { type: 'slider', key: 'splashRadius', label: 'Bán kính nổ lan (m)', min: 0, max: 30, step: 0.5 },
+      { type: 'section', label: 'Đạn (kiểu Bắn đạn)' },
+      { type: 'ref', key: 'projectileId', label: 'Loại đạn', collection: 'projectiles', nullable: true },
+      { type: 'slider', key: 'projectileSpeed', label: 'Tốc độ ngang của đạn (m/s)', min: 1, max: 120, step: 1, help: 'chậm = quỹ đạo vòng cung cao' },
+      { type: 'slider', key: 'spread', label: 'Độ lệch (m mỗi 10m)', min: 0, max: 10, step: 0.1 },
+      { type: 'number', key: 'volley', label: 'Số viên mỗi loạt', min: 1, step: 1 },
+      { type: 'section', label: 'Particle' },
+      { type: 'ref', key: 'hitParticleId', label: 'Khi trúng', collection: 'particles', nullable: true },
+      { type: 'ref', key: 'fireParticleId', label: 'Khi ra đòn / phun', collection: 'particles', nullable: true },
+    ],
+    blank: () => ({
+      id: '',
+      name: 'Vũ khí mới',
+      attack: 'melee',
+      damage: 20,
+      damageType: 'slash',
+      range: 1.2,
+      minRange: 0,
+      cooldown: 1,
+      windup: 0.3,
+      knockback: 3,
+      knockUp: 0,
+      cleaveArc: 0,
+      maxTargets: 1,
+      splashRadius: 0,
+      projectileId: null,
+      projectileSpeed: 20,
+      spread: 0,
+      volley: 1,
+      hitParticleId: null,
+      fireParticleId: null,
+    }),
+  },
+  projectiles: {
+    label: 'Đạn',
+    icon: '🏹',
+    columns: [
+      { key: 'name', label: 'Tên' },
+      { key: 'model', label: 'Mô hình' },
+      { key: 'gravity', label: 'Trọng lực' },
+      { key: 'hitRadius', label: 'Bán kính trúng' },
+    ],
+    fields: () => [
+      idField,
+      nameField,
+      { type: 'select', key: 'model', label: 'Mô hình', options: PROJECTILE_MODELS },
+      { type: 'slider', key: 'scale', label: 'Tỉ lệ', min: 0.1, max: 5, step: 0.05 },
+      { type: 'color', key: 'color', label: 'Màu nhấn (#ffffff = mặc định)' },
+      { type: 'slider', key: 'gravity', label: 'Trọng lực', min: 0, max: 40, step: 0.1 },
+      { type: 'slider', key: 'hitRadius', label: 'Bán kính trúng (m)', min: 0.05, max: 3, step: 0.05 },
+      { type: 'slider', key: 'lifetime', label: 'Thời gian sống (s)', min: 0.5, max: 30, step: 0.5 },
+      { type: 'bool', key: 'stick', label: 'Cắm xuống đất khi rơi' },
+      { type: 'ref', key: 'trailParticleId', label: 'Vệt bay', collection: 'particles', nullable: true },
+      { type: 'ref', key: 'impactParticleId', label: 'Khi chạm', collection: 'particles', nullable: true },
+    ],
+    blank: () => ({ id: '', name: 'Đạn mới', model: 'arrow', scale: 1, color: '#ffffff', gravity: 9.8, hitRadius: 0.3, lifetime: 8, trailParticleId: null, impactParticleId: null, stick: false }),
+  },
+  particles: {
+    label: 'Particle',
+    icon: '✨',
+    columns: [
+      { key: 'name', label: 'Tên' },
+      { key: 'shape', label: 'Hình' },
+      { key: 'count', label: 'Số hạt' },
+      { key: 'colorStart', label: 'Màu đầu' },
+      { key: 'colorEnd', label: 'Màu cuối' },
+    ],
+    fields: () => [
+      idField,
+      nameField,
+      { type: 'section', label: 'Hình dạng' },
+      { type: 'select', key: 'shape', label: 'Hình hạt', options: PARTICLE_SHAPES },
+      { type: 'bool', key: 'additive', label: 'Phát sáng (cộng màu — mờ dần về màu cuối)' },
+      { type: 'range2', key: 'size', label: 'Kích thước đầu → cuối', min: 0, max: 5, step: 0.01 },
+      { type: 'color', key: 'colorStart', label: 'Màu đầu' },
+      { type: 'color', key: 'colorEnd', label: 'Màu cuối' },
+      { type: 'section', label: 'Phát xạ' },
+      { type: 'number', key: 'count', label: 'Số hạt mỗi lần nổ', min: 1, max: 400, step: 1 },
+      { type: 'number', key: 'rate', label: 'Số hạt / giây (khi làm vệt)', min: 0, step: 1 },
+      { type: 'slider', key: 'emitRadius', label: 'Bán kính vùng phát (m)', min: 0, max: 5, step: 0.05 },
+      { type: 'select', key: 'direction', label: 'Hướng bay', options: PARTICLE_DIRECTIONS },
+      { type: 'slider', key: 'spread', label: 'Độ tỏa', min: 0, max: 1, step: 0.01 },
+      { type: 'section', label: 'Chuyển động' },
+      { type: 'range2', key: 'lifetime', label: 'Thời gian sống min → max (s)', min: 0.05, max: 10, step: 0.05 },
+      { type: 'range2', key: 'speed', label: 'Tốc độ min → max', min: 0, max: 60, step: 0.1 },
+      { type: 'slider', key: 'gravity', label: 'Trọng lực (âm = bay lên)', min: -40, max: 60, step: 0.5 },
+      { type: 'slider', key: 'drag', label: 'Lực cản', min: 0, max: 10, step: 0.1 },
+      { type: 'slider', key: 'spin', label: 'Xoay', min: 0, max: 40, step: 0.5 },
+    ],
+    blank: () => ({
+      id: '',
+      name: 'Particle mới',
+      shape: 'cube',
+      additive: false,
+      count: 12,
+      rate: 30,
+      lifetime: [0.4, 0.9],
+      speed: [1, 4],
+      direction: 'hemisphere',
+      spread: 0.5,
+      gravity: 9.8,
+      drag: 0.5,
+      size: [0.2, 0.02],
+      colorStart: '#ffffff',
+      colorEnd: '#999999',
+      spin: 3,
+      emitRadius: 0.1,
+    }),
+  },
+  assets: {
+    label: 'Asset 3D',
+    icon: '🧱',
+    columns: [
+      { key: 'name', label: 'Tên' },
+      { key: 'kind', label: 'Loại' },
+      { key: 'scale', label: 'Tỉ lệ' },
+      { key: 'seed', label: 'Seed' },
+    ],
+    fields: (doc) => [
+      { type: 'section', label: 'Mô hình procedural' },
+      idField,
+      nameField,
+      { type: 'select', key: 'kind', label: 'Loại mô hình', options: ASSET_KINDS },
+      { type: 'slider', key: 'scale', label: 'Tỉ lệ', min: 0.1, max: 6, step: 0.05 },
+      { type: 'number', key: 'seed', label: 'Seed biến thể', min: 0, step: 1 },
+      { type: 'section', label: 'Tham số' },
+      ...assetParamFields((ASSET_KINDS as readonly string[]).includes(doc.kind as string) ? (doc.kind as AssetKind) : 'humanoid'),
+    ],
+    blank: () => ({ id: '', name: 'Asset mới', kind: 'humanoid', scale: 1, seed: 1, params: assetParamDefaults('humanoid') }),
+  },
+  maps: {
+    label: 'Bản đồ',
+    icon: '🗺️',
+    columns: [
+      { key: 'name', label: 'Tên' },
+      { key: 'size', label: 'Kích thước' },
+      { key: 'river.enabled', label: 'Sông' },
+      { key: 'budget', label: 'Ngân sách' },
+    ],
+    fields: () => [
+      { type: 'section', label: 'Địa hình' },
+      idField,
+      nameField,
+      { type: 'number', key: 'seed', label: 'Seed địa hình', min: 0, step: 1 },
+      { type: 'slider', key: 'size', label: 'Kích thước (m)', min: 60, max: 300, step: 5 },
+      { type: 'slider', key: 'heightScale', label: 'Độ cao đồi (m)', min: 0, max: 20, step: 0.1 },
+      { type: 'slider', key: 'hilliness', label: 'Độ lượn sóng', min: 0.2, max: 4, step: 0.05 },
+      { type: 'slider', key: 'deployDepth', label: 'Chiều sâu vùng triển khai (m)', min: 5, max: 80, step: 1 },
+      { type: 'number', key: 'budget', label: 'Ngân sách mặc định', min: 100, step: 100 },
+      { type: 'section', label: 'Sông' },
+      { type: 'bool', key: 'river.enabled', label: 'Có sông ngang giữa hai phe' },
+      { type: 'slider', key: 'river.width', label: 'Độ rộng (m)', min: 2, max: 30, step: 0.5 },
+      { type: 'slider', key: 'river.meander', label: 'Độ uốn khúc (m)', min: 0, max: 40, step: 0.5 },
+      { type: 'section', label: 'Cây / đá / bụi (số lượng mỗi hecta)' },
+      { type: 'slider', key: 'trees.perHectare', label: 'Mật độ cây', min: 0, max: 200, step: 1 },
+      { type: 'refs', key: 'trees.kinds', label: 'Loại cây', collection: 'assets', kinds: ['tree'] },
+      { type: 'slider', key: 'rocks.perHectare', label: 'Mật độ đá', min: 0, max: 100, step: 1 },
+      { type: 'refs', key: 'rocks.kinds', label: 'Loại đá', collection: 'assets', kinds: ['rock'] },
+      { type: 'slider', key: 'bushes.perHectare', label: 'Mật độ bụi', min: 0, max: 200, step: 1 },
+      { type: 'refs', key: 'bushes.kinds', label: 'Loại bụi', collection: 'assets', kinds: ['bush'] },
+      { type: 'section', label: 'Màu sắc & bầu trời' },
+      { type: 'color', key: 'grassColor', label: 'Cỏ' },
+      { type: 'color', key: 'dirtColor', label: 'Đất' },
+      { type: 'color', key: 'sandColor', label: 'Cát' },
+      { type: 'color', key: 'waterColor', label: 'Nước' },
+      { type: 'color', key: 'skyTop', label: 'Trời (đỉnh)' },
+      { type: 'color', key: 'skyBottom', label: 'Trời (chân)' },
+      { type: 'slider', key: 'fog', label: 'Sương mù', min: 0, max: 1, step: 0.05 },
+    ],
+    blank: (b) => ({
+      id: '',
+      name: 'Bản đồ mới',
+      seed: Math.floor(Math.random() * 100000),
+      size: 140,
+      heightScale: 3,
+      hilliness: 1,
+      river: { enabled: false, width: 8, meander: 10 },
+      trees: { perHectare: 10, kinds: b.assets.filter((a) => a.kind === 'tree').slice(0, 1).map((a) => a.id) },
+      rocks: { perHectare: 6, kinds: b.assets.filter((a) => a.kind === 'rock').slice(0, 1).map((a) => a.id) },
+      bushes: { perHectare: 20, kinds: b.assets.filter((a) => a.kind === 'bush').slice(0, 1).map((a) => a.id) },
+      grassColor: '#6fae4b',
+      dirtColor: '#8a6a3f',
+      sandColor: '#d9c58a',
+      waterColor: '#3a8fd0',
+      skyTop: '#5aa8f0',
+      skyBottom: '#d6ecff',
+      fog: 0.25,
+      deployDepth: 28,
+      budget: 3000,
+    }),
+  },
+  bots: {
+    label: 'Bot AI',
+    icon: '🤖',
+    columns: [
+      { key: 'name', label: 'Tên' },
+      { key: 'difficulty', label: 'Độ khó' },
+      { key: 'strategy', label: 'Chiến thuật' },
+      { key: 'budgetMultiplier', label: '× Tiền' },
+      { key: 'reactive', label: 'Khắc chế' },
+    ],
+    fields: () => [
+      idField,
+      nameField,
+      { type: 'textarea', key: 'description', label: 'Mô tả (hiện cho người chơi)' },
+      { type: 'slider', key: 'difficulty', label: 'Độ khó (chọn quân hiệu quả hơn)', min: 1, max: 5, step: 1 },
+      { type: 'slider', key: 'budgetMultiplier', label: 'Hệ số ngân sách so với người chơi', min: 0.2, max: 5, step: 0.05 },
+      { type: 'select', key: 'strategy', label: 'Chiến thuật chọn quân', options: BOT_STRATEGIES },
+      { type: 'select', key: 'formation', label: 'Đội hình', options: FORMATIONS },
+      { type: 'bool', key: 'reactive', label: 'Xếp quân sau khi xem đội hình người chơi' },
+      { type: 'slider', key: 'randomness', label: 'Độ ngẫu nhiên', min: 0, max: 1, step: 0.05 },
+      { type: 'number', key: 'maxUnits', label: 'Số lính tối đa', min: 1, step: 1 },
+      { type: 'refs', key: 'factionIds', label: 'Chỉ dùng các phe (bỏ trống = tất cả)', collection: 'factions' },
+    ],
+    blank: () => ({ id: '', name: 'Bot mới', description: '', difficulty: 3, budgetMultiplier: 1, strategy: 'balanced', factionIds: [], reactive: false, formation: 'line', randomness: 0.3, maxUnits: 100 }),
+  },
+};
+
+export const SETTINGS_FIELDS: Field[] = [
+  { type: 'number', key: 'maxUnitsPerSide', label: 'Số lính tối đa mỗi phe', min: 1, max: 500, step: 1 },
+  { type: 'number', key: 'battleTimeLimit', label: 'Giới hạn thời gian trận (s)', min: 30, step: 10 },
+  { type: 'slider', key: 'gravity', label: 'Trọng lực khi lính bị hất tung', min: 1, max: 40, step: 0.1 },
+  { type: 'bool', key: 'friendlyFire', label: 'Sát thương nổ lan trúng cả quân mình' },
+  { type: 'number', key: 'ragdollLimit', label: 'Số ragdoll vật lý cùng lúc', min: 0, max: 400, step: 5, help: 'giảm nếu máy yếu' },
+  { type: 'number', key: 'corpseLimit', label: 'Số xác giữ lại trên sân', min: 0, step: 50 },
+  { type: 'ref', key: 'deathParticleId', label: 'Particle khi tử trận', collection: 'particles', nullable: true },
+  { type: 'ref', key: 'splashParticleId', label: 'Particle nước bắn', collection: 'particles', nullable: true },
+  { type: 'ref', key: 'landParticleId', label: 'Particle tiếp đất', collection: 'particles', nullable: true },
+];
+
+export function isEnvKind(kind: string): boolean {
+  return (ENV_ASSET_KINDS as readonly string[]).includes(kind);
+}
+
+export function getPath(obj: unknown, path: string): unknown {
+  let cur: unknown = obj;
+  for (const k of path.split('.')) {
+    if (cur == null || typeof cur !== 'object') return undefined;
+    cur = (cur as Record<string, unknown>)[k];
+  }
+  return cur;
+}
+
+export function setPath<T extends Doc>(obj: T, path: string, value: unknown): T {
+  const [head, ...rest] = path.split('.');
+  const copy = { ...obj } as Doc;
+  copy[head] = rest.length ? setPath((obj[head] as Doc) ?? {}, rest.join('.'), value) : value;
+  return copy as T;
+}

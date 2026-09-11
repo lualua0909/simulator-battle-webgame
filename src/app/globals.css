@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-display: var(--font-bungee), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme {
+  --color-ink: #1f1a14;
+  --color-paper: #f6eedb;
+  --color-parch: #efe2c2;
+  --color-blue-team: #2f6fe0;
+  --color-red-team: #d8373a;
+  --color-gold: #f2b83a;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Chunky game button */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-white px-4 py-2 font-bold text-ink shadow-[0_4px_0_0_var(--color-ink)] transition active:translate-y-[3px] active:shadow-[0_1px_0_0_var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-50;
+}
+.btn-gold {
+  @apply bg-gold;
+}
+.btn-blue {
+  @apply bg-blue-team text-white;
+}
+.btn-red {
+  @apply bg-red-team text-white;
+}
+.panel {
+  @apply rounded-2xl border-2 border-ink bg-paper/95 shadow-[0_6px_0_0_rgba(31,26,20,0.85)];
+}
+.field {
+  @apply w-full rounded-lg border-2 border-ink/70 bg-white px-2 py-1 text-sm outline-none focus:border-ink;
+}
+
+/* Cinematic letterbox */
+@keyframes cine-bar-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes cine-title-in {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+}
+.cine-bar {
+  animation: cine-bar-in 0.45s ease-out;
+}
+.cine-title {
+  -webkit-text-stroke: 6px #fff;
+  paint-order: stroke fill;
+  animation: cine-title-in 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
