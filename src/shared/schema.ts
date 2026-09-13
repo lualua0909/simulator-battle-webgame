@@ -1,6 +1,7 @@
 // Game content schema — single source of truth for the CMS (validation + forms),
 // the simulation (types) and the online server (army validation).
 import { z } from 'zod';
+import { checkSculptSpec, sculptSpecSchema, type SculptRig } from './sculpt';
 
 export const DAMAGE_TYPES = ['blunt', 'slash', 'pierce', 'fire', 'magic'] as const;
 export const ARMOR_CLASSES = ['unarmored', 'light', 'heavy', 'beast', 'siege'] as const;
@@ -238,6 +239,26 @@ export type TreeParams = z.infer<typeof treeParamsSchema>;
 export type RockParams = z.infer<typeof rockParamsSchema>;
 export type BushParams = z.infer<typeof bushParamsSchema>;
 
+/** Animation rig each asset kind uses; an img2threejs model must match it to replace the asset. */
+export const RIG_OF_KIND = {
+  humanoid: 'humanoid',
+  horse: 'quadruped',
+  elephant: 'quadruped',
+  dragon: 'dragon',
+  bird: 'bird',
+  catapult: 'catapult',
+  tree: 'static',
+  rock: 'static',
+  bush: 'static',
+} as const satisfies Record<AssetKind, SculptRig>;
+
+/** img2threejs studio model that replaces the procedural preset (null = procedural). */
+export const assetSculptSchema = z.object({
+  studioId: z.string().max(64),
+  version: z.number().int().min(1),
+  spec: sculptSpecSchema,
+});
+
 export const assetSchema = z
   .object({
     id: idSchema,
@@ -246,6 +267,7 @@ export const assetSchema = z
     scale: z.number().min(0.1).max(10).default(1),
     seed: z.number().int().min(0).max(1_000_000).default(1),
     params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
+    sculpt: assetSculptSchema.nullable().default(null),
   })
   .superRefine((asset, ctx) => {
     const result = ASSET_PARAM_SCHEMAS[asset.kind].safeParse(asset.params);
@@ -253,6 +275,12 @@ export const assetSchema = z
       for (const issue of result.error.issues) {
         ctx.addIssue({ code: 'custom', message: issue.message, path: ['params', ...issue.path.map(String)] });
       }
+    }
+    if (asset.sculpt && asset.sculpt.spec.rig !== RIG_OF_KIND[asset.kind]) {
+      ctx.addIssue({ code: 'custom', message: `model img2threejs dùng rig ${asset.sculpt.spec.rig}, asset loại ${asset.kind} cần rig ${RIG_OF_KIND[asset.kind]}`, path: ['sculpt'] });
+    }
+    for (const issue of asset.sculpt ? checkSculptSpec(asset.sculpt.spec) : []) {
+      if (issue.level === 'fail') ctx.addIssue({ code: 'custom', message: issue.message, path: ['sculpt', 'spec'] });
     }
   });
 

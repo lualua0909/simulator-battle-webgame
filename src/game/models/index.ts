@@ -1,6 +1,7 @@
 // Asset preset → procedural model, plus unit composition (mount + rider) and template cache.
 import * as THREE from 'three';
 import { parseAssetParams, type AssetDef, type UnitDef } from '@/shared/schema';
+import { buildSculptModel } from '../sculpt/build';
 import { bakeModel, mergeTemplate, type ModelTemplate } from './bake';
 import { createBirdModel } from './bird';
 import { createCatapultModel } from './catapult';
@@ -15,6 +16,13 @@ export type { ModelTemplate } from './bake';
 export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.Group {
   const seed = seedOverride ?? asset.seed;
   let root: THREE.Group;
+  // An img2threejs studio model replaces the procedural preset.
+  if (asset.sculpt) {
+    root = buildSculptModel(asset.sculpt.spec);
+    root.scale.setScalar(asset.scale);
+    root.userData.assetId = asset.id;
+    return root;
+  }
   switch (asset.kind) {
     case 'humanoid':
       root = createHumanoidModel(parseAssetParams('humanoid', asset.params));
@@ -64,8 +72,9 @@ export function createUnitModel(unit: Pick<UnitDef, 'modelId' | 'riderModelId'>,
       rider.userData.prefix = 'rider.';
       // Socket marks where the rider's hips sit; undo the mount's scale for the rider.
       const mountScale = base?.scale ?? 1;
+      const hipY = rider.children.find((c) => c.userData.part === 'hips')?.position.y ?? HIP_Y;
       rider.scale.setScalar(riderAsset.scale / mountScale);
-      rider.position.y = (-HIP_Y * riderAsset.scale) / mountScale;
+      rider.position.y = (-hipY * riderAsset.scale) / mountScale;
       saddle.add(rider);
     }
   }

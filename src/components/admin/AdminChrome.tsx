@@ -25,6 +25,7 @@ export function AdminNav() {
       {COLLECTIONS.map((c) => item(`/admin/c/${c}`, `${COLLECTION_SPECS[c].icon} ${COLLECTION_SPECS[c].label}`))}
       {item('/admin/settings', '⚙️ Cài đặt & khắc chế')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
+      {item('/admin/studio', '🧪 Xưởng img2threejs')}
       {item('/models', '🧱 Xưởng mô hình')}
       {item('/play?mode=ai', '⚔️ Mở game')}
       <button

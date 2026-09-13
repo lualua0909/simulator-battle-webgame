@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { ASSET_KINDS, type AssetKind, type CollectionName, type ConfigBundle } from '@/shared/schema';
+import { ASSET_KINDS, type AssetDef, type AssetKind, type CollectionName, type ConfigBundle } from '@/shared/schema';
 import { assetParamDefaults, COLLECTION_SPECS } from '@/shared/fields';
 import { useConfig } from '@/game/useConfig';
 import { api, ApiError, detailsToErrors } from './api';
@@ -11,6 +11,10 @@ import DocForm from './DocForm';
 import { AssetPreview, BotTester, FactionPreview, MapPreview, ParticlePreview, ProjectilePreview, UnitPreview, WeaponPreview } from './Previews';
 
 type Doc = Record<string, unknown>;
+
+function isSculpted(doc: Doc | null): doc is Doc & { sculpt: NonNullable<AssetDef['sculpt']> } {
+  return Boolean(doc && doc.sculpt);
+}
 
 export default function DocEditor({ collection, id, from }: { collection: CollectionName; id: string; from?: string }) {
   const router = useRouter();
@@ -130,6 +134,19 @@ export default function DocEditor({ collection, id, from }: { collection: Collec
               ))}
             </ul>
           )}
+        </div>
+      )}
+      {collection === 'assets' && isSculpted(doc) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink bg-gold/30 px-3 py-2 text-sm">
+          <span>
+            🧪 Asset đang dùng model img2threejs <b>{doc.sculpt.spec.name}</b> (v{doc.sculpt.version}). Các tham số procedural bên dưới chỉ có tác dụng khi hoàn tác.
+          </span>
+          <Link className="underline" href={`/admin/studio?job=${doc.sculpt.studioId}`}>
+            Mở trong Xưởng
+          </Link>
+          <button className="btn ml-auto px-2 py-0.5 text-xs" onClick={() => change({ ...doc, sculpt: null })}>
+            Hoàn tác về procedural
+          </button>
         </div>
       )}
       {!doc ? (

@@ -157,7 +157,7 @@ const units: UnitDef[] = [
   U({ id: 'dragon', name: 'Rồng lửa', factionId: 'huyen-thoai', role: 'ranged', cost: 5000, hp: 6000, speed: 5, mass: 50, radius: 3, height: 3, armorClass: 'beast', flying: true, altitude: 9, knockbackResist: 0.95, weaponId: 'dragon-breath', modelId: 'm-dragon', description: 'Phun lửa từ trên cao.' }),
 ];
 
-const A = (a: Omit<AssetDef, 'scale' | 'seed'> & Partial<Pick<AssetDef, 'scale' | 'seed'>>): AssetDef => ({ scale: 1, seed: 1, ...a });
+const A = (a: Omit<AssetDef, 'scale' | 'seed' | 'sculpt'> & Partial<Pick<AssetDef, 'scale' | 'seed'>>): AssetDef => ({ scale: 1, seed: 1, sculpt: null, ...a });
 
 const assets: AssetDef[] = [
   A({ id: 'm-clubber', name: 'Chiến binh gậy', kind: 'humanoid', params: { skin: '#e2a878', shirt: '#8a5a2b', pants: '#6b4424', armor: 'loincloth', armorColor: '#a8743c', hair: 'short', hairColor: '#2a1a10', weapon: 'club' } }),
@@ -178,7 +178,7 @@ const assets: AssetDef[] = [
   A({ id: 'm-wizard', name: 'Pháp sư', kind: 'humanoid', params: { shirt: '#4a2a8a', armor: 'robe', armorColor: '#4a2a8a', head: 'wizard', headColor: '#3a2070', hair: 'long', hairColor: '#e8e8e8', beard: 'long', weapon: 'staff', orbColor: '#ff7a1a' } }),
   A({ id: 'm-giant', name: 'Người khổng lồ', kind: 'humanoid', scale: 2.5, params: { bulk: 1.4, skin: '#c9a27a', shirt: '#7a6a4a', pants: '#5a4a32', armor: 'loincloth', armorColor: '#6b4424', hair: 'none', beard: 'short', hairColor: '#4a3020', weapon: 'bigclub' } }),
   A({ id: 'm-warhorse', name: 'Chiến mã', kind: 'horse', params: { coat: '#6b4226', mane: '#1e140c', barding: true, bardingColor: '#2f5fb3' } }),
-  A({ id: 'm-mammoth', name: 'Voi ma mút', kind: 'elephant', scale: 1.15, params: { skin: '#6b4424', fur: true, tusks: true, tuskColor: '#f1ead8', howdah: false } }),
+  A({ id: 'm-mammoth', name: 'Voi ma mút', kind: 'elephant', scale: 1.15, params: { skin: '#8c9591', fur: true, tusks: true, tuskColor: '#f1ead8', howdah: false } }),
   A({ id: 'm-war-elephant', name: 'Chiến tượng', kind: 'elephant', params: { skin: '#8d8f96', tusks: true, howdah: true, blanket: '#d23c3c' } }),
   A({ id: 'm-eagle', name: 'Đại bàng', kind: 'bird', scale: 1.4, params: {} }),
   A({ id: 'm-dragon', name: 'Rồng lửa', kind: 'dragon', params: {} }),

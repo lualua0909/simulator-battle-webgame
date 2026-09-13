@@ -13,6 +13,7 @@
     "shots": "tsx scripts/screenshots.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@dimforge/rapier3d-compat": "0.20.0",
     "better-sqlite3": "^13.0.3",
     "next": "16.3.4",
