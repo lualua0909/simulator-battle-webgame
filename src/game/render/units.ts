@@ -257,7 +257,8 @@ export class UnitRenderer {
         }
       }
     }
-    let excess = this.corpses.filter((c) => !c.gone).length - settings.corpseLimit;
+    let excess = -settings.corpseLimit;
+    for (const c of this.corpses) if (!c.gone) excess++;
     for (const v of this.corpses) {
       if (excess <= 0) break;
       if (v.gone || v.ragdoll) continue;

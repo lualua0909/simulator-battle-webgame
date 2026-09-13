@@ -78,6 +78,13 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     setArmiesState(next);
   }, []);
 
+  /** Deployment undo stack (Ctrl/⌘+Z): one entry per click, drag, fill or clear. */
+  const history = useRef<Armies[]>([]);
+  const snapshot = useCallback(() => {
+    history.current.push(armiesRef.current);
+    if (history.current.length > 100) history.current.shift();
+  }, []);
+
   // ------------------------------------------------------------------ online
   const onStartRef = useRef<(s: BattleStart) => void>(() => {});
   const net = useOnline(mode === 'online', {
@@ -199,6 +206,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     if (p.type === 'down' && p.button === 0 && p.hit) {
       const del = tool === 'erase' || p.ctrl;
       paint.current = { active: true, erase: del, x: p.x, z: p.z };
+      snapshot();
       if (del) erase(p.x, p.z);
       else if (!place(p.x, p.z) && engine?.terrain && !engine.terrain.inZone(mySide, p.x, p.z)) flash(`Chỉ được đặt trong vùng phe ${SIDE_NAME[mySide]}`);
     } else if (p.type === 'move' && paint.current.active && p.hit && (p.shift || paint.current.erase)) {
@@ -210,8 +218,23 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         if (paint.current.erase) erase(p.x, p.z);
         else place(p.x, p.z);
       }
-    } else if (p.type === 'up') paint.current.active = false;
+    } else if (p.type === 'up' && paint.current.active) {
+      paint.current.active = false;
+      // Drop the entry if the stroke changed nothing.
+      const h = history.current;
+      if (h[h.length - 1] === armiesRef.current) h.pop();
+    }
   };
+
+  const undo = () => {
+    const prev = history.current.pop();
+    if (prev) setArmies(prev);
+  };
+
+  // Undo history belongs to one side on one map.
+  useEffect(() => {
+    history.current = [];
+  }, [mySide, mapVersion, phase]);
 
   // engine presentation per phase
   useEffect(() => {
@@ -332,6 +355,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const fillRandom = () => {
     if (!bundle || !engine?.terrain) return;
     const army = generateBotArmy({ bot: { ...RANDOM_FILL, maxUnits: maxUnits }, content: bundle, terrain: engine.terrain, side: mySide, budget, seed: randomSeed() });
+    snapshot();
     setArmies({ ...armiesRef.current, [mySide]: army });
   };
 
@@ -361,10 +385,16 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       }
       if (e.key === 'Escape' && phase === 'deploy') setTool('place');
       if (e.key.toLowerCase() === 'x' && phase === 'deploy') setTool((t) => (t === 'erase' ? 'place' : 'erase'));
+      if (e.key.toLowerCase() === 'z' && (e.ctrlKey || e.metaKey) && phase === 'deploy' && !locked) {
+        e.preventDefault();
+        undo();
+      }
+      const speedKey = { '1': 0.25, '2': 1, '3': 2, '4': 4 }[e.key];
+      if (speedKey && (phase === 'battle' || phase === 'result')) setSpeed(speedKey);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [phase, engine]);
+  });
 
   const totals = useMemo(() => ({ blue: armies.blue.length, red: armies.red.length }), [armies]);
   const resultSide: Side | undefined = mode === 'online' ? net.seat?.side : mode === 'ai' ? 'blue' : undefined;
@@ -441,7 +471,17 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={fillRandom}>
                   🎲 Ngẫu nhiên
                 </button>
-                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={() => setArmies({ ...armiesRef.current, [mySide]: [] })}>
+                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={undo} title="Ctrl/⌘+Z">
+                  ↶ Hoàn tác
+                </button>
+                <button
+                  className="btn px-2 py-1 text-sm"
+                  disabled={locked}
+                  onClick={() => {
+                    snapshot();
+                    setArmies({ ...armiesRef.current, [mySide]: [] });
+                  }}
+                >
                   Xóa hết
                 </button>
               </div>
@@ -459,7 +499,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             </div>
             <div className="mt-auto flex items-end gap-2">
               <div className="pointer-events-none hidden max-w-56 text-[11px] font-bold leading-tight text-ink/80 drop-shadow lg:block">
-                Chuột trái: đặt · Shift+kéo: rải · Ctrl/⌥+click hoặc X: xóa · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE
+                Chuột trái: đặt · Shift+kéo: rải · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE
               </div>
               <div className="flex-1">
                 <UnitPalette bundle={bundle} thumbs={thumbs} selected={selected} onSelect={(id) => (setSelected(id), setTool('place'))} budgetLeft={budget - spent} />

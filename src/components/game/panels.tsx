@@ -236,8 +236,8 @@ export function BattleHud(props: { stats: BattleStats; total: Record<Side, numbe
         <button className={`btn px-3 py-1 ${props.paused ? 'btn-gold' : ''}`} onClick={props.onPause} title="Space">
           {props.paused ? '▶' : '❚❚'}
         </button>
-        {[0.25, 1, 2, 4].map((s) => (
-          <button key={s} className={`btn px-2 py-1 text-sm ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed(s)}>
+        {[0.25, 1, 2, 4].map((s, i) => (
+          <button key={s} className={`btn px-2 py-1 text-sm ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed(s)} title={`Phím ${i + 1}`}>
             {s}×
           </button>
         ))}

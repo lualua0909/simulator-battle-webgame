@@ -124,6 +124,11 @@ export class Terrain {
     return h;
   }
 
+  /** Upper bound of height(): noise peak plus the rim hills (the river only lowers). */
+  get maxHeight(): number {
+    return this.heightScale + 7;
+  }
+
   inZone(side: Side, x: number, z: number): boolean {
     const zone = this.zones[side];
     return x >= zone.x0 && x <= zone.x1 && z >= zone.z0 && z <= zone.z1;

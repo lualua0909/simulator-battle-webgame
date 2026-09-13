@@ -116,7 +116,7 @@ export class BattleEngine {
     private readonly bundle: ConfigBundle,
     private readonly events: EngineEvents = {},
   ) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(1.75, window.devicePixelRatio));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -400,6 +400,8 @@ export class BattleEngine {
 
   /** Canvas snapshot (used for screenshots/share). */
   snapshot(): string {
+    // No preserveDrawingBuffer: render and read back in the same task.
+    this.renderer.render(this.scene, this.camera);
     return this.renderer.domElement.toDataURL('image/png');
   }
 
@@ -524,8 +526,12 @@ export class BattleEngine {
     this.raycaster.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
     const { origin, direction } = this.raycaster.ray;
     const at = (t: number) => this.tmp.copy(origin).addScaledVector(direction, t);
-    let prev = 0;
-    for (let t = 1; t < 900; t += 1) {
+    // Skip the stretch of ray above the highest possible terrain.
+    const top = terrain.maxHeight + 0.5;
+    if (origin.y > top && direction.y >= 0) return null;
+    const start = origin.y > top ? Math.floor((top - origin.y) / direction.y) : 0;
+    let prev = start;
+    for (let t = start + 1; t < start + 900; t += 1) {
       const p = at(t);
       if (p.y < terrain.height(p.x, p.z)) {
         let lo = prev;

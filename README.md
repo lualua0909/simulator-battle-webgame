@@ -39,7 +39,8 @@ Khi dev mà không đặt `ADMIN_PASSWORD`, mật khẩu admin là `admin`. Khi 
 - Chuột trái: đặt lính · **Shift + kéo**: rải hàng loạt · **Ctrl/⌥ + click** hoặc phím **X**: xóa
 - Camera: **lăn / pinch** zoom về phía con trỏ (zoom gần tự hạ góc nhìn) · **chuột phải kéo**: xoay + nghiêng · **chuột giữa** hoặc **Shift + chuột phải** kéo: kéo bản đồ (điểm đất dính theo con trỏ) · ngoài lúc xếp quân, **chuột trái kéo** cũng kéo bản đồ · **WASD / QE**: di chuyển, xoay
 - Cinematic: vào xếp quân → bay lướt bản đồ rồi hạ xuống sân mình; bấm bắt đầu → lướt từ quân địch về sau lưng quân mình (trận chờ bay xong); có bên thắng → lướt dọc quân thắng kèm pháo hoa. Click hoặc bấm phím bất kỳ để bỏ qua.
-- Trong trận: **Space** tạm dừng, tốc độ 0.25× – 4×
+- Xếp quân: **Ctrl/⌘ + Z** hoàn tác (mỗi lần click/kéo/ngẫu nhiên/xóa hết là một bước)
+- Trong trận: **Space** tạm dừng, tốc độ 0.25× – 4× (phím **1–4**)
 
 ## Kiến trúc
 

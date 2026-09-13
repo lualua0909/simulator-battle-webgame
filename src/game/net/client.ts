@@ -28,26 +28,41 @@ export function useOnline(enabled: boolean, handlers: OnlineHandlers) {
   const [seat, setSeat] = useState<Seat | null>(null);
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
+  /** Seat + name to reclaim after a dropped connection (a reconnect gets a new socket id). */
+  const rejoin = useRef<{ seat: Seat; name: string } | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
     const s: GameSocket = io({ path: '/socket.io', transports: ['websocket'] });
-    s.on('connect', () => setConnected(true));
+    s.on('connect', () => {
+      setConnected(true);
+      const r = rejoin.current;
+      if (!r) return;
+      s.emit('room:join', { code: r.seat.code, name: r.name, token: r.seat.token }, (res) => {
+        if (res.ok) return;
+        rejoin.current = null;
+        setSeat(null);
+        setRoom(null);
+      });
+    });
     s.on('disconnect', () => setConnected(false));
     s.on('room:state', setRoom);
     s.on('battle:start', (start) => handlersRef.current.onStart(start));
     s.on('battle:desync', ({ tick }) => handlersRef.current.onDesync(tick));
     setSocket(s);
     return () => {
+      rejoin.current = null;
       s.emit('room:leave');
       s.disconnect();
       setSocket(null);
     };
   }, [enabled]);
 
-  const remember = (res: AckResult<Seat>): AckResult<Seat> => {
+  const remember = (res: AckResult<Seat>, name: string): AckResult<Seat> => {
     if (res.ok) {
-      setSeat({ code: res.code, side: res.side, token: res.token });
+      const seat = { code: res.code, side: res.side, token: res.token };
+      rejoin.current = { seat, name };
+      setSeat(seat);
       try {
         sessionStorage.setItem(tokenKey(res.code), res.token);
       } catch {
@@ -58,7 +73,7 @@ export function useOnline(enabled: boolean, handlers: OnlineHandlers) {
   };
 
   const create = useCallback(
-    (name: string) => new Promise<AckResult<Seat>>((resolve) => (socket ? socket.emit('room:create', { name }, (r) => resolve(remember(r))) : resolve({ ok: false, error: 'Chưa kết nối' }))),
+    (name: string) => new Promise<AckResult<Seat>>((resolve) => (socket ? socket.emit('room:create', { name }, (r) => resolve(remember(r, name))) : resolve({ ok: false, error: 'Chưa kết nối' }))),
     [socket],
   );
 
@@ -72,7 +87,7 @@ export function useOnline(enabled: boolean, handlers: OnlineHandlers) {
         } catch {
           token = undefined;
         }
-        socket.emit('room:join', { code, name, token }, (r) => resolve(remember(r)));
+        socket.emit('room:join', { code, name, token }, (r) => resolve(remember(r, name)));
       }),
     [socket],
   );

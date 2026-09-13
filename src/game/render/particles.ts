@@ -63,17 +63,36 @@ export class ParticleSystem {
     this.tmpC2.set(def.colorEnd);
     for (let n = 0; n < count && this.alive < this.cap; n++) {
       const i = this.alive++;
-      const rx = (Math.random() * 2 - 1) * def.emitRadius;
-      const ry = (Math.random() * 2 - 1) * def.emitRadius;
-      const rz = (Math.random() * 2 - 1) * def.emitRadius;
-      this.p.set([x + rx, y + ry, z + rz], i * 3);
+      const P = i * 3;
+      const L = i * 7;
+      const C = i * 6;
+      const p = this.p;
+      p[P] = x + (Math.random() * 2 - 1) * def.emitRadius;
+      p[P + 1] = y + (Math.random() * 2 - 1) * def.emitRadius;
+      p[P + 2] = z + (Math.random() * 2 - 1) * def.emitRadius;
       const d = this.direction(def, dir);
       const speed = def.speed[0] + Math.random() * (def.speed[1] - def.speed[0]);
-      this.v.set([d.x * speed, d.y * speed, d.z * speed], i * 3);
-      this.r.set([Math.random() * 6, Math.random() * 6, Math.random() * 6], i * 3);
-      const life = def.lifetime[0] + Math.random() * (def.lifetime[1] - def.lifetime[0]);
-      this.life.set([0, life, def.size[0] * sizeMul, def.size[1] * sizeMul, def.spin * (Math.random() * 2 - 1), def.gravity, def.drag], i * 7);
-      this.col.set([this.tmpC.r, this.tmpC.g, this.tmpC.b, this.tmpC2.r, this.tmpC2.g, this.tmpC2.b], i * 6);
+      this.v[P] = d.x * speed;
+      this.v[P + 1] = d.y * speed;
+      this.v[P + 2] = d.z * speed;
+      this.r[P] = Math.random() * 6;
+      this.r[P + 1] = Math.random() * 6;
+      this.r[P + 2] = Math.random() * 6;
+      const life = this.life;
+      life[L] = 0;
+      life[L + 1] = def.lifetime[0] + Math.random() * (def.lifetime[1] - def.lifetime[0]);
+      life[L + 2] = def.size[0] * sizeMul;
+      life[L + 3] = def.size[1] * sizeMul;
+      life[L + 4] = def.spin * (Math.random() * 2 - 1);
+      life[L + 5] = def.gravity;
+      life[L + 6] = def.drag;
+      const col = this.col;
+      col[C] = this.tmpC.r;
+      col[C + 1] = this.tmpC.g;
+      col[C + 2] = this.tmpC.b;
+      col[C + 3] = this.tmpC2.r;
+      col[C + 4] = this.tmpC2.g;
+      col[C + 5] = this.tmpC2.b;
       this.bucket[i] = bucket;
     }
   }
