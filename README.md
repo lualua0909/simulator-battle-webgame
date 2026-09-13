@@ -18,7 +18,7 @@ npm run dev            # http://localhost:3000  (Next.js + Socket.IO chung một
 Production:
 
 ```bash
-cp .env.example .env   # đặt ADMIN_PASSWORD
+cp .env.example .env   # đặt FIREBASE_SERVICE_ACCOUNT, FIREBASE_ROOT_EMAILS
 npm run build
 npm start
 ```
@@ -30,8 +30,9 @@ npm start
 | `npm run db:reset` | khôi phục dữ liệu CMS mặc định |
 | `npm run shots -- models` | chụp ảnh mọi mô hình vào `.shots/models` (cần server đang chạy) |
 
-Biến môi trường: xem `.env.example` (`ADMIN_PASSWORD`, `SESSION_SECRET`, `DATABASE_PATH`, `PORT`, `ANTHROPIC_API_KEY`).
-Khi dev mà không đặt `ADMIN_PASSWORD`, mật khẩu admin là `admin`. Khi production mà thiếu thì admin bị khóa.
+Biến môi trường: xem `.env.example` (`FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_ROOT_EMAILS`, `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, `DATABASE_PATH`, `PORT`, `ANTHROPIC_API_KEY`).
+
+Tài khoản: Firebase Auth (email/mật khẩu + Google). Hồ sơ lưu ở Firestore `users/{uid}` (`role`: 0 root, 1 admin, 2 user; `fcmTokens`). Chỉ root/admin vào `/admin`; quản lý user ở `/admin/users`. Root đầu tiên: thêm email vào `FIREBASE_ROOT_EMAILS` rồi đăng nhập bằng Google. Firebase Console cần bật provider Email/Password + Google, và triển khai `firestore.rules` (client chỉ đọc hồ sơ của mình, mọi ghi đi qua server).
 
 > **Triển khai:** chế độ online cần Node server chạy lâu dài (VPS, Railway, Render, Fly.io…) vì dùng WebSocket và SQLite file. Không chạy được trên serverless (Vercel).
 

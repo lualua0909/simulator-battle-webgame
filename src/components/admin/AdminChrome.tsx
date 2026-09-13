@@ -5,11 +5,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { COLLECTIONS } from '@/shared/schema';
 import { COLLECTION_SPECS } from '@/shared/fields';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { api, ApiError } from './api';
 
 export function AdminNav() {
   const path = usePathname();
   const router = useRouter();
+  const { signOut } = useAuth();
   const item = (href: string, label: string, exact = false) => {
     const active = exact ? path === href : path.startsWith(href);
     return (
@@ -24,6 +26,7 @@ export function AdminNav() {
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Nội dung game</div>
       {COLLECTIONS.map((c) => item(`/admin/c/${c}`, `${COLLECTION_SPECS[c].icon} ${COLLECTION_SPECS[c].label}`))}
       {item('/admin/settings', '⚙️ Cài đặt & khắc chế')}
+      {item('/admin/users', '👥 Người dùng')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
       {item('/admin/studio', '🧪 Xưởng img2threejs')}
       {item('/models', '🧱 Xưởng mô hình')}
@@ -31,7 +34,7 @@ export function AdminNav() {
       <button
         className="mt-2 rounded-lg px-2 py-1.5 text-left text-sm font-bold hover:bg-white"
         onClick={async () => {
-          await api('/api/admin/logout', { method: 'POST' });
+          await signOut();
           router.push('/admin/login');
         }}
       >

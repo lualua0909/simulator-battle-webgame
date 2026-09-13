@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Be_Vietnam_Pro, Bungee } from 'next/font/google';
+import AuthProvider from '@/components/auth/AuthProvider';
 import './globals.css';
 
 const display = Bungee({ weight: '400', subsets: ['latin', 'vietnamese'], variable: '--font-bungee' });
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="vi" className={`${display.variable} ${body.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

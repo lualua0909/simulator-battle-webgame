@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import AuthButton from '@/components/auth/AuthButton';
 
 const MODES = [
   { href: '/play?mode=ai', title: 'Đấu với máy', desc: 'Chọn đối thủ AI — từ Tân binh tới Bạo chúa biết khắc chế đội hình của bạn.', icon: '🤖', cls: 'btn-gold' },
@@ -29,13 +30,11 @@ export default function Home() {
             </Link>
           ))}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap justify-center gap-3">
           <Link href="/models" className="btn">
             🧱 Xưởng mô hình
           </Link>
-          <Link href="/admin" className="btn">
-            🛠 CMS quản trị
-          </Link>
+          <AuthButton />
         </div>
       </div>
     </main>
