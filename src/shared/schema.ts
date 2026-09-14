@@ -6,20 +6,30 @@ import { checkSculptSpec, sculptSpecSchema, type SculptRig } from './sculpt';
 export const DAMAGE_TYPES = ['blunt', 'slash', 'pierce', 'fire', 'magic'] as const;
 export const ARMOR_CLASSES = ['unarmored', 'light', 'heavy', 'beast', 'siege'] as const;
 export const ROLES = ['melee', 'ranged', 'support', 'siege'] as const;
-export const ATTACK_KINDS = ['melee', 'projectile', 'breath', 'heal', 'chain', 'strike', 'vortex', 'nova'] as const;
+export const ATTACK_KINDS = ['melee', 'projectile', 'breath', 'heal', 'chain', 'strike', 'vortex', 'nova', 'dash'] as const;
 /** Body animation while winding up / releasing an ability ('auto' = derived from the kind and the held weapon). */
 export const CAST_STYLES = ['auto', 'swing', 'thrust', 'bow', 'throw', 'cast', 'gun', 'raise', 'palm', 'slam'] as const;
 export const STRIKE_VFX = ['lightning', 'meteor'] as const;
-export const UNIT_ASSET_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'catapult'] as const;
+export const UNIT_ASSET_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'catapult', 'structure'] as const;
 export const ENV_ASSET_KINDS = ['tree', 'rock', 'bush'] as const;
 export const ASSET_KINDS = [...UNIT_ASSET_KINDS, ...ENV_ASSET_KINDS] as const;
-export const PROJECTILE_MODELS = ['arrow', 'spear', 'stone', 'boulder', 'fireball', 'orb', 'bullet', 'meteor'] as const;
+export const PROJECTILE_MODELS = ['arrow', 'spear', 'stone', 'boulder', 'fireball', 'orb', 'bullet', 'meteor', 'shuriken'] as const;
 export const PARTICLE_SHAPES = ['cube', 'tetra', 'sphere'] as const;
 export const PARTICLE_DIRECTIONS = ['up', 'sphere', 'hemisphere', 'forward'] as const;
 export const BOT_STRATEGIES = ['balanced', 'rush', 'ranged', 'tank', 'swarm', 'elite', 'counter'] as const;
 export const FORMATIONS = ['line', 'wedge', 'flanks', 'blob', 'scatter'] as const;
 /** Treasure chest looks of the reward boxes (src/game/models/chest.ts). */
 export const CHEST_VARIANTS = ['wooden', 'silver', 'golden', 'giant', 'magical', 'super-magical'] as const;
+/**
+ * Siege-mode building behaviour: `wall` = stackable 2 m grid block units walk on, `platform` = grid
+ * tower units stand on (range bonus), `building` = immovable (towers, barracks), `core` = the
+ * keep the attackers must destroy. 'none' = a normal unit.
+ */
+export const STRUCTURE_KINDS = ['none', 'wall', 'platform', 'building', 'core'] as const;
+/** Which side may field a unit in siege mode. */
+export const SIEGE_SIDES = ['any', 'defense', 'attack'] as const;
+/** Looks of the `structure` asset kind (src/game/models/structures.ts). */
+export const STRUCTURE_TYPES = ['wall', 'watchtower', 'bow-tower', 'gun-tower', 'tesla', 'barracks', 'keep'] as const;
 /** Highest star level of an upgraded unit. */
 export const STAR_MAX = 5;
 
@@ -28,6 +38,7 @@ export type ArmorClass = (typeof ARMOR_CLASSES)[number];
 export type Role = (typeof ROLES)[number];
 export type AssetKind = (typeof ASSET_KINDS)[number];
 export type UnitAssetKind = (typeof UNIT_ASSET_KINDS)[number];
+export type StructureKind = (typeof STRUCTURE_KINDS)[number];
 
 export const idSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/, 'id chỉ gồm chữ thường, số, dấu gạch ngang');
 const refOrNull = idSchema.nullable().default(null);
@@ -75,6 +86,15 @@ export const unitSchema = z.object({
   chargeBonus: z.number().min(1).max(5).default(1),
   knockbackResist: z.number().min(0).max(1).default(0),
   trampleDamage: z.number().min(0).max(2000).default(0),
+  // ---- siege mode
+  structure: z.enum(STRUCTURE_KINDS).default('none'),
+  siegeSide: z.enum(SIEGE_SIDES).default('any'),
+  /** Climbs enemy walls instead of breaking them. */
+  climbWalls: z.boolean().default(false),
+  /** Barracks: unit produced every `spawnInterval` s while fewer than `spawnMax` of its own are alive. */
+  spawnUnitId: refOrNull,
+  spawnInterval: z.number().min(0.2).max(60).default(1),
+  spawnMax: z.number().int().min(1).max(50).default(10),
   // ---- player collection (coins: 1 coin = 1 VND)
   /** Coins to unlock the unit; 0 = every player has it, guests included. */
   unlockCost: z.number().int().min(0).max(100_000_000).default(0),
@@ -198,7 +218,7 @@ export const humanoidParamsSchema = z.object({
   armor: z.enum(['none', 'vest', 'plate', 'robe', 'loincloth', 'fur']).default('none'),
   armorColor: hex.default('#9aa3ad'),
   head: z
-    .enum(['none', 'cap', 'helmet', 'greathelm', 'horned', 'crown', 'hood', 'wizard', 'headband', 'strawhat'])
+    .enum(['none', 'cap', 'helmet', 'greathelm', 'horned', 'crown', 'hood', 'wizard', 'headband', 'strawhat', 'ninja'])
     .default('none'),
   headColor: hex.default('#8a8f96'),
   hair: z.enum(['none', 'short', 'long', 'mohawk', 'topknot']).default('short'),
@@ -208,7 +228,7 @@ export const humanoidParamsSchema = z.object({
   cape: z.boolean().default(false),
   capeColor: hex.default('#b3262e'),
   weapon: z
-    .enum(['none', 'club', 'bigclub', 'sword', 'greatsword', 'axe', 'spear', 'lance', 'hammer', 'bow', 'staff', 'pitchfork', 'stone', 'musket'])
+    .enum(['none', 'club', 'bigclub', 'sword', 'greatsword', 'axe', 'spear', 'lance', 'hammer', 'bow', 'staff', 'pitchfork', 'stone', 'musket', 'katana'])
     .default('none'),
   offhand: z.enum(['none', 'shield-round', 'shield-kite', 'buckler']).default('none'),
   woodColor: hex.default('#8a5a2b'),
@@ -253,6 +273,17 @@ export const catapultParamsSchema = z.object({
   wood: hex.default('#8a5a2b'),
   metal: hex.default('#5d636b'),
   rope: hex.default('#d8c28a'),
+  /** Burning pitch pot instead of a stone. */
+  fire: z.boolean().default(false),
+});
+
+export const structureParamsSchema = z.object({
+  type: z.enum(STRUCTURE_TYPES).default('wall'),
+  stone: hex.default('#9a948a'),
+  stone2: hex.default('#7d776e'),
+  wood: hex.default('#7a5230'),
+  roof: hex.default('#9a3a2a'),
+  accent: hex.default('#d8b04a'),
 });
 
 export const treeParamsSchema = z.object({
@@ -284,6 +315,7 @@ export const ASSET_PARAM_SCHEMAS = {
   dragon: dragonParamsSchema,
   bird: birdParamsSchema,
   catapult: catapultParamsSchema,
+  structure: structureParamsSchema,
   tree: treeParamsSchema,
   rock: rockParamsSchema,
   bush: bushParamsSchema,
@@ -295,6 +327,7 @@ export type ElephantParams = z.infer<typeof elephantParamsSchema>;
 export type DragonParams = z.infer<typeof dragonParamsSchema>;
 export type BirdParams = z.infer<typeof birdParamsSchema>;
 export type CatapultParams = z.infer<typeof catapultParamsSchema>;
+export type StructureParams = z.infer<typeof structureParamsSchema>;
 export type TreeParams = z.infer<typeof treeParamsSchema>;
 export type RockParams = z.infer<typeof rockParamsSchema>;
 export type BushParams = z.infer<typeof bushParamsSchema>;
@@ -307,6 +340,7 @@ export const RIG_OF_KIND = {
   dragon: 'dragon',
   bird: 'bird',
   catapult: 'catapult',
+  structure: 'static',
   tree: 'static',
   rock: 'static',
   bush: 'static',
@@ -362,7 +396,11 @@ export const mapSchema = z.object({
     enabled: z.boolean().default(false),
     width: z.number().min(2).max(30).default(8),
     meander: z.number().min(0).max(40).default(10),
+    /** > 0: the river is too deep to wade except a shallow ford this wide around z = 0. */
+    ford: z.number().min(0).max(60).default(0),
   }),
+  /** Plateau (m) rising toward the red side; negative raises the blue side. */
+  rise: z.number().min(-20).max(20).default(0),
   trees: scatterSchema,
   rocks: scatterSchema,
   bushes: scatterSchema,
@@ -374,6 +412,8 @@ export const mapSchema = z.object({
   skyBottom: hex,
   fog: z.number().min(0).max(1).default(0.3),
   deployDepth: z.number().min(5).max(80).default(28),
+  /** Siege mode: depth of the defenders' zone (0 = deployDepth). */
+  defenseDepth: z.number().min(0).max(120).default(0),
   budget: z.number().int().min(100).max(1_000_000).default(3000),
 });
 
@@ -415,9 +455,30 @@ export const economySchema = z.object({
   hourlyBox: boxRewardSchema.default(() => ({ chest: 'silver' as const, coins: [50, 150] as [number, number], cards: 12, kinds: 2 })),
 });
 
+export const siegeSettingsSchema = z.object({
+  /** Budget of each side = map (or room) budget × this. */
+  defenseBudget: z.number().min(0.1).max(10).default(1),
+  attackBudget: z.number().min(0.1).max(10).default(1),
+  /** Height of one wall block (m); blocks are 2×2 m. */
+  tierHeight: z.number().min(0.5).max(4).default(1.6),
+  maxTiers: z.number().int().min(1).max(6).default(3),
+  maxWallBlocks: z.number().int().min(0).max(1000).default(400),
+  /** Range bonus of units standing on a watchtower (0.3 = +30 %). */
+  towerRangeBonus: z.number().min(0).max(3).default(0.3),
+  /** Units that fit on one watchtower. */
+  towerCapacity: z.number().int().min(1).max(8).default(2),
+  /** Damage per metre fallen beyond 2.5 m. */
+  fallDamage: z.number().min(0).max(500).default(15),
+  /** Speed multiplier walking over wall rubble. */
+  rubbleSlow: z.number().min(0.1).max(1).default(0.55),
+  /** Wall climbing speed (m/s). */
+  climbSpeed: z.number().min(0.2).max(10).default(1.4),
+});
+
 export const settingsSchema = z.object({
   maxUnitsPerSide: z.number().int().min(1).max(500).default(150),
-  battleTimeLimit: z.number().min(30).max(1800).default(300),
+  /** Seconds; at the end a battle is a draw, a siege is won by the defenders. */
+  battleTimeLimit: z.number().min(30).max(3600).default(600),
   ragdollLimit: z.number().int().min(0).max(400).default(80),
   corpseLimit: z.number().int().min(0).max(3000).default(800),
   gravity: z.number().min(1).max(40).default(9.8),
@@ -432,6 +493,7 @@ export const settingsSchema = z.object({
   damageMatrix: z.object(Object.fromEntries(DAMAGE_TYPES.map((d) => [d, armorRow])) as Record<DamageType, typeof armorRow>),
   /** Reward boxes and star upgrades. */
   economy: economySchema.default(() => economySchema.parse({})),
+  siege: siegeSettingsSchema.default(() => siegeSettingsSchema.parse({})),
 });
 
 // ---------------------------------------------------------------- bundle
@@ -446,6 +508,7 @@ export type MapDef = z.infer<typeof mapSchema>;
 export type BotDef = z.infer<typeof botSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
 export type Economy = Settings['economy'];
+export type SiegeSettings = Settings['siege'];
 export type BoxConfig = Economy['dailyBox'];
 export type ChestVariant = (typeof CHEST_VARIANTS)[number];
 

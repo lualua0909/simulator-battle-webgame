@@ -23,6 +23,8 @@ export interface BattleRecord {
   configVersion: string;
   armies: Armies;
   useStars: boolean;
+  /** Siege mode: the defending side (null = open battle). */
+  defense: Side | null;
   stars: ArmyStars;
   players: Record<Side, MatchPlayer>;
   startedAt: number;
@@ -68,6 +70,7 @@ export async function saveMatch(b: BattleRecord, winner: Side | 'draw', tick: nu
       players: b.players,
       armies: b.armies,
       useStars: b.useStars,
+      defense: b.defense,
       stars: b.stars,
       winner,
       endTick: tick,

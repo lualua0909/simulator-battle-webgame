@@ -24,6 +24,7 @@ const RULES: RefRule[] = [
   { from: 'units', field: 'skillIds', to: 'weapons' },
   { from: 'units', field: 'modelId', to: 'assets', kinds: UNIT_ASSET_KINDS, requiredWhen: () => true },
   { from: 'units', field: 'riderModelId', to: 'assets', kinds: ['humanoid'] },
+  { from: 'units', field: 'spawnUnitId', to: 'units' },
   { from: 'weapons', field: 'projectileId', to: 'projectiles', requiredWhen: (d) => d.attack === 'projectile' },
   { from: 'weapons', field: 'hitParticleId', to: 'particles' },
   { from: 'weapons', field: 'fireParticleId', to: 'particles' },

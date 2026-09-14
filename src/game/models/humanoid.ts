@@ -153,7 +153,7 @@ function buildHead(head: THREE.Group, p: HumanoidParams): void {
   }
 
   // hair (skipped under full helmets)
-  const fullHelm = p.head === 'greathelm' || p.head === 'hood';
+  const fullHelm = p.head === 'greathelm' || p.head === 'hood' || p.head === 'ninja';
   if (!fullHelm && p.hair !== 'none') {
     head.add(mesh('hair-cap', dome(HEAD_R + 0.012, 9, 3), p.hairColor, [0, cy + 0.02, -0.012], [-0.38, 0, 0]));
     if (p.hair === 'long') head.add(mesh('hair-long', ell(0.18, 0.24, 0.08), p.hairColor, [0, cy - 0.1, -0.13]));
@@ -215,6 +215,13 @@ function buildHead(head: THREE.Group, p: HumanoidParams): void {
       break;
     case 'strawhat':
       head.add(mesh('straw-hat', cone(0.42, 0.22, 10), hc, [0, cy + 0.26, 0]));
+      break;
+    case 'ninja':
+      // Wrapped hood over the crown, a mask over mouth and nose, knot tails at the back.
+      head.add(mesh('ninja-wrap', dome(HEAD_R + 0.02, 9, 3), hc, [0, cy + 0.035, -0.005], [-0.2, 0, 0]));
+      head.add(mesh('ninja-mask', ell(HEAD_R + 0.015, 0.1, HEAD_R + 0.012), hc, [0, cy - 0.075, 0.004]));
+      head.add(detail(mesh('ninja-band', new THREE.TorusGeometry(HEAD_R + 0.022, 0.018, 4, 10), shade(hc, 1.6), [0, cy + 0.1, 0], [Math.PI / 2 - 0.1, 0, 0])));
+      for (const s of [1, -1]) head.add(detail(mesh(`ninja-tail-${s}`, box(0.035, 0.2, 0.012), shade(hc, 1.6), [0.04 * s, cy + 0.0, -HEAD_R - 0.03], [0.5, 0, 0.35 * s])));
       break;
     case 'none':
       break;

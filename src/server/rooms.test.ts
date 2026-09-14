@@ -164,7 +164,7 @@ test('star levels come from the wallets of the army units while the host keeps s
   assert.ok(room.ok);
   await join(guest, room.code);
   const off = new Promise<void>((resolve) => host.on('room:state', (s) => s.useStars === false && resolve()));
-  host.emit('room:settings', { mapId: SEED.maps[0].id, budget: SEED.maps[0].budget, useStars: false });
+  host.emit('room:settings', { mapId: SEED.maps[0].id, budget: SEED.maps[0].budget, useStars: false, defense: null });
   await off;
   const started = once(guest, 'battle:start');
   await ready(host, 'blue');
@@ -222,4 +222,28 @@ test('leaving before confirming voids the result for the other player', async ()
   assert.deepEqual(await result, { ok: false, error: 'bob rời trận, kết quả bị hủy' });
   assert.equal(saved.length, before);
   close(alice);
+});
+
+test('siege rooms validate the defenders against siege rules and start with the defending side', async () => {
+  const host = open('cookie-alice');
+  const guest = open('cookie-bob');
+  await Promise.all([connected(host), connected(guest)]);
+  const room = await create(host);
+  assert.ok(room.ok);
+  await join(guest, room.code);
+  const map = SEED.maps[0];
+  const siege = new Promise<void>((resolve) => host.on('room:state', (s) => s.defense === 'red' && resolve()));
+  host.emit('room:settings', { mapId: map.id, budget: map.budget, useStars: false, defense: 'red' });
+  await siege;
+  const terrain = new Terrain(map, SEED.assets, 'red');
+  const zone = terrain.zones.red;
+  const x = (zone.x0 + zone.x1) / 2;
+  const send = (c: Client, army: Array<{ unitId: string; x: number; z: number }>) => new Promise<AckResult>((resolve) => c.emit('room:ready', { army }, resolve));
+  assert.deepEqual(await send(guest, [{ unitId: 'clubber', x, z: 0 }]), { ok: false, error: 'Phe thủ thành cần đúng 1 Nhà chính' });
+  const started = once(host, 'battle:start');
+  assert.deepEqual(await send(guest, [{ unitId: 'nha-chinh', x, z: 0 }, { unitId: 'clubber', x, z: 10 }]), { ok: true });
+  const blue = terrain.zones.blue;
+  assert.deepEqual(await send(host, [{ unitId: 'clubber', x: (blue.x0 + blue.x1) / 2, z: 0 }]), { ok: true });
+  assert.equal((await started).defense, 'red');
+  close(host, guest);
 });

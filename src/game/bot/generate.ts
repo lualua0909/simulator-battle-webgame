@@ -2,7 +2,7 @@
 // then a formation inside the bot's deployment zone. Seeded, so repeatable.
 import type { ArmorClass, BotDef, ContentBundle, Role, UnitDef, WeaponDef } from '@/shared/schema';
 import { ARMOR_CLASSES, DAMAGE_TYPES } from '@/shared/schema';
-import type { Placement } from '../sim/army';
+import { canField, type Placement } from '../sim/army';
 import { Rng, clamp } from '../sim/rng';
 import type { Side, Terrain } from '../sim/terrain';
 
@@ -63,7 +63,8 @@ export function unitPower(unit: UnitDef, content: Content): { dps: number; ehp: 
 export function generateBotArmy(opts: BotArmyOptions): Placement[] {
   const { bot, content, terrain, side, budget } = opts;
   const rng = new Rng(opts.seed);
-  const pool = content.units.filter((u) => bot.factionIds.length === 0 || bot.factionIds.includes(u.factionId));
+  // Structures are placed by the siege layout, not bought here.
+  const pool = content.units.filter((u) => u.structure === 'none' && canField(u, side, terrain.defense) && (bot.factionIds.length === 0 || bot.factionIds.includes(u.factionId)));
   if (pool.length === 0) return [];
 
   const { shares, bonus } = bot.strategy === 'counter' ? counterPlan(opts) : { shares: SHARES[bot.strategy], bonus: () => 1 };

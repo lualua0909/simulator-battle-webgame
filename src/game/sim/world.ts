@@ -8,7 +8,7 @@ import { starScale } from '@/shared/economy';
 import type { ContentBundle, MapDef, ProjectileDef, UnitDef, WeaponDef } from '@/shared/schema';
 import type { Armies, Side } from './army';
 import { Rng, clamp, dcos, fnv1a } from './rng';
-import { EDGE_MARGIN, type Obstacle, Terrain } from './terrain';
+import { EDGE_MARGIN, WALL_CELL, type Obstacle, Terrain, wallIndex } from './terrain';
 
 export const SIM_HZ = 30;
 export const SIM_DT = 1 / SIM_HZ;
@@ -24,6 +24,8 @@ const DEG = 0.017453292519943295;
 const SKILL_RETRY = 0.3;
 /** Damage-over-time reports one `hit` event per this many ticks per unit. */
 const DOT_EVENT_TICKS = 6;
+/** Falls shorter than this do no damage. */
+const SAFE_FALL = 2.5;
 
 export type SimEvent =
   | { type: 'hit'; x: number; y: number; z: number; dx: number; dz: number; weaponId: string; targetId: number; blocked: boolean; damage: number }
@@ -42,7 +44,11 @@ export type SimEvent =
   | { type: 'warn'; unitId: number; weaponId: string; x: number; y: number; z: number; radius: number; delay: number }
   | { type: 'strike'; weaponId: string; x: number; y: number; z: number; radius: number }
   | { type: 'nova'; unitId: number; weaponId: string; x: number; y: number; z: number; radius: number }
-  | { type: 'zone-end'; zoneId: number; weaponId: string; x: number; y: number; z: number; radius: number };
+  | { type: 'zone-end'; zoneId: number; weaponId: string; x: number; y: number; z: number; radius: number }
+  /** A wall cell lost blocks: `tiers` remain (0 = collapsed into rubble). */
+  | { type: 'wall-break'; unitId: number; tiers: number; lost: number; x: number; y: number; z: number; dx: number; dz: number }
+  /** A barracks produced a unit. */
+  | { type: 'spawn'; unitId: number; parentId: number };
 
 /** One ability of a unit: its basic attack (index 0) or a skill. */
 export class SimAbility {
@@ -95,6 +101,22 @@ export class SimUnit {
   airborne = false;
   flyHeight: number;
   deathTick = -1;
+  /** Grid structure state (walls, watchtowers). */
+  wall: WallCell | null = null;
+  /** Wall cell the unit stands on. */
+  onWall: WallCell | null = null;
+  /** Enemy wall cell being climbed. */
+  climb: WallCell | null = null;
+  /** Height a fall from a wall started at (NaN = not falling from a wall). */
+  fallY = NaN;
+  /** Range multiplier (watchtower bonus). */
+  rangeMul = 1;
+  /** Dash skill in flight: the target struck on landing. */
+  dashTargetId = -1;
+  dashWeapon: WeaponDef | null = null;
+  /** Barracks: seconds to the next unit and the units it produced. */
+  spawnLeft = 0;
+  readonly children: SimUnit[] = [];
 
   constructor(
     readonly id: number,
@@ -132,6 +154,15 @@ export class SimUnit {
     return this.def.mass;
   }
 
+  get structure(): boolean {
+    return this.def.structure !== 'none';
+  }
+
+  /** Walls and watchtowers: grid blocks, not fighters. */
+  get grid(): boolean {
+    return this.wall !== null;
+  }
+
   /** Planar speed (steering + knockback). */
   speed(): number {
     const x = this.vx + this.kx;
@@ -167,6 +198,31 @@ export class SimProjectile {
     this.x = this.px = x;
     this.y = this.py = y;
     this.z = this.pz = z;
+  }
+}
+
+/** One 2×2 m grid cell holding a wall stack or a watchtower (its HP lives on `unit`). */
+export class WallCell {
+  constructor(
+    readonly unit: SimUnit,
+    readonly ix: number,
+    readonly iz: number,
+    readonly kind: 'wall' | 'platform',
+    /** HP of one block; a wall loses a tier per `blockHp` of damage. */
+    readonly blockHp: number,
+    public tiers: number,
+  ) {}
+
+  get top(): number {
+    return this.unit.y + this.unit.def.height;
+  }
+
+  get x0(): number {
+    return this.ix * WALL_CELL;
+  }
+
+  get z0(): number {
+    return this.iz * WALL_CELL;
   }
 }
 
@@ -211,7 +267,8 @@ interface SimStrike {
 export interface BattleResult {
   winner: Side | 'draw';
   tick: number;
-  reason: 'eliminated' | 'timeout';
+  /** `core`: the defenders' keep fell (siege mode). */
+  reason: 'eliminated' | 'timeout' | 'core';
   survivors: Record<Side, number>;
 }
 
@@ -232,6 +289,14 @@ export class BattleSim {
   private nextProjectileId = 1;
   private nextZoneId = 1;
   private readonly timeLimitTicks: number;
+  /** Siege mode: the defending side (null = open battle). */
+  readonly defense: Side | null;
+  /** Grid structure cells (rubble stays) by cell key. */
+  readonly walls = new Map<number, WallCell>();
+  private readonly unitDefs: Map<string, UnitDef>;
+  private readonly weaponDefs: Map<string, WeaponDef>;
+  private readonly projectileDefs: Map<string, ProjectileDef>;
+  private readonly stars: Partial<Record<Side, Readonly<Record<string, number>>>>;
 
   constructor(
     private readonly content: SimContent,
@@ -243,29 +308,50 @@ export class BattleSim {
     stars: Partial<Record<Side, Readonly<Record<string, number>>>> = {},
   ) {
     this.rng = new Rng(seed);
+    this.defense = terrain.defense;
+    this.stars = stars;
     this.timeLimitTicks = Math.round(content.settings.battleTimeLimit * SIM_HZ);
-    const units = new Map(content.units.map((u) => [u.id, u]));
-    const weapons = new Map(content.weapons.map((w) => [w.id, w]));
-    const projectiles = new Map(content.projectiles.map((p) => [p.id, p]));
-    const projectileOf = (w: WeaponDef) => (w.projectileId ? projectiles.get(w.projectileId) ?? null : null);
-    const bonus = content.settings.economy.starBonus;
-    const powered = <T extends object>(def: T, scale: number, patch: (d: T) => Partial<T>): T => (scale === 1 ? def : { ...def, ...patch(def) });
+    this.unitDefs = new Map(content.units.map((u) => [u.id, u]));
+    this.weaponDefs = new Map(content.weapons.map((w) => [w.id, w]));
+    this.projectileDefs = new Map(content.projectiles.map((p) => [p.id, p]));
+    const tierHeight = content.settings.siege.tierHeight;
     for (const side of ['blue', 'red'] as const) {
+      // Wall blocks placed on the same cell stack into one wall unit.
+      const stacks = new Map<number, number>();
       for (const p of armies[side]) {
-        const base = units.get(p.unitId);
-        const weapon = base && weapons.get(base.weaponId);
-        if (!base || !weapon) continue;
-        const scale = starScale(stars[side]?.[base.id] ?? 0, bonus);
-        const def = powered(base, scale, (u) => ({ hp: u.hp * scale, trampleDamage: u.trampleDamage * scale }));
-        const strong = (w: WeaponDef) => powered(w, scale, (x) => ({ damage: x.damage * scale, burnDps: x.burnDps * scale }));
-        const id = this.units.length;
-        // Stagger first attacks so a line does not swing in perfect unison.
-        const abilities = [new SimAbility(strong(weapon), projectileOf(weapon), false, def.attackSpeed, (id % 7) * 0.05)];
-        for (const skillId of def.skillIds) {
-          const skill = weapons.get(skillId);
-          if (skill) abilities.push(new SimAbility(strong(skill), projectileOf(skill), true, def.castSpeed, skill.initialCooldown / def.castSpeed + (id % 5) * 0.1));
+        const base = this.unitDefs.get(p.unitId);
+        if (!base || (base.structure !== 'wall' && base.structure !== 'platform')) continue;
+        const key = cellKey(wallIndex(p.x), wallIndex(p.z));
+        stacks.set(key, (stacks.get(key) ?? 0) + 1);
+      }
+      for (const p of armies[side]) {
+        const base = this.unitDefs.get(p.unitId);
+        if (!base) continue;
+        if (base.structure !== 'wall' && base.structure !== 'platform') {
+          this.createUnit(side, base, p.x, p.z);
+          continue;
         }
-        this.units.push(new SimUnit(id, side, def, abilities, p.x, p.z, terrain.height(p.x, p.z)));
+        const ix = wallIndex(p.x);
+        const iz = wallIndex(p.z);
+        const key = cellKey(ix, iz);
+        if (this.walls.has(key)) continue;
+        const kind = base.structure;
+        const blocks = kind === 'wall' ? Math.min(stacks.get(key) ?? 1, content.settings.siege.maxTiers) : 1;
+        const cx = (ix + 0.5) * WALL_CELL;
+        const cz = (iz + 0.5) * WALL_CELL;
+        const u = this.createUnit(side, base, cx, cz, (def) => ({ ...def, hp: def.hp * blocks, height: kind === 'wall' ? blocks * tierHeight : def.height }));
+        if (!u) continue;
+        u.wall = new WallCell(u, ix, iz, kind, u.def.hp / blocks, blocks);
+        this.walls.set(key, u.wall);
+      }
+    }
+    // Units placed on a wall or watchtower start on top of it.
+    for (const u of this.units) {
+      if (u.structure || u.flying) continue;
+      const cell = this.cellAt(u.x, u.z);
+      if (cell && cell.unit.side === u.side) {
+        u.onWall = cell;
+        u.y = u.py = cell.top;
       }
     }
     for (const o of terrain.obstacles) {
@@ -281,13 +367,42 @@ export class BattleSim {
     return this.tick * SIM_DT;
   }
 
+  /** Adds a unit (placement or barracks spawn) with its star bonus; `shape` adjusts the def (wall stacks). */
+  private createUnit(side: Side, base: UnitDef, x: number, z: number, shape?: (def: UnitDef) => UnitDef): SimUnit | null {
+    const weapon = this.weaponDefs.get(base.weaponId);
+    if (!weapon) return null;
+    const projectileOf = (w: WeaponDef) => (w.projectileId ? this.projectileDefs.get(w.projectileId) ?? null : null);
+    const scale = starScale(this.stars[side]?.[base.id] ?? 0, this.content.settings.economy.starBonus);
+    const powered = <T extends object>(def: T, patch: (d: T) => Partial<T>): T => (scale === 1 ? def : { ...def, ...patch(def) });
+    let def = powered(base, (u) => ({ hp: u.hp * scale, trampleDamage: u.trampleDamage * scale }));
+    if (shape) def = shape(def);
+    const strong = (w: WeaponDef) => powered(w, (x) => ({ damage: x.damage * scale, burnDps: x.burnDps * scale }));
+    const id = this.units.length;
+    // Stagger first attacks so a line does not swing in perfect unison.
+    const abilities = [new SimAbility(strong(weapon), projectileOf(weapon), false, def.attackSpeed, (id % 7) * 0.05)];
+    for (const skillId of def.skillIds) {
+      const skill = this.weaponDefs.get(skillId);
+      if (skill) abilities.push(new SimAbility(strong(skill), projectileOf(skill), true, def.castSpeed, skill.initialCooldown / def.castSpeed + (id % 5) * 0.1));
+    }
+    const u = new SimUnit(id, side, def, abilities, x, z, this.terrain.height(x, z));
+    u.spawnLeft = def.spawnInterval;
+    this.units.push(u);
+    return u;
+  }
+
+  /** Grid cell (wall, watchtower or rubble) under a point. */
+  cellAt(x: number, z: number): WallCell | undefined {
+    return this.walls.size === 0 ? undefined : this.walls.get(cellKey(wallIndex(x), wallIndex(z)));
+  }
+
   unit(id: number): SimUnit | undefined {
     return this.units[id];
   }
 
+  /** Alive units and buildings of a side (wall blocks and watchtowers not counted). */
   aliveCount(side: Side): number {
     let n = 0;
-    for (const u of this.units) if (u.alive && u.side === side) n++;
+    for (const u of this.units) if (u.alive && u.side === side && !u.grid) n++;
     return n;
   }
 
@@ -307,15 +422,17 @@ export class BattleSim {
       p.pz = p.z;
     }
     this.buildGrid();
-    for (const u of this.units) if (u.alive) this.updateTarget(u);
-    for (const u of this.units) if (u.alive) this.steer(u);
+    for (const u of this.units) if (u.alive && !u.grid) this.updateTarget(u);
+    for (const u of this.units) if (u.alive && !u.structure) this.steer(u);
     this.updateZones();
-    for (const u of this.units) if (u.alive) this.integrate(u);
+    for (const u of this.units) if (u.alive && !u.structure) this.integrate(u);
     this.resolveCollisions();
     for (const u of this.units) if (u.alive) this.updateStatus(u);
-    for (const u of this.units) if (u.alive) this.updateAttack(u);
+    for (const u of this.units) if (u.alive && !u.grid) this.updateAttack(u);
     this.updateProjectiles();
     this.updateStrikes();
+    this.updateWalls();
+    this.updateSpawns();
     if (!this.result) this.checkEnd();
   }
 
@@ -373,15 +490,27 @@ export class BattleSim {
 
   private pickEnemy(u: SimUnit): number {
     const groundOnly = u.weapon.attack === 'melee' && !u.flying;
+    // Siege engines prefer buildings and walls; everyone else ignores walls until nothing else is left.
+    const breaker = u.def.role === 'siege';
     let best = -1;
     let bestD = Infinity;
     let bestAny = -1;
     let bestAnyD = Infinity;
+    let bestWall = -1;
+    let bestWallD = Infinity;
     for (const v of this.units) {
       if (!v.alive || v.side === u.side) continue;
       const dx = v.x - u.x;
       const dz = v.z - u.z;
-      const d = dx * dx + dz * dz;
+      let d = dx * dx + dz * dz;
+      if (breaker && v.structure) d *= 0.25;
+      if (v.grid && !breaker) {
+        if (d < bestWallD) {
+          bestWallD = d;
+          bestWall = v.id;
+        }
+        continue;
+      }
       if (d < bestAnyD) {
         bestAnyD = d;
         bestAny = v.id;
@@ -392,7 +521,7 @@ export class BattleSim {
         best = v.id;
       }
     }
-    return best >= 0 ? best : bestAny;
+    return best >= 0 ? best : bestAny >= 0 ? bestAny : bestWall;
   }
 
   private pickHealTarget(u: SimUnit): number {
@@ -401,7 +530,7 @@ export class BattleSim {
     let follow = -1;
     let followD = Infinity;
     for (const v of this.units) {
-      if (!v.alive || v.side !== u.side || v === u) continue;
+      if (!v.alive || v.side !== u.side || v === u || v.structure) continue;
       const dx = v.x - u.x;
       const dz = v.z - u.z;
       const d = dx * dx + dz * dz;
@@ -426,9 +555,9 @@ export class BattleSim {
   private steer(u: SimUnit): void {
     let dvx = 0;
     let dvz = 0;
-    if (u.stun > 0 || u.airborne) {
-      u.vx *= 0.8;
-      u.vz *= 0.8;
+    if (u.stun > 0 || u.airborne || u.climb) {
+      u.vx *= u.climb ? 0 : 0.8;
+      u.vz *= u.climb ? 0 : 0.8;
       return;
     }
     // Casting a skill or channelling: stand still and face the action's target.
@@ -439,8 +568,28 @@ export class BattleSim {
       const dz = t.z - u.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
       if (dist > 1e-6) {
-        const nx = dx / dist;
-        const nz = dz / dist;
+        let nx = dx / dist;
+        let nz = dz / dist;
+        // A deep river between the unit and its target: head for the ford first.
+        const t0 = this.terrain;
+        if (t0.ford > 0 && !u.flying) {
+          const half = t0.ford / 2 - u.radius - 0.5;
+          const west = u.x < t0.riverX(u.z);
+          if (west !== t.x < t0.riverX(t.z)) {
+            if (u.z > half || u.z < -half) {
+              // To the ford entrance on this bank…
+              const fx = t0.riverX(0) + (west ? -1 : 1) * (t0.riverHalfWidth + 2) - u.x;
+              const fz = clamp(u.z, -half + 0.5, half - 0.5) - u.z;
+              const fl = Math.sqrt(fx * fx + fz * fz) || 1;
+              nx = fx / fl;
+              nz = fz / fl;
+            } else {
+              // …then straight across.
+              nx = west ? 1 : -1;
+              nz = 0;
+            }
+          }
+        }
         let want = 0;
         const w = u.weapon;
         if (busy) want = 0;
@@ -448,14 +597,15 @@ export class BattleSim {
           const keep = t.side === u.side && t.hp < t.def.hp ? w.range * 0.7 : 4 + u.radius + t.radius;
           if (dist > keep) want = 1;
         } else if (isRanged(w)) {
-          if (dist > w.range * 0.95) want = 1;
+          if (dist > w.range * u.rangeMul * 0.95) want = 1;
           else if (dist < w.minRange) want = -1;
         } else {
           const reach = w.range + u.radius + t.radius;
           if (dist > reach * 0.9) want = 1;
         }
         const water = !u.flying && this.terrain.inWater(u.x, u.z) ? WATER_SLOW : 1;
-        const sp = u.def.speed * water * want;
+        const rubble = !u.flying && !u.onWall && this.cellAt(u.x, u.z)?.unit.alive === false ? this.content.settings.siege.rubbleSlow : 1;
+        const sp = u.def.speed * water * rubble * want;
         dvx = nx * sp;
         dvz = nz * sp;
         this.turnTowards(u, nx, nz);
@@ -488,6 +638,10 @@ export class BattleSim {
 
   private integrate(u: SimUnit): void {
     const g = this.content.settings.gravity;
+    if (u.climb) {
+      this.climbStep(u, u.climb);
+      return;
+    }
     if (u.airborne) {
       u.x += u.kx * SIM_DT;
       u.z += u.kz * SIM_DT;
@@ -496,15 +650,23 @@ export class BattleSim {
       u.kx *= 0.995;
       u.kz *= 0.995;
       this.clampBounds(u);
-      const ground = this.terrain.height(u.x, u.z);
+      // Land on a wall top when coming down onto it, otherwise on the ground.
+      const cell = this.cellAt(u.x, u.z);
+      const onTop = !!cell && cell.unit.alive && u.y - u.vy * SIM_DT >= cell.top - 0.3;
+      const ground = onTop ? cell!.top : this.terrain.height(u.x, u.z);
       if (u.y <= ground) {
         u.y = ground;
         u.airborne = false;
-        u.stun = Math.max(u.stun, 0.5 + Math.min(1.5, -u.vy * 0.1));
+        u.onWall = onTop ? cell! : null;
+        if (u.dashWeapon) this.dashLand(u, u.dashWeapon);
+        else u.stun = Math.max(u.stun, 0.5 + Math.min(1.5, -u.vy * 0.1));
         u.vy = 0;
         u.kx *= 0.4;
         u.kz *= 0.4;
         this.events.push({ type: 'land', unitId: u.id, x: u.x, y: u.y, z: u.z });
+        const drop = u.fallY - ground;
+        u.fallY = NaN;
+        if (drop > SAFE_FALL && !u.def.climbWalls) this.fallDamage(u, (drop - SAFE_FALL) * this.content.settings.siege.fallDamage);
       }
       return;
     }
@@ -513,6 +675,85 @@ export class BattleSim {
     u.kx *= 0.82;
     u.kz *= 0.82;
     if (u.stun > 0) u.stun -= SIM_DT;
+  }
+
+  /** Climbing an enemy wall: rise at climbSpeed, then step onto its top. */
+  private climbStep(u: SimUnit, cell: WallCell): void {
+    if (!cell.unit.alive || u.stun > 0) {
+      u.climb = null;
+      this.startFall(u);
+      return;
+    }
+    u.y += this.content.settings.siege.climbSpeed * SIM_DT;
+    if (u.y < cell.top) return;
+    u.climb = null;
+    u.y = cell.top;
+    u.onWall = cell;
+    const m = Math.min(0.4, WALL_CELL * 0.5);
+    u.x = clamp(u.x, cell.x0 + m, cell.x0 + WALL_CELL - m);
+    u.z = clamp(u.z, cell.z0 + m, cell.z0 + WALL_CELL - m);
+    this.events.push({ type: 'land', unitId: u.id, x: u.x, y: u.y, z: u.z });
+  }
+
+  /** Leap at a target: a ballistic jump (onto wall tops too) ending in a strike. */
+  private dash(u: SimUnit, w: WeaponDef, t: SimUnit | undefined): void {
+    if (!t || !t.alive || t.side === u.side || u.airborne) return;
+    const dx = t.x - u.x;
+    const dz = t.z - u.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < 1e-6) return;
+    const stop = Math.max(0, dist - (u.radius + t.radius + 0.3));
+    const g = this.content.settings.gravity;
+    // Long enough to be coming down at the end (so it lands on a wall top instead of overshooting).
+    const rise = t.y + 0.8 - u.y;
+    const T = Math.max(0.45, stop / 12, rise > 0 ? Math.sqrt((2 * rise) / g) * 1.2 : 0);
+    // Airborne drift decays 0.5 % per tick: aim for the distance actually covered.
+    let cover = 0;
+    for (let i = 0, f = 1, n = Math.round(T * SIM_HZ); i < n; i++, f *= 0.995) cover += f;
+    const drift = Math.max(0.5, cover / Math.max(1, Math.round(T * SIM_HZ)));
+    u.climb = null;
+    u.onWall = null;
+    u.airborne = true;
+    u.fallY = NaN;
+    u.kx = ((dx / dist) * stop) / T / drift;
+    u.kz = ((dz / dist) * stop) / T / drift;
+    u.vx = 0;
+    u.vz = 0;
+    // Aim a little above the target so the leap comes down onto it (and onto wall tops).
+    u.vy = (t.y + 0.8 - u.y + 0.5 * g * T * T) / T;
+    u.dashTargetId = t.id;
+    u.dashWeapon = w;
+  }
+
+  private dashLand(u: SimUnit, w: WeaponDef): void {
+    const t = this.units[u.dashTargetId];
+    u.dashTargetId = -1;
+    u.dashWeapon = null;
+    u.kx *= 0.2;
+    u.kz *= 0.2;
+    if (!t || !t.alive || t.side === u.side) return;
+    const dx = t.x - u.x;
+    const dz = t.z - u.z;
+    const reach = u.radius + t.radius + 1.8;
+    if (dx * dx + dz * dz <= reach * reach && this.verticalReach(u, t)) this.meleeHit(u, w, t, w.damage);
+  }
+
+  /** Drops off a wall (its block broke, or the unit walked off the edge). */
+  private startFall(u: SimUnit): void {
+    u.onWall = null;
+    u.airborne = true;
+    u.vy = 0;
+    u.fallY = u.y;
+    u.windupLeft = -1;
+    u.channelLeft = 0;
+    u.action = null;
+  }
+
+  private fallDamage(u: SimUnit, amount: number): void {
+    if (amount <= 0 || !u.alive) return;
+    u.hp -= amount;
+    this.events.push({ type: 'hit', x: u.x, y: u.y + u.def.height * 0.3, z: u.z, dx: 0, dz: 0, weaponId: '', targetId: u.id, blocked: false, damage: amount });
+    if (u.hp <= 0) this.kill(u, -u.fx, -u.fz, 0, 0);
   }
 
   private clampBounds(u: SimUnit): void {
@@ -529,9 +770,12 @@ export class BattleSim {
     for (const u of this.units) {
       if (!u.alive) continue;
       this.near(u.x, u.z, u.radius + 6, near);
+      if (u.grid || u.climb) continue;
       for (const v of near) {
-        if (v.id <= u.id || !v.alive) continue;
+        if (v.id <= u.id || !v.alive || v.grid || v.climb) continue;
         if (u.flying !== v.flying || u.airborne || v.airborne) continue;
+        // On a wall and below it do not push each other.
+        if (u.onWall !== v.onWall && (u.y - v.y > 1.2 || v.y - u.y > 1.2)) continue;
         let dx = v.x - u.x;
         let dz = v.z - u.z;
         const min = u.radius + v.radius;
@@ -547,8 +791,9 @@ export class BattleSim {
         const nz = dz / d;
         const overlap = min - d;
         const total = u.mass + v.mass;
-        const pu = overlap * (v.mass / total) * 0.8;
-        const pv = overlap * (u.mass / total) * 0.8;
+        // Buildings never move.
+        const pu = u.structure ? 0 : v.structure ? overlap * 0.8 : overlap * (v.mass / total) * 0.8;
+        const pv = v.structure ? 0 : u.structure ? overlap * 0.8 : overlap * (u.mass / total) * 0.8;
         u.x -= nx * pu;
         u.z -= nz * pu;
         v.x += nx * pv;
@@ -559,13 +804,120 @@ export class BattleSim {
         }
       }
     }
+    const siege = this.content.settings.siege;
     for (const u of this.units) {
-      if (!u.alive) continue;
-      if (!u.flying) this.pushOutOfObstacles(u);
+      if (!u.alive || u.structure || u.climb) continue;
+      if (!u.flying) {
+        if (!u.onWall) this.pushOutOfObstacles(u);
+        this.pushOutOfWalls(u);
+        if (!u.airborne && this.terrain.ford > 0 && this.terrain.deepWater(u.x, u.z)) this.pushToBank(u);
+      }
+      if (this.defense === u.side && !u.onWall && !u.airborne) this.leash(u);
       this.clampBounds(u);
+      u.rangeMul = u.onWall?.kind === 'platform' ? 1 + siege.towerRangeBonus : 1;
       if (u.airborne) continue;
+      if (u.onWall) {
+        const cell = u.onWall;
+        if (!cell.unit.alive || u.y > cell.top + 0.3) this.startFall(u);
+        else u.y = cell.top;
+        continue;
+      }
       const ground = this.terrain.height(u.x, u.z);
       u.y = u.flying ? ground + u.flyHeight : ground;
+    }
+  }
+
+  /** Out of deep water onto the nearer bank. */
+  private pushToBank(u: SimUnit): void {
+    const rx = this.terrain.riverX(u.z);
+    const edge = this.terrain.riverHalfWidth + 0.01;
+    u.x = u.px < rx ? rx - edge : rx + edge;
+  }
+
+  /** Defenders never leave their zone. */
+  private leash(u: SimUnit): void {
+    const zone = this.terrain.zones[u.side];
+    u.x = clamp(u.x, zone.x0, zone.x1);
+    u.z = clamp(u.z, zone.z0, zone.z1);
+  }
+
+  /**
+   * Wall cells are solid boxes up to their top. Units on a wall walk along connected cells
+   * (defenders stop at the edge, attackers drop off); units below are pushed out, and an
+   * attacker blocked by an enemy wall climbs it (climbWalls) or starts breaking it.
+   */
+  private pushOutOfWalls(u: SimUnit): void {
+    if (this.walls.size === 0) return;
+    const tierHeight = this.content.settings.siege.tierHeight;
+    if (u.onWall) {
+      const from = u.onWall;
+      const cell = this.cellAt(u.x, u.z);
+      if (cell === from) return;
+      const dy = cell ? cell.top - from.top : 0;
+      if (cell && cell.unit.alive && dy <= tierHeight + 0.01 && -dy <= tierHeight + 0.01) {
+        u.onWall = cell;
+        return;
+      }
+      if (u.side === this.defense) {
+        u.x = clamp(u.x, from.x0 + 0.05, from.x0 + WALL_CELL - 0.05);
+        u.z = clamp(u.z, from.z0 + 0.05, from.z0 + WALL_CELL - 0.05);
+      } else this.startFall(u);
+      return;
+    }
+    const r = u.radius;
+    for (let ix = wallIndex(u.x - r); ix <= wallIndex(u.x + r); ix++) {
+      for (let iz = wallIndex(u.z - r); iz <= wallIndex(u.z + r); iz++) {
+        const cell = this.walls.get(cellKey(ix, iz));
+        if (!cell || !cell.unit.alive || u.y >= cell.top - 0.3) continue;
+        // A dash onto a wall top vaults over the face of the target's cell.
+        if (u.dashWeapon && this.units[u.dashTargetId]?.onWall === cell) continue;
+        const x0 = cell.x0;
+        const z0 = cell.z0;
+        const x1 = x0 + WALL_CELL;
+        const z1 = z0 + WALL_CELL;
+        const cx = clamp(u.x, x0, x1);
+        const cz = clamp(u.z, z0, z1);
+        const dx = u.x - cx;
+        const dz = u.z - cz;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= r * r) continue;
+        if (d2 > 1e-8) {
+          const d = Math.sqrt(d2);
+          u.x = cx + (dx / d) * r;
+          u.z = cz + (dz / d) * r;
+        } else {
+          // Centre inside the box: leave through the nearest face.
+          const left = u.x - x0;
+          const right = x1 - u.x;
+          const back = u.z - z0;
+          const front = z1 - u.z;
+          const m = Math.min(left, right, back, front);
+          if (m === left) u.x = x0 - r;
+          else if (m === right) u.x = x1 + r;
+          else if (m === back) u.z = z0 - r;
+          else u.z = z1 + r;
+        }
+        if (cell.unit.side === u.side || u.airborne) continue;
+        if (u.def.climbWalls) {
+          u.climb = cell;
+          u.vx = 0;
+          u.vz = 0;
+          u.kx = 0;
+          u.kz = 0;
+          const fx = x0 + WALL_CELL * 0.5 - u.x;
+          const fz = z0 + WALL_CELL * 0.5 - u.z;
+          const len = Math.sqrt(fx * fx + fz * fz);
+          if (len > 1e-6) {
+            u.fx = fx / len;
+            u.fz = fz / len;
+          }
+          return;
+        }
+        if (u.targetId !== cell.unit.id) {
+          u.targetId = cell.unit.id;
+          u.retargetIn = 60;
+        }
+      }
     }
   }
 
@@ -701,6 +1053,7 @@ export class BattleSim {
   private skillTarget(u: SimUnit, a: SimAbility): number {
     const w = a.def;
     if (w.attack === 'heal') return this.healSkillTarget(u, w);
+    if (w.attack === 'dash') return u.airborne || u.climb ? -1 : this.dashTarget(u, w);
     if (w.attack === 'nova') return this.countEnemies(u.x, u.y + u.def.height * 0.5, u.z, w.splashRadius, u.side) >= w.minTargets ? u.id : -1;
     const t = this.units[u.targetId];
     if (!t || !t.alive || t.side === u.side) return -1;
@@ -724,12 +1077,31 @@ export class BattleSim {
     return bestCount >= w.minTargets ? best : -1;
   }
 
+  /** Nearest enemy in leap range, archers and wall defenders first. */
+  private dashTarget(u: SimUnit, w: WeaponDef): number {
+    let best = -1;
+    let bestScore = Infinity;
+    for (const v of this.units) {
+      if (!v.alive || v.side === u.side || v.structure || v.flying) continue;
+      const dx = v.x - u.x;
+      const dz = v.z - u.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > w.range * w.range || d2 < w.minRange * w.minRange) continue;
+      const score = d2 - (isRanged(v.weapon) ? 60 : 0) - (v.onWall ? 120 : 0);
+      if (score < bestScore) {
+        bestScore = score;
+        best = v.id;
+      }
+    }
+    return best;
+  }
+
   private healSkillTarget(u: SimUnit, w: WeaponDef): number {
     let best = -1;
     let bestScore = Infinity;
     const near = this.near(u.x, u.z, w.range + 1, this.scratch2);
     for (const v of near) {
-      if (!v.alive || v.side !== u.side || v.hp >= v.def.hp) continue;
+      if (!v.alive || v.side !== u.side || v.hp >= v.def.hp || v.structure) continue;
       const dx = v.x - u.x;
       const dz = v.z - u.z;
       const d2 = dx * dx + dz * dz;
@@ -748,7 +1120,7 @@ export class BattleSim {
     let n = 0;
     const near = this.near(x, z, r + 4, this.scratch);
     for (const v of near) {
-      if (!v.alive || v.side === side) continue;
+      if (!v.alive || v.side === side || v.grid) continue;
       const dx = v.x - x;
       const dz = v.z - z;
       const reach = r + v.def.radius;
@@ -762,7 +1134,7 @@ export class BattleSim {
     let n = 0;
     const near = this.near(center.x, center.z, r + 4, this.scratch);
     for (const v of near) {
-      if (!v.alive || v.side !== center.side || v.hp >= v.def.hp) continue;
+      if (!v.alive || v.side !== center.side || v.hp >= v.def.hp || v.structure) continue;
       const dx = v.x - center.x;
       const dz = v.z - center.z;
       if (dx * dx + dz * dz <= (r + v.def.radius) * (r + v.def.radius)) n++;
@@ -777,14 +1149,18 @@ export class BattleSim {
     switch (w.attack) {
       case 'projectile':
       case 'strike':
-      case 'vortex':
-        return d2 <= w.range * w.range && d2 >= w.minRange * w.minRange;
+      case 'vortex': {
+        const range = w.range * u.rangeMul;
+        return d2 <= range * range && d2 >= w.minRange * w.minRange;
+      }
       case 'heal':
         return d2 <= w.range * w.range;
+      case 'dash':
+        return d2 <= w.range * w.range && d2 >= w.minRange * w.minRange;
       case 'chain':
       case 'breath': {
         const dy = t.y + t.def.height * 0.5 - (u.y + u.def.height * (w.attack === 'breath' ? 0 : 0.7));
-        const r = w.range + t.def.radius;
+        const r = w.range * (w.attack === 'chain' ? u.rangeMul : 1) + t.def.radius;
         return d2 + dy * dy <= r * r;
       }
       default: {
@@ -845,6 +1221,9 @@ export class BattleSim {
       case 'nova':
         this.nova(u, w);
         return;
+      case 'dash':
+        this.dash(u, w, t);
+        return;
       default:
         this.cleave(u, a, t, dx, dy, dz);
     }
@@ -889,7 +1268,7 @@ export class BattleSim {
     if (w.splashRadius > 0) this.events.push({ type: 'nova', unitId: u.id, weaponId: w.id, x: t.x, y: t.y, z: t.z, radius: w.splashRadius });
     const list = w.splashRadius > 0 ? this.near(t.x, t.z, w.splashRadius + 4, this.scratch2) : [t];
     for (const v of list) {
-      if (!v.alive || v.side !== t.side || v.hp >= v.def.hp) continue;
+      if (!v.alive || v.side !== t.side || v.hp >= v.def.hp || v.structure) continue;
       if (v !== t) {
         const dx = v.x - t.x;
         const dz = v.z - t.z;
@@ -1122,7 +1501,7 @@ export class BattleSim {
     let best = -1;
     let bestD = maxDist * maxDist;
     for (const v of this.units) {
-      if (!v.alive || v.side === side || v.flying) continue;
+      if (!v.alive || v.side === side || v.flying || v.structure) continue;
       const d = (v.x - x) * (v.x - x) + (v.z - z) * (v.z - z);
       if (d < bestD) {
         bestD = d;
@@ -1214,7 +1593,7 @@ export class BattleSim {
     const imp = (force * res) / v.def.mass;
     v.kx += nx * imp;
     v.kz += nz * imp;
-    if (up > 0 && !v.flying) {
+    if (up > 0 && !v.flying && !v.structure) {
       const vy = (up * res) / Math.sqrt(v.def.mass);
       if (vy > 2) {
         v.vy = v.airborne ? Math.max(v.vy, vy) : vy;
@@ -1383,26 +1762,71 @@ export class BattleSim {
 
   // ------------------------------------------------------------------ end
 
+  // ------------------------------------------------------------------ siege structures
+
+  /** Wall cells lose a tier per blockHp of damage; a destroyed cell becomes rubble. */
+  private updateWalls(): void {
+    if (this.walls.size === 0) return;
+    const tierHeight = this.content.settings.siege.tierHeight;
+    for (const cell of this.walls.values()) {
+      if (cell.tiers === 0) continue;
+      const u = cell.unit;
+      const tiers = u.alive ? Math.max(1, Math.ceil(u.hp / cell.blockHp - 1e-9)) : 0;
+      if (tiers >= cell.tiers) continue;
+      const lost = cell.tiers - tiers;
+      cell.tiers = tiers;
+      if (cell.kind === 'wall' && tiers > 0) (u.def as { height: number }).height = tiers * tierHeight;
+      this.events.push({ type: 'wall-break', unitId: u.id, tiers, lost, x: u.x, y: cell.top, z: u.z, dx: -u.fx, dz: -u.fz });
+    }
+  }
+
+  /** Barracks produce one unit per spawnInterval while fewer than spawnMax of theirs live. */
+  private updateSpawns(): void {
+    const count = this.units.length;
+    for (let i = 0; i < count; i++) {
+      const b = this.units[i];
+      if (!b.alive || !b.def.spawnUnitId) continue;
+      b.spawnLeft -= SIM_DT;
+      if (b.spawnLeft > 0) continue;
+      b.spawnLeft += b.def.spawnInterval;
+      let alive = 0;
+      for (const c of b.children) if (c.alive) alive++;
+      const base = this.unitDefs.get(b.def.spawnUnitId);
+      if (alive >= b.def.spawnMax || !base || base.structure !== 'none') continue;
+      const lane = (b.children.length % 5) - 2;
+      const x = b.x + b.fx * (b.radius + base.radius + 0.6);
+      const z = b.z + lane * (base.radius * 2 + 0.3);
+      const child = this.createUnit(b.side, base, x, z);
+      if (!child) continue;
+      child.fx = b.fx;
+      child.fz = b.fz;
+      b.children.push(child);
+      this.events.push({ type: 'spawn', unitId: child.id, parentId: b.id });
+    }
+  }
+
+  // ------------------------------------------------------------------ end
+
   private checkEnd(): void {
     const blue = this.aliveCount('blue');
     const red = this.aliveCount('red');
     const survivors = { blue, red };
+    const defense = this.defense;
+    if (defense) {
+      const attack = defense === 'blue' ? 'red' : 'blue';
+      let core = false;
+      for (const u of this.units) if (u.alive && u.side === defense && u.def.structure === 'core') core = true;
+      const alive = { blue, red };
+      if (!core || alive[defense] === 0) this.result = { winner: attack, tick: this.tick, reason: core ? 'eliminated' : 'core', survivors };
+      else if (alive[attack] === 0) this.result = { winner: defense, tick: this.tick, reason: 'eliminated', survivors };
+      else if (this.tick >= this.timeLimitTicks) this.result = { winner: defense, tick: this.tick, reason: 'timeout', survivors };
+      return;
+    }
     if (blue === 0 || red === 0) {
       this.result = { winner: blue > 0 ? 'blue' : red > 0 ? 'red' : 'draw', tick: this.tick, reason: 'eliminated', survivors };
       return;
     }
-    if (this.tick >= this.timeLimitTicks) {
-      let vb = 0;
-      let vr = 0;
-      for (const u of this.units) {
-        if (!u.alive) continue;
-        const value = u.def.cost * (u.hp / u.def.hp);
-        if (u.side === 'blue') vb += value;
-        else vr += value;
-      }
-      const winner = Math.round(vb) === Math.round(vr) ? 'draw' : vb > vr ? 'blue' : 'red';
-      this.result = { winner, tick: this.tick, reason: 'timeout', survivors };
-    }
+    if (this.tick >= this.timeLimitTicks) this.result = { winner: 'draw', tick: this.tick, reason: 'timeout', survivors };
   }
 }
 

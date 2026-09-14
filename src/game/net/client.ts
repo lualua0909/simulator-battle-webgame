@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { Placement } from '../sim/army';
 import type { Side } from '../sim/terrain';
-import { UNAUTHORIZED, type AckResult, type BattleOutcome, type BattleStart, type ClientToServer, type RoomState, type ServerToClient } from '@/shared/net';
+import { UNAUTHORIZED, type AckResult, type BattleOutcome, type BattleStart, type ClientToServer, type RoomSettings, type RoomState, type ServerToClient } from '@/shared/net';
 
 type GameSocket = Socket<ServerToClient, ClientToServer>;
 
@@ -100,7 +100,7 @@ export function useOnline(uid: string | null, handlers: OnlineHandlers) {
     join,
     ready,
     unready: () => socket?.emit('room:unready'),
-    settings: (mapId: string, budget: number, useStars: boolean) => socket?.emit('room:settings', { mapId, budget, useStars }),
+    settings: (next: RoomSettings) => socket?.emit('room:settings', next),
     checksum: (tick: number, hash: number) => socket?.emit('battle:checksum', { tick, hash }),
     end: (outcome: BattleOutcome, tick: number) => socket?.emit('battle:end', { outcome, tick }),
   };

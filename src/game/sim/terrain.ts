@@ -4,6 +4,18 @@ import type { AssetDef, MapDef } from '@/shared/schema';
 import { Rng, clamp, smooth01, valueNoise, valueNoise1 } from './rng';
 
 export const EDGE_MARGIN = 6;
+/** Siege wall / watchtower grid cell (m). */
+export const WALL_CELL = 2;
+
+/** Grid index of a coordinate. */
+export function wallIndex(v: number): number {
+  return Math.floor(v / WALL_CELL);
+}
+
+/** Centre of a grid index. */
+export function wallCenter(i: number): number {
+  return (i + 0.5) * WALL_CELL;
+}
 
 export type Side = 'blue' | 'red';
 
@@ -39,6 +51,8 @@ export class Terrain {
   readonly riverBase = 0;
   readonly riverDepth: number;
   readonly waterLevel: number;
+  /** Width of the only shallow crossing of a deep river (0 = wadeable everywhere). */
+  readonly ford: number;
   readonly obstacles: Obstacle[] = [];
 
   private readonly seed: number;
@@ -47,25 +61,39 @@ export class Terrain {
   private readonly meander: number;
   private readonly riverLimit: number;
 
-  constructor(readonly map: MapDef, assets: readonly AssetDef[] = []) {
+  constructor(
+    readonly map: MapDef,
+    assets: readonly AssetDef[] = [],
+    /** Siege mode: the defending side (its zone uses map.defenseDepth); null = open battle. */
+    readonly defense: Side | null = null,
+  ) {
     this.size = map.size;
     this.half = map.size / 2;
     this.seed = map.seed;
     this.heightScale = map.heightScale;
     this.freq = 0.018 * map.hilliness;
 
-    const depth = Math.min(map.deployDepth, this.half - EDGE_MARGIN - 8);
-    const inner = this.half - EDGE_MARGIN - depth;
-    this.zones = {
-      blue: { x0: -this.half + EDGE_MARGIN, x1: -inner, z0: -this.half + EDGE_MARGIN, z1: this.half - EDGE_MARGIN },
-      red: { x0: inner, x1: this.half - EDGE_MARGIN, z0: -this.half + EDGE_MARGIN, z1: this.half - EDGE_MARGIN },
+    const usable = this.half - EDGE_MARGIN;
+    const base = Math.min(map.deployDepth, usable - 8);
+    const depthOf = (side: Side) => {
+      if (side !== defense || map.defenseDepth <= 0) return base;
+      // The defenders' zone may reach past the middle, leaving a 16 m gap to the attackers.
+      return Math.min(map.defenseDepth, usable * 2 - base - 16);
     };
+    const blueDepth = depthOf('blue');
+    const redDepth = depthOf('red');
+    this.zones = {
+      blue: { x0: -usable, x1: -usable + blueDepth, z0: -usable, z1: usable },
+      red: { x0: usable - redDepth, x1: usable, z0: -usable, z1: usable },
+    };
+    const inner = Math.min(usable - blueDepth, usable - redDepth);
 
     this.riverEnabled = map.river.enabled;
     this.riverHalfWidth = map.river.width / 2;
     this.riverDepth = 1.4 + map.river.width * 0.06;
     this.waterLevel = this.riverBase - 0.35;
     this.meander = map.river.meander;
+    this.ford = map.river.enabled ? map.river.ford : 0;
     // Keep the river valley out of both deployment zones.
     this.riverLimit = Math.max(0, inner - this.riverHalfWidth * 3.5 - 2);
 
@@ -85,6 +113,11 @@ export class Terrain {
     return d < 0 ? -d : d;
   }
 
+  /** Deep water ground units cannot enter (rivers with a ford). */
+  deepWater(x: number, z: number): boolean {
+    return this.ford > 0 && (z < 0 ? -z : z) > this.ford / 2 && this.inWater(x, z);
+  }
+
   inWater(x: number, z: number): boolean {
     return this.riverDistance(x, z) < this.riverHalfWidth;
   }
@@ -96,6 +129,11 @@ export class Terrain {
       valueNoise(x * f * 2.1, z * f * 2.1, this.seed + 17) * 0.3 +
       valueNoise(x * f * 4.3, z * f * 4.3, this.seed + 33) * 0.15;
     let h = (n - 0.5) * 2 * this.heightScale;
+    if (this.map.rise !== 0) {
+      // Ramp over the middle fifth of the map onto a plateau.
+      const s = this.map.rise > 0 ? x : -x;
+      h += (this.map.rise < 0 ? -this.map.rise : this.map.rise) * smooth01((s + this.size * 0.02) / (this.size * 0.2));
+    }
     const ax = x < 0 ? -x : x;
     const az = z < 0 ? -z : z;
     const e = (ax > az ? ax : az) / this.half;
@@ -117,7 +155,10 @@ export class Terrain {
         h = this.riverBase + (h - this.riverBase) * smooth01((d - hw) / (valley - hw));
         if (d < hw) {
           const t = d / hw;
-          h = this.riverBase - this.riverDepth * (1 - t * t);
+          const az = z < 0 ? -z : z;
+          // The ford is a shallow riverbed.
+          const depth = this.ford > 0 ? (az <= this.ford / 2 ? 0.45 : this.riverDepth * 1.6) : this.riverDepth;
+          h = this.riverBase - depth * (1 - t * t);
         }
       }
     }
@@ -126,7 +167,7 @@ export class Terrain {
 
   /** Upper bound of height(): noise peak plus the rim hills (the river only lowers). */
   get maxHeight(): number {
-    return this.heightScale + 7;
+    return this.heightScale + 7 + (this.map.rise < 0 ? -this.map.rise : this.map.rise);
   }
 
   inZone(side: Side, x: number, z: number): boolean {

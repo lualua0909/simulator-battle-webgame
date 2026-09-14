@@ -10,7 +10,7 @@ import { randomInt } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
-import { armyCost, armySchema, validateArmy, type Placement } from '@/game/sim/army';
+import { armyCost, armySchema, sideBudget, validateArmy, type Placement } from '@/game/sim/army';
 import { SIM_HZ } from '@/game/sim/world';
 import { Terrain, type Side } from '@/game/sim/terrain';
 import { isUnlocked, type PlayerState } from '@/shared/economy';
@@ -39,6 +39,8 @@ interface Room {
   budget: number;
   /** Host setting: upgraded units fight with their star bonus. */
   useStars: boolean;
+  /** Host setting: siege mode with this side defending (null = open battle). */
+  defense: Side | null;
   players: Partial<Record<Side, Player>>;
   /** Current battle until it is saved or voided (the phase returns to lobby at the first report). */
   battle: BattleRecord | null;
@@ -114,7 +116,7 @@ async function publicState(room: Room): Promise<RoomState> {
     const p = room.players[side];
     if (p) players[side] = { name: p.name, ready: p.ready, connected: p.socketId !== null, units: p.army.length, cost: armyCost(bundle, p.army) };
   }
-  return { code: room.code, phase: room.phase, mapId: room.mapId, budget: room.budget, useStars: room.useStars, players };
+  return { code: room.code, phase: room.phase, mapId: room.mapId, budget: room.budget, useStars: room.useStars, defense: room.defense, players };
 }
 
 export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: userFromSessionCookie, saveMatch, loadPlayer: getPlayer }): void {
@@ -203,7 +205,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       const map = bundle.maps[0];
       if (!map) return ack({ ok: false, error: 'Chưa có bản đồ nào trong CMS' });
       const code = newCode();
-      room = { code, phase: 'lobby', mapId: map.id, budget: map.budget, useStars: true, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [], stars: {} } }, battle: null, cleanup: null };
+      room = { code, phase: 'lobby', mapId: map.id, budget: map.budget, useStars: true, defense: null, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [], stars: {} } }, battle: null, cleanup: null };
       side = 'blue';
       rooms.set(code, room);
       void socket.join(code);
@@ -237,12 +239,13 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     socket.on('room:settings', async (req) => {
       const bundle = await getBundle();
       if (!room || side !== 'blue' || room.phase !== 'lobby') return;
-      const parsed = z.object({ mapId: idSchema, budget: z.number().int().min(100).max(1_000_000), useStars: z.boolean() }).safeParse(req);
+      const parsed = z.object({ mapId: idSchema, budget: z.number().int().min(100).max(1_000_000), useStars: z.boolean(), defense: z.enum(['blue', 'red']).nullable().default(null) }).safeParse(req);
       if (!parsed.success) return;
       if (!bundle.maps.some((m) => m.id === parsed.data.mapId)) return;
       room.mapId = parsed.data.mapId;
       room.budget = parsed.data.budget;
       room.useStars = parsed.data.useStars;
+      room.defense = parsed.data.defense;
       for (const p of Object.values(room.players)) if (p) p.ready = false;
       void broadcast(room);
     });
@@ -261,7 +264,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       const map = bundle.maps.find((m) => m.id === room!.mapId);
       if (!map) return ack({ ok: false, error: 'Bản đồ không còn tồn tại' });
       if (army.data.length === 0) return ack({ ok: false, error: 'Chưa đặt lính nào' });
-      const check = validateArmy(bundle, new Terrain(map, bundle.assets), side, army.data, room.budget);
+      const check = validateArmy(bundle, new Terrain(map, bundle.assets, room.defense), side, army.data, sideBudget(bundle.settings, room.budget, side, room.defense));
       if (!check.ok) return ack({ ok: false, error: check.error });
       const armyUnits = new Set(army.data.map((p) => p.unitId));
       const locked = bundle.units.find((u) => armyUnits.has(u.id) && !isUnlocked(u, wallet));
@@ -282,6 +285,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
           budget: room.budget,
           armies: { blue: blue.army, red: red.army },
           useStars: room.useStars,
+          defense: room.defense,
           stars: room.useStars ? { blue: blue.stars, red: red.stars } : { blue: {}, red: {} },
           configVersion: bundle.version,
         };

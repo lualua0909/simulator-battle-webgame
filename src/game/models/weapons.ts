@@ -43,6 +43,12 @@ export function createWeaponModel(kind: WeaponKind, c: WeaponColors): THREE.Grou
       g.add(metal('sword-tip', cone(0.046 * k, 0.1 * k, 4), c.metal, [0, 0.79 * k, 0], [0, Math.PI / 4, 0]));
       break;
     }
+    case 'katana':
+      g.add(mesh('katana-grip', cyl(0.022, 0.022, 0.24), '#1e1e22', [0, 0.02, 0]));
+      g.add(metal('katana-tsuba', cyl(0.06, 0.06, 0.018, 8), c.metal, [0, 0.15, 0]));
+      g.add(metal('katana-blade', box(0.04, 0.78, 0.012), '#e6ecf2', [0, 0.55, 0.012], [0.04, 0, 0]));
+      g.add(metal('katana-tip', cone(0.028, 0.1, 3), '#e6ecf2', [0, 0.98, 0.03], [0.06, Math.PI / 4, 0]));
+      break;
     case 'axe':
       g.add(mesh('axe-handle', cyl(0.03, 0.03, 0.8), c.wood, [0, 0.28, 0]));
       g.add(metal('axe-blade', box(0.26, 0.2, 0.035), c.metal, [0.12, 0.58, 0]));

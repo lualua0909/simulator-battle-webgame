@@ -3,12 +3,40 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { ConfigBundle } from '@/shared/schema';
-import type { RoomState } from '@/shared/net';
+import type { RoomSettings, RoomState } from '@/shared/net';
 import type { Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import type { BattleStats } from '@/game/render/engine';
 
 export const SIDE_NAME: Record<Side, string> = { blue: 'Xanh', red: 'Đỏ' };
+
+/** Mode picker value: open battle, or siege with the given side defending. */
+export type ModeChoice = 'battle' | Side;
+
+export function ModePicker(props: { mode: 'ai' | 'local' | 'online'; value: ModeChoice; onChange(v: ModeChoice): void; disabled?: boolean }) {
+  const options: Array<{ value: ModeChoice; label: string; hint: string }> =
+    props.mode === 'ai'
+      ? [
+          { value: 'battle', label: '⚔ Đại chiến', hint: 'hai đạo quân lao vào nhau' },
+          { value: 'blue', label: '🏰 Bạn thủ thành', hint: 'xây tường, tháp; máy công thành' },
+          { value: 'red', label: '🔥 Bạn công thành', hint: 'máy xây thành, bạn phá' },
+        ]
+      : [
+          { value: 'battle', label: '⚔ Đại chiến', hint: 'hai đạo quân lao vào nhau' },
+          { value: 'blue', label: '🏰 Thủ thành: Xanh thủ', hint: 'Đỏ công thành' },
+          { value: 'red', label: '🏰 Thủ thành: Đỏ thủ', hint: 'Xanh công thành' },
+        ];
+  return (
+    <div className="grid gap-2 sm:grid-cols-3">
+      {options.map((o) => (
+        <button key={o.value} disabled={props.disabled} onClick={() => props.onChange(o.value)} className={`rounded-xl border-2 p-2 text-left ${props.value === o.value ? 'border-ink bg-gold' : 'border-ink/30 bg-white'}`}>
+          <div className="font-bold">{o.label}</div>
+          <div className="text-xs opacity-70">{o.hint}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function resultTitle(result: BattleResult, mySide?: Side): string {
   if (result.winner === 'draw') return 'HÒA!';
@@ -43,12 +71,19 @@ export function SetupPanel(props: {
   setBotId(id: string): void;
   blind: boolean;
   setBlind(v: boolean): void;
+  choice: ModeChoice;
+  setChoice(v: ModeChoice): void;
   onStart(): void;
 }) {
   const { bundle, mode } = props;
   return (
     <div className="panel pointer-events-auto mx-auto flex max-h-[88vh] w-[min(760px,94vw)] flex-col gap-3 overflow-y-auto p-4">
       <h2 className="font-display text-2xl">{mode === 'ai' ? 'Đấu với máy' : '2 người 1 máy'}</h2>
+      <section>
+        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">Chế độ</h3>
+        <ModePicker mode={mode} value={props.choice} onChange={props.setChoice} />
+        {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">Phe thủ chỉ đứng trong vùng của mình, cần 1 Nhà chính. Phe công phá Nhà chính để thắng; hết giờ thì phe thủ thắng.</p>}
+      </section>
       <section>
         <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">Bản đồ</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -64,7 +99,7 @@ export function SetupPanel(props: {
               <div className="h-8 rounded-md" style={{ background: `linear-gradient(180deg, ${m.skyTop}, ${m.skyBottom} 55%, ${m.grassColor} 56%, ${m.dirtColor})` }} />
               <div className="mt-1 font-bold">{m.name}</div>
               <div className="text-xs opacity-70">
-                {m.size}m {m.river.enabled ? '· có sông' : ''}
+                {m.size}m {m.river.enabled ? '· có sông' : ''} {m.defenseDepth > 0 ? '· 🏰' : ''}
               </div>
             </button>
           ))}
@@ -169,8 +204,10 @@ export function OnlineLobby(props: {
   );
 }
 
-export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: Side; onSettings(mapId: string, budget: number, useStars: boolean): void }) {
+export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: Side; onSettings(next: RoomSettings): void }) {
   const { room, mySide, bundle } = props;
+  const current: RoomSettings = { mapId: room.mapId, budget: room.budget, useStars: room.useStars, defense: room.defense };
+  const set = (patch: Partial<RoomSettings>) => props.onSettings({ ...current, ...patch });
   const host = mySide === 'blue';
   const link = typeof window !== 'undefined' ? `${window.location.origin}/play?mode=online&room=${room.code}` : '';
   const [copied, setCopied] = useState(false);
@@ -202,36 +239,43 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
         );
       })}
       <div className="flex items-center gap-2">
-        <select className="field" disabled={!host} value={room.mapId} onChange={(e) => props.onSettings(e.target.value, bundle.maps.find((m) => m.id === e.target.value)?.budget ?? room.budget, room.useStars)}>
+        <select className="field" disabled={!host} value={room.mapId} onChange={(e) => set({ mapId: e.target.value, budget: bundle.maps.find((m) => m.id === e.target.value)?.budget ?? room.budget })}>
           {bundle.maps.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
             </option>
           ))}
         </select>
-        <input className="field w-24" type="number" step={100} disabled={!host} value={room.budget} onChange={(e) => props.onSettings(room.mapId, Math.max(100, Number(e.target.value) || 100), room.useStars)} />
+        <input className="field w-24" type="number" step={100} disabled={!host} value={room.budget} onChange={(e) => set({ budget: Math.max(100, Number(e.target.value) || 100) })} />
       </div>
+      <select className="field" disabled={!host} value={room.defense ?? 'battle'} onChange={(e) => set({ defense: e.target.value === 'battle' ? null : (e.target.value as Side) })}>
+        <option value="battle">⚔ Đại chiến</option>
+        <option value="blue">🏰 Thủ thành: Xanh thủ</option>
+        <option value="red">🏰 Thủ thành: Đỏ thủ</option>
+      </select>
       <label className="flex items-center gap-2" title="Lính đã nâng sao được cộng máu và sát thương theo sao của từng người">
-        <input type="checkbox" disabled={!host} checked={room.useStars} onChange={(e) => props.onSettings(room.mapId, room.budget, e.target.checked)} />
+        <input type="checkbox" disabled={!host} checked={room.useStars} onChange={(e) => set({ useStars: e.target.checked })} />
         ⭐ Tính sao nâng cấp của lính
       </label>
-      {!host && <p className="text-xs opacity-60">Chủ phòng (Xanh) chọn bản đồ, ngân sách và có tính sao hay không.</p>}
+      {!host && <p className="text-xs opacity-60">Chủ phòng (Xanh) chọn bản đồ, ngân sách, chế độ và có tính sao hay không.</p>}
     </div>
   );
 }
 
-export function BattleHud(props: { stats: BattleStats; total: Record<Side, number>; speed: number; paused: boolean; onSpeed(s: number): void; onPause(): void; onStop(): void; stopLabel: string }) {
+export function BattleHud(props: { stats: BattleStats; total: Record<Side, number>; speed: number; paused: boolean; onSpeed(s: number): void; onPause(): void; onStop(): void; stopLabel: string; timeLimit: number; defense: Side | null }) {
   const { stats, total } = props;
-  const mm = Math.floor(stats.time / 60);
-  const ss = Math.floor(stats.time % 60)
+  const left = Math.max(0, props.timeLimit - stats.time);
+  const mm = Math.floor(left / 60);
+  const ss = Math.floor(left % 60)
     .toString()
     .padStart(2, '0');
   return (
     <>
       <div className="panel pointer-events-auto absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 px-4 py-2">
         <TeamBar side="blue" alive={stats.blue} total={total.blue} />
-        <span className="font-display text-lg tabular-nums">
+        <span className={`flex flex-col items-center font-display text-lg leading-none tabular-nums ${left < 30 ? 'text-red-team' : ''}`} title="Thời gian còn lại">
           {mm}:{ss}
+          {props.defense && <span className="text-[10px] font-bold opacity-70">🏰 {SIDE_NAME[props.defense]} thủ</span>}
         </span>
         <TeamBar side="red" alive={stats.red} total={total.red} />
       </div>
@@ -267,7 +311,7 @@ function TeamBar({ side, alive, total }: { side: Side; alive: number; total: num
   );
 }
 
-export function ResultModal(props: { result: BattleResult; mySide?: Side; onRematch(): void; onEdit(): void; rematchLabel?: string }) {
+export function ResultModal(props: { result: BattleResult; mySide?: Side; siege: boolean; onRematch(): void; onEdit(): void; rematchLabel?: string }) {
   const { result } = props;
   const title = resultTitle(result, props.mySide);
   const color = result.winner === 'blue' ? 'text-blue-team' : result.winner === 'red' ? 'text-red-team' : 'text-ink';
@@ -276,7 +320,7 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; onRema
       <div className="panel flex w-[min(420px,92vw)] flex-col items-center gap-3 p-6 text-center">
         <div className={`font-display text-4xl ${color}`}>{title}</div>
         <p className="text-sm opacity-80">
-          {result.reason === 'timeout' ? 'Hết giờ — phân định theo giá trị quân còn lại.' : 'Một bên đã bị tiêu diệt hoàn toàn.'}
+          {result.reason === 'core' ? 'Nhà chính đã bị phá hủy!' : result.reason === 'timeout' ? (props.siege ? 'Hết giờ — phe thủ đã giữ được thành.' : 'Hết giờ — hai bên hòa nhau.') : 'Một bên đã bị tiêu diệt hoàn toàn.'}
           <br />
           Còn sống: <b className="text-blue-team">{result.survivors.blue}</b> xanh · <b className="text-red-team">{result.survivors.red}</b> đỏ · {(result.tick / 30).toFixed(0)} giây
         </p>

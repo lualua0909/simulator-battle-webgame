@@ -5,7 +5,7 @@ import type { ArmyStars } from '@/shared/net';
 import type { ConfigBundle, MapDef, ParticleDef, ProjectileDef, WeaponDef } from '@/shared/schema';
 import { getUnitTemplate } from '../models';
 import type { Armies } from '../sim/army';
-import { Terrain, type Side } from '../sim/terrain';
+import { Terrain, WALL_CELL, type Side } from '../sim/terrain';
 import { BattleSim, SIM_DT, type BattleResult, type SimEvent } from '../sim/world';
 import { attackStyleFor, Poser } from './animate';
 import { basePitch, RtsCamera, type CameraView } from './camera';
@@ -16,6 +16,8 @@ import { ParticleSystem } from './particles';
 import { ProjectileRenderer } from './projectiles';
 import { RagdollWorld } from './ragdoll';
 import { createScenery } from './scenery';
+import { DebrisSystem } from './debris';
+import { WallRenderer } from './walls';
 import { createSkirt, createTerrainMesh, createWater, createZoneOverlay, type Water } from './terrainMesh';
 import { UnitRenderer } from './units';
 
@@ -89,6 +91,8 @@ export class BattleEngine {
   private zones: Record<Side, THREE.Group> | null = null;
   private water: Water | null = null;
   private readonly units: UnitRenderer;
+  private readonly walls: WallRenderer;
+  private readonly debris = new DebrisSystem();
   private readonly projectiles: ProjectileRenderer;
   private readonly particles = new ParticleSystem();
   private readonly effects: EffectRenderer;
@@ -108,7 +112,7 @@ export class BattleEngine {
   private readonly sun = new THREE.DirectionalLight('#fff1d8', 2.6);
   private readonly hemi = new THREE.HemisphereLight('#dcecff', '#5a4a30', 1.25);
   private readonly sky: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
-  private ghost: { group: THREE.Group; side: Side; valid: (x: number, z: number) => boolean; mats: THREE.MeshStandardMaterial[] } | null = null;
+  private ghost: { group: THREE.Group; side: Side; valid: (x: number, z: number) => boolean; mats: THREE.MeshStandardMaterial[]; grid: boolean } | null = null;
   private readonly timer = new THREE.Timer();
   private time = 0;
   private statsTimer = 0;
@@ -149,6 +153,7 @@ export class BattleEngine {
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
     this.units = new UnitRenderer(bundle);
+    this.walls = new WallRenderer(bundle);
     this.projectiles = new ProjectileRenderer(bundle);
     this.effects = new EffectRenderer(bundle);
     this.effectHost = {
@@ -167,7 +172,7 @@ export class BattleEngine {
         this.shakeAmount = Math.min(1, this.shakeAmount + amount * near);
       },
     };
-    this.scene.add(this.sky, this.hemi, this.sun, this.sun.target, this.mapGroup, this.units.group, this.projectiles.group, this.effects.group, this.particles.group, this.fireworks.group);
+    this.scene.add(this.sky, this.hemi, this.sun, this.sun.target, this.mapGroup, this.units.group, this.walls.group, this.debris.group, this.projectiles.group, this.effects.group, this.particles.group, this.fireworks.group);
 
     this.rts = new RtsCamera(this.camera, this.renderer.domElement);
     this.rts.pick = (x, y) => this.groundAt(x, y);
@@ -180,7 +185,8 @@ export class BattleEngine {
 
   // ------------------------------------------------------------------ public API
 
-  loadMap(mapId: string): void {
+  /** `defense`: the defending side in siege mode (zones differ), null = open battle. */
+  loadMap(mapId: string, defense: Side | null = null): void {
     const map = this.bundle.maps.find((m) => m.id === mapId) ?? this.bundle.maps[0];
     if (!map) return;
     for (const child of [...this.mapGroup.children]) {
@@ -191,7 +197,7 @@ export class BattleEngine {
       });
     }
     this.map = map;
-    const terrain = new Terrain(map, this.bundle.assets);
+    const terrain = new Terrain(map, this.bundle.assets, defense);
     this.terrain = terrain;
     this.mapGroup.add(createTerrainMesh(terrain), createSkirt(terrain));
     this.water = createWater(terrain);
@@ -219,9 +225,12 @@ export class BattleEngine {
 
     this.rts.setTerrain(terrain);
     this.effects.setTerrain(terrain);
+    this.debris.setTerrain(terrain);
     this.sim = null;
     this.mode = 'deploy';
     this.units.clear();
+    this.walls.clear();
+    this.debris.clear();
     this.projectiles.clear();
     this.particles.clear();
     this.effects.clear();
@@ -255,6 +264,7 @@ export class BattleEngine {
     this.mode = 'deploy';
     this.sim = new BattleSim(this.bundle, this.map, this.terrain, armies, 1);
     this.units.build(this.sim);
+    this.walls.build(this.sim);
     this.projectiles.clear();
     this.particles.clear();
     this.effects.clear();
@@ -266,6 +276,8 @@ export class BattleEngine {
     this.resetRagdolls();
     this.sim = new BattleSim(this.bundle, this.map, this.terrain, armies, seed, stars);
     this.units.build(this.sim);
+    this.walls.build(this.sim);
+    this.debris.clear();
     this.projectiles.clear();
     this.particles.clear();
     this.effects.clear();
@@ -422,10 +434,10 @@ export class BattleEngine {
       m.matrix.copy(poses[i]);
       group.add(m);
     });
-    group.rotation.y = side === 'blue' ? Math.PI / 2 : -Math.PI / 2;
+    group.rotation.y = def.structure === 'wall' ? 0 : side === 'blue' ? Math.PI / 2 : -Math.PI / 2;
     group.visible = false;
     this.scene.add(group);
-    this.ghost = { group, side, valid, mats: [ok, bad] };
+    this.ghost = { group, side, valid, mats: [ok, bad], grid: def.structure === 'wall' || def.structure === 'platform' };
   }
 
   /** Canvas snapshot (used for screenshots/share). */
@@ -443,6 +455,8 @@ export class BattleEngine {
     this.ragdollToken++;
     this.ragdolls?.dispose();
     this.units.clear();
+    this.walls.clear();
+    this.debris.dispose();
     this.projectiles.dispose();
     this.particles.dispose();
     this.effects.dispose();
@@ -562,15 +576,22 @@ export class BattleEngine {
     if (origin.y > top && direction.y >= 0) return null;
     const start = origin.y > top ? Math.floor((top - origin.y) / direction.y) : 0;
     let prev = start;
-    for (let t = start + 1; t < start + 900; t += 1) {
+    // Deployment: wall and watchtower tops are ground too (stacking, placing defenders on them).
+    const sim = this.mode === 'deploy' ? this.sim : null;
+    const surface = (x: number, z: number) => {
+      const cell = sim?.cellAt(x, z);
+      return cell ? cell.top : terrain.height(x, z);
+    };
+    const step = sim && sim.walls.size > 0 ? 0.25 : 1;
+    for (let t = start + step; t < start + 900; t += step) {
       const p = at(t);
-      if (p.y < terrain.height(p.x, p.z)) {
+      if (p.y < surface(p.x, p.z)) {
         let lo = prev;
         let hi = t;
         for (let i = 0; i < 12; i++) {
           const mid = (lo + hi) / 2;
           const q = at(mid);
-          if (q.y < terrain.height(q.x, q.z)) hi = mid;
+          if (q.y < surface(q.x, q.z)) hi = mid;
           else lo = mid;
         }
         const hit = at(hi).clone();
@@ -589,6 +610,12 @@ export class BattleEngine {
         if (p && this.mode === 'deploy' && !this.cine) {
           this.ghost.group.visible = true;
           this.ghost.group.position.copy(p);
+          if (this.ghost.grid) {
+            const ix = Math.floor(p.x / WALL_CELL);
+            const iz = Math.floor(p.z / WALL_CELL);
+            const cell = this.sim?.cellAt(p.x, p.z);
+            this.ghost.group.position.set((ix + 0.5) * WALL_CELL, cell ? cell.top : this.terrain!.height((ix + 0.5) * WALL_CELL, (iz + 0.5) * WALL_CELL), (iz + 0.5) * WALL_CELL);
+          }
           const good = this.ghost.valid(p.x, p.z);
           const [ok, bad] = this.ghost.mats;
           this.ghost.group.children.forEach((c) => ((c as THREE.Mesh).material = good ? ok : bad));
@@ -639,9 +666,11 @@ export class BattleEngine {
       this.ragdolls?.step(simDt);
       this.units.manage(simDt, this.bundle.settings);
       this.units.update(sim, this.mode === 'battle' ? this.alpha : 1, animDt, this.hidden);
+      this.walls.update(animDt, this.hidden);
       this.projectiles.update(sim, this.alpha, simDt, this.particles);
     }
     this.effects.update(animDt, this.mode === 'battle' ? sim : null, this.alpha, this.effectHost);
+    this.debris.update(simDt);
     this.particles.update(animDt);
     this.fireworks.update(dt);
     this.updateDusk(dt);
@@ -663,6 +692,28 @@ export class BattleEngine {
     (window as unknown as { __engineFrames?: number }).__engineFrames = ((window as unknown as { __engineFrames?: number }).__engineFrames ?? 0) + 1;
   }
 
+  private structureColors(u: { def: { modelId: string } }): string[] {
+    const params = this.bundle.assets.find((a) => a.id === u.def.modelId)?.params ?? {};
+    const pick = (k: string, d: string) => (typeof params[k] === 'string' ? (params[k] as string) : d);
+    return [pick('stone', '#9a948a'), pick('stone2', '#7d776e'), pick('wood', '#7a5230'), pick('roof', '#9a3a2a')];
+  }
+
+  /** A building comes down: waves of stone and timber, dust columns and a heavy shake. */
+  private collapseBuilding(u: { x: number; y: number; z: number; radius: number; def: { height: number; modelId: string } }): void {
+    const colors = this.structureColors(u);
+    const r = Math.max(1, u.radius);
+    const h = u.def.height;
+    const waves = 4;
+    for (let k = 0; k < waves; k++) {
+      const y = u.y + h * (1 - (k + 0.5) / waves);
+      this.debris.burst({ x: u.x, y, z: u.z, hx: r * 0.8, hy: h / waves / 2, hz: r * 0.8, count: Math.round(14 + r * h * 1.2), colors, force: 4.5, delay: k * 0.35, size: [0.2, 0.7] });
+    }
+    for (let k = 0; k < 3; k++) this.emit('smoke', u.x + (Math.random() - 0.5) * r, u.y + h * (0.3 + k * 0.25), u.z + (Math.random() - 0.5) * r, undefined, 18);
+    this.emit('shock-dust', u.x, u.y + 0.3, u.z, undefined, 50);
+    this.emit('debris', u.x, u.y + h * 0.5, u.z, undefined, 40);
+    this.effectHost.shake(0.6, u.x, u.z);
+  }
+
   private emit(id: string | null | undefined, x: number, y: number, z: number, dir?: { x: number; y: number; z: number }, count?: number): void {
     const def = id ? this.particleDefs.get(id) : undefined;
     if (def) this.particles.emit(def, x, y, z, dir, count);
@@ -675,14 +726,45 @@ export class BattleEngine {
       switch (e.type) {
         case 'hit': {
           const w = this.weapons.get(e.weaponId);
+          const target = sim.units[e.targetId];
+          if (target?.structure) {
+            // Stone chips instead of blood; walls shudder.
+            this.emit(e.blocked ? 'spark' : 'hit-dust', e.x, e.y, e.z, { x: -e.dx, y: 0.6, z: -e.dz });
+            if (e.damage > 40) this.debris.burst({ x: e.x, y: e.y, z: e.z, hx: 0.4, hy: 0.4, hz: 0.4, count: Math.min(4, 1 + Math.floor(e.damage / 80)), colors: this.structureColors(target), dx: -e.dx, dz: -e.dz, force: 3, size: [0.08, 0.22] });
+            if (target.grid) this.walls.onHit(target.id, e.damage);
+            break;
+          }
           this.emit(e.blocked ? 'spark' : w?.hitParticleId, e.x, e.y, e.z, { x: e.dx, y: 0.6, z: e.dz });
           this.units.onHit(e);
           break;
         }
         case 'death': {
           const u = sim.units[e.unitId];
+          if (u.structure) {
+            if (!u.grid || u.wall?.kind === 'platform') this.collapseBuilding(u);
+            this.units.onDeath(e, sim, settings);
+            break;
+          }
           this.units.onDeath(e, sim, settings);
           this.emit(settings.deathParticleId, u.x, u.y + u.def.height * 0.5, u.z, undefined, Math.round(8 + u.def.radius * 6));
+          break;
+        }
+        case 'wall-break': {
+          const u = sim.units[e.unitId];
+          const cell = u.wall;
+          if (!cell) break;
+          const tierHeight = settings.siege.tierHeight;
+          const colors = this.walls.colors(cell);
+          for (let k = 0; k < e.lost; k++) {
+            const y = u.y + (e.tiers + k + 0.5) * tierHeight;
+            this.debris.burst({ x: u.x, y, z: u.z, hx: WALL_CELL * 0.45, hy: tierHeight * 0.45, hz: WALL_CELL * 0.45, count: 26, colors, dx: e.dx, dz: e.dz, force: 3.5 + k, delay: k * 0.08 });
+            this.emit('debris', u.x, y, u.z);
+            this.emit('smoke', u.x, y - tierHeight * 0.3, u.z, undefined, 10);
+          }
+          const collapsed = e.tiers === 0;
+          this.emit('shock-dust', u.x, u.y + 0.2, u.z, undefined, collapsed ? 40 : 16);
+          if (collapsed) this.emit('smoke', u.x, u.y + 1.5, u.z, undefined, 24);
+          this.effectHost.shake(collapsed ? 0.35 : 0.14, u.x, u.z);
           break;
         }
         case 'attack': {

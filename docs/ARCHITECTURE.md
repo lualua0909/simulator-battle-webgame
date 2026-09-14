@@ -107,6 +107,16 @@ mindmap
         Đặt / rải hàng loạt / xóa
         Hoàn tác Ctrl Z
         Ngân sách và giới hạn lính
+      Thủ thành
+        Đấu máy, 2 người 1 máy, online
+        Một phe thủ, một phe công, chọn trên mọi bản đồ
+        Nhà chính bắt buộc, bị phá là phe thủ thua
+        Hết giờ phe thủ thắng, đại chiến hết giờ thì hòa
+        Tường khối 2 m chồng 3 tầng, lính thủ đi trên tường
+        Tháp canh, tháp cung, tháp súng, trụ điện, nhà lính
+        Ninja leo tường, máy bắn đá lửa
+        Bot xây thành theo mẫu
+        Tường nứt, sụp, mảnh vỡ, đống đổ nát
       Trận đấu
         Mô phỏng tất định 30 Hz
         Tạm dừng, tốc độ 0.25x đến 4x

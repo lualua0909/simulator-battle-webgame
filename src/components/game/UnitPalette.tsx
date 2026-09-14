@@ -16,15 +16,18 @@ interface Props {
   player: PlayerState | null;
   /** Star levels shown on the tiles when they count in this battle. */
   stars?: Record<string, number>;
+  /** Units usable in this mode and side (others are hidden). */
+  available?: (u: UnitDef) => boolean;
 }
 
 const ROLE_LABEL: Record<UnitDef['role'], string> = { melee: 'Cận chiến', ranged: 'Tầm xa', support: 'Hỗ trợ', siege: 'Công thành' };
 
-export default function UnitPalette({ bundle, thumbs, selected, onSelect, budgetLeft, player, stars }: Props) {
-  const factions = useMemo(() => [...bundle.factions].sort((a, b) => a.order - b.order), [bundle]);
+export default function UnitPalette({ bundle, thumbs, selected, onSelect, budgetLeft, player, stars, available }: Props) {
   const [tab, setTab] = useState<string>('all');
   const [hover, setHover] = useState<UnitDef | null>(null);
-  const units = bundle.units.filter((u) => tab === 'all' || u.factionId === tab).sort((a, b) => Number(isUnlocked(b, player)) - Number(isUnlocked(a, player)) || a.cost - b.cost);
+  const pool = bundle.units.filter((u) => !available || available(u));
+  const factions = useMemo(() => [...bundle.factions].sort((a, b) => a.order - b.order), [bundle]).filter((f) => pool.some((u) => u.factionId === f.id));
+  const units = pool.filter((u) => tab === 'all' || u.factionId === tab).sort((a, b) => Number(isUnlocked(b, player)) - Number(isUnlocked(a, player)) || a.cost - b.cost);
   const info = hover ?? bundle.units.find((u) => u.id === selected) ?? null;
 
   return (

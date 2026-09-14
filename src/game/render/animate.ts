@@ -26,6 +26,10 @@ export interface AnimInput {
   seed: number;
   /** Speed at which the gait reaches full amplitude. */
   refSpeed: number;
+  /** Turret yaw relative to the body (tower rig). */
+  aim?: number;
+  /** Climbing a wall (humanoid). */
+  climbing?: boolean;
 }
 
 const tmpEuler = new THREE.Euler();
@@ -96,6 +100,13 @@ export class Poser {
         case 'catapult':
           this.catapult(seg, input);
           break;
+        case 'tower':
+          this.r(seg, 'turret', 0, input.aim ?? 0, 0);
+          this.r(seg, 'flag', 0, Math.sin(input.time * 2.2 + input.seed * 6) * 0.35, 0);
+          break;
+        case 'static':
+          this.r(seg, 'flag', 0, Math.sin(input.time * 2.2 + input.seed * 6) * 0.35, 0);
+          break;
       }
     }
     const parts = this.template.parts;
@@ -144,6 +155,22 @@ export class Poser {
     const weaponHand = (seg.meta.weaponHand as string) === 'L' ? 'L' : 'R';
     const hasWeapon = seg.parts.weapon !== undefined;
     const hasShield = seg.parts.offhand !== undefined;
+
+    if (a.climbing) {
+      // Hand over hand up the wall face, knees alternating.
+      const k = Math.sin(t * 7);
+      this.r(seg, 'armL', -2.7 + k * 0.45, 0, 0.25);
+      this.r(seg, 'armR', -2.7 - k * 0.45, 0, -0.25);
+      this.r(seg, 'forearmL', -0.4 - Math.max(0, k) * 0.6);
+      this.r(seg, 'forearmR', -0.4 - Math.max(0, -k) * 0.6);
+      this.r(seg, 'thighL', -0.9 - k * 0.5);
+      this.r(seg, 'thighR', -0.9 + k * 0.5);
+      this.r(seg, 'shinL', 1.2);
+      this.r(seg, 'shinR', 1.2);
+      this.r(seg, 'torso', -0.15);
+      this.r(seg, 'head', -0.35);
+      return;
+    }
 
     if (a.airborne || a.stunned) {
       const f = a.airborne ? 1 : 0.5;

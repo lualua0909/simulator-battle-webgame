@@ -20,7 +20,7 @@ const map: MapDef = {
   seed: 5,
   size: 110,
   heightScale: 0.4,
-  river: { enabled: false, width: 8, meander: 0 },
+  river: { enabled: false, width: 8, meander: 0, ford: 0 },
   trees: { perHectare: 0, kinds: [] },
   rocks: { perHectare: 0, kinds: [] },
   bushes: { perHectare: 0, kinds: [] },

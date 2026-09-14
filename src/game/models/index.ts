@@ -10,6 +10,7 @@ import { createElephantModel } from './elephant';
 import { createBushModel, createRockModel, createTreeModel } from './environment';
 import { createHorseModel } from './horse';
 import { createHumanoidModel, HIP_Y } from './humanoid';
+import { createStructureModel } from './structures';
 
 export type { ModelTemplate } from './bake';
 
@@ -41,6 +42,9 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
       break;
     case 'catapult':
       root = createCatapultModel(parseAssetParams('catapult', asset.params));
+      break;
+    case 'structure':
+      root = createStructureModel(parseAssetParams('structure', asset.params), seed);
       break;
     case 'tree':
       root = createTreeModel(parseAssetParams('tree', asset.params), seed);

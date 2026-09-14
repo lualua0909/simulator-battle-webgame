@@ -22,6 +22,7 @@ interface TypeVis {
   /** Motion per ability id (basic attack and skills). */
   styles: Map<string, AttackStyle>;
   meshes: (THREE.InstancedMesh | null)[];
+  capacity: number;
   used: number;
   refSpeed: number;
   stride: number;
@@ -45,7 +46,15 @@ interface UnitVis {
   corpse: boolean;
   sink: number;
   gone: boolean;
+  /** Turret yaw relative to the body (towers). */
+  aim: number;
+  /** Seconds since a building started collapsing (-1 = standing). */
+  collapse: number;
+  /** Pose when the collapse started. */
+  rest: THREE.Matrix4[] | null;
 }
+
+const COLLAPSE_TIME = 2.4;
 
 type HitEvent = Extract<SimEvent, { type: 'hit' }>;
 type DeathEvent = Extract<SimEvent, { type: 'death' }>;
@@ -78,31 +87,33 @@ export class UnitRenderer {
 
   build(sim: BattleSim): void {
     this.clear();
-    const counts = new Map<string, number>();
-    for (const u of sim.units) counts.set(u.def.id, (counts.get(u.def.id) ?? 0) + 1);
-    let maxParts = 0;
-    for (const [id, n] of counts) {
-      const def = sim.units.find((u) => u.def.id === id)!.def;
-      const template = getUnitTemplate(def, this.assets);
-      const style = attackStyleFor(template, this.weapons.get(def.weaponId));
-      const meshes = template.parts.map((p) => {
-        if (!p.geometry) return null;
-        const m = new THREE.InstancedMesh(p.geometry, material, n);
-        m.count = 0;
-        m.castShadow = true;
-        m.receiveShadow = true;
-        m.frustumCulled = false;
-        this.group.add(m);
-        return m;
-      });
-      maxParts = Math.max(maxParts, template.parts.length);
-      this.types.set(id, { template, poser: new Poser(template, style), style, styles: new Map(), meshes, used: 0, refSpeed: Math.max(1, def.speed), stride: Math.max(0.5, template.bounds.max.y * 0.32) });
+    this.ensure(sim);
+  }
+
+  /** Visuals for units added since the last call (all of them after build, barracks spawns later). */
+  ensure(sim: BattleSim): void {
+    const start = this.vis.length;
+    if (sim.units.length === start) return;
+    const need = new Map<string, number>();
+    for (let i = start; i < sim.units.length; i++) {
+      const u = sim.units[i];
+      if (u.wall?.kind === 'wall') continue;
+      need.set(u.def.id, (need.get(u.def.id) ?? 0) + 1);
     }
-    this.pose = Array.from({ length: maxParts }, () => new THREE.Matrix4());
-    this.vis = sim.units.map((u) => {
-      const type = this.types.get(u.def.id)!;
-      return {
-        type,
+    for (const [id, n] of need) {
+      const type = this.types.get(id);
+      const existing = type ? this.vis.filter((v) => v.type === type).length : 0;
+      if (type && existing + n <= type.capacity) continue;
+      const def = sim.units.find((u) => u.def.id === id)!.def;
+      // Types that can still grow (barracks spawns) get headroom.
+      this.makeType(id, def, type ? (existing + n) * 2 : n, type);
+    }
+    for (let i = start; i < sim.units.length; i++) {
+      const u = sim.units[i];
+      const wall = u.wall?.kind === 'wall';
+      const type = this.types.get(u.def.id);
+      const v: UnitVis = {
+        type: type!,
         seed: ((u.id * 2654435761) >>> 0) / 4294967296,
         phase: Math.random() * Math.PI * 2,
         speed: 0,
@@ -114,24 +125,59 @@ export class UnitRenderer {
         vLeanZ: 0,
         yaw: Math.atan2(u.fx, u.fz),
         tumble: 0,
-        world: type.template.parts.map(() => new THREE.Matrix4()),
+        world: type ? type.template.parts.map(() => new THREE.Matrix4()) : [],
         ragdoll: null,
         corpse: false,
         sink: 0,
-        gone: false,
+        // Wall stacks are drawn by WallRenderer.
+        gone: wall,
+        aim: 0,
+        collapse: -1,
+        rest: null,
       };
+      this.vis.push(v);
+      if (!wall) this.poseAlive(u, v, sim, 1, 0);
+    }
+  }
+
+  private makeType(id: string, def: SimUnit['def'], capacity: number, old: TypeVis | undefined): void {
+    const template = old?.template ?? getUnitTemplate(def, this.assets);
+    const style = old?.style ?? attackStyleFor(template, this.weapons.get(def.weaponId));
+    if (old) for (const m of old.meshes) if (m) this.group.remove(m);
+    const meshes = template.parts.map((p, k) => {
+      if (!p.geometry) return null;
+      const m = new THREE.InstancedMesh(p.geometry, material, capacity);
+      const prev = old?.meshes[k];
+      if (prev) {
+        (m.instanceMatrix.array as Float32Array).set(prev.instanceMatrix.array as Float32Array);
+        prev.dispose();
+      }
+      m.count = 0;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.frustumCulled = false;
+      this.group.add(m);
+      return m;
     });
-    sim.units.forEach((u, i) => this.poseAlive(u, this.vis[i], sim, 1, 0));
+    if (template.parts.length > this.pose.length) this.pose = Array.from({ length: template.parts.length }, () => new THREE.Matrix4());
+    if (old) {
+      old.meshes = meshes;
+      old.capacity = capacity;
+      return;
+    }
+    this.types.set(id, { template, poser: new Poser(template, style), style, styles: new Map(), meshes, capacity, used: 0, refSpeed: Math.max(1, def.speed), stride: Math.max(0.5, template.bounds.max.y * 0.32) });
   }
 
   update(sim: BattleSim, alpha: number, dt: number, hidden: Side | null): void {
     this.time += dt;
+    this.ensure(sim);
     for (const t of this.types.values()) t.used = 0;
     for (let i = 0; i < sim.units.length; i++) {
       const u = sim.units[i];
       const v = this.vis[i];
       if (!v || v.gone || (hidden && u.side === hidden)) continue;
       if (u.alive) this.poseAlive(u, v, sim, alpha, dt);
+      else if (v.collapse >= 0) this.collapseStep(u, v, dt);
       else if (v.ragdoll && this.ragdolls) this.ragdolls.read(v.ragdoll, v.world);
       const t = v.type;
       const slot = t.used++;
@@ -159,7 +205,15 @@ export class UnitRenderer {
     const z = u.pz + (u.z - u.pz) * alpha;
     const vx = (u.x - u.px) / SIM_DT;
     const vz = (u.z - u.pz) / SIM_DT;
-    if (dt > 0) {
+    if (u.structure) {
+      // Buildings stand still; a tower turns its turret toward the target.
+      const t = sim.units[u.targetId];
+      if (t && t.alive && dt > 0) {
+        let d = Math.atan2(t.x - u.x, t.z - u.z) - v.yaw - v.aim;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        v.aim += d * (1 - Math.exp(-dt * 5));
+      }
+    } else if (dt > 0) {
       const k = Math.min(1, dt * 10);
       const nvx = v.svx + (vx - v.svx) * k;
       const nvz = v.svz + (vz - v.svz) * k;
@@ -199,7 +253,7 @@ export class UnitRenderer {
 
     const t = v.type;
     t.poser.compute(
-      { time: this.time, speed: v.speed, phase: v.phase, attack, style: this.styleOf(t, act.def), airborne: u.airborne, stunned: u.stun > 0, leanX: v.leanX, leanZ: v.leanZ, seed: v.seed, refSpeed: t.refSpeed },
+      { time: this.time, speed: v.speed, phase: v.phase, attack, style: this.styleOf(t, act.def), airborne: u.airborne && !u.dashWeapon, stunned: u.stun > 0, leanX: v.leanX, leanZ: v.leanZ, seed: v.seed, refSpeed: t.refSpeed, aim: v.aim, climbing: u.climb !== null },
       this.pose,
     );
     this.tmpE.set(-v.tumble, v.yaw, 0, 'YXZ');
@@ -226,10 +280,32 @@ export class UnitRenderer {
     v.vLeanZ -= left * k;
   }
 
+  /** Building sinks, tilts and shudders into a ruin (debris and dust come from the engine). */
+  private collapseStep(u: SimUnit, v: UnitVis, dt: number): void {
+    if (!v.rest || v.collapse > COLLAPSE_TIME) return;
+    v.collapse += dt;
+    const k = Math.min(1, v.collapse / COLLAPSE_TIME);
+    const fall = k * k;
+    const h = u.def.height;
+    const shake = (1 - k) * 0.12;
+    const tilt = fall * 0.14 * (v.seed > 0.5 ? 1 : -1);
+    const m = this.rootM
+      .makeTranslation(u.x + (Math.random() * 2 - 1) * shake, u.y - fall * h * 0.72, u.z + (Math.random() * 2 - 1) * shake)
+      .multiply(new THREE.Matrix4().makeRotationZ(tilt))
+      .multiply(new THREE.Matrix4().makeRotationX(tilt * 0.6))
+      .multiply(new THREE.Matrix4().makeTranslation(-u.x, -u.y, -u.z));
+    for (let i = 0; i < v.world.length; i++) v.world[i].multiplyMatrices(m, v.rest[i]);
+  }
+
   onDeath(e: DeathEvent, sim: BattleSim, settings: Settings): void {
     const v = this.vis[e.unitId];
     const u = sim.units[e.unitId];
-    if (!v || !u) return;
+    if (!v || !u || v.gone) return;
+    if (u.structure) {
+      v.collapse = 0;
+      v.rest = v.world.map((w) => w.clone());
+      return;
+    }
     const vel = new THREE.Vector3((u.x - u.px) / SIM_DT, u.airborne ? u.vy : 0, (u.z - u.pz) / SIM_DT);
     const impulse = new THREE.Vector3(e.dx * e.force, e.dy * e.force + 1.5, e.dz * e.force);
     if (this.ragdolls && this.ragdolls.active.size < settings.ragdollLimit) {

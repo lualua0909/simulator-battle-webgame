@@ -1,7 +1,7 @@
 // Projectile models, authored pointing along +Z (velocity direction).
 import type * as THREE from 'three';
 import type { ProjectileDef } from '@/shared/schema';
-import { ball, beam, box, cone, detail, faceColors, jitter, mesh, metal, modelRoot } from './common';
+import { ball, beam, box, cone, cyl, detail, faceColors, jitter, mesh, metal, modelRoot } from './common';
 
 export function createProjectileModel(def: Pick<ProjectileDef, 'model' | 'color' | 'scale'>): THREE.Group {
   const root = modelRoot(`projectile-${def.model}`, 'static');
@@ -41,6 +41,11 @@ export function createProjectileModel(def: Pick<ProjectileDef, 'model' | 'color'
       root.add(mesh('meteor-glow', jitter(ball(0.36, 1), 0.1, 9), '#ffd27a', [0, 0, 0.08], [0, 0, 0], { emissive: 1 }));
       root.add(mesh('meteor-flame', jitter(cone(0.46, 1.5, 7), 0.1, 11), tint ?? '#ff6a1a', [0, 0, -0.72], [-Math.PI / 2, 0, 0], { emissive: 0.9 }));
       root.add(detail(mesh('meteor-flame-core', cone(0.24, 1.0, 6), '#ffd27a', [0, 0, -0.5], [-Math.PI / 2, 0, 0], { emissive: 1 })));
+      break;
+    case 'shuriken':
+      // Four-point star lying in the flight plane.
+      for (let i = 0; i < 4; i++) root.add(metal(`shuriken-blade-${i}`, cone(0.045, 0.16, 3).rotateX(Math.PI / 2).translate(0, 0, 0.08).rotateY((i * Math.PI) / 2), tint ?? '#c9ced6'));
+      root.add(metal('shuriken-hub', cyl(0.035, 0.035, 0.02, 6), '#3a3a40'));
       break;
   }
   root.scale.setScalar(def.scale);

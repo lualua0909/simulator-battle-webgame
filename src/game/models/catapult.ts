@@ -1,7 +1,7 @@
 // Low-poly mangonel (catapult rig): wheel pivots, throwing-arm pivot, ammo part.
 import type * as THREE from 'three';
 import type { CatapultParams } from '@/shared/schema';
-import { ball, beam, box, cyl, detail, faceColors, jitter, mesh, metal, modelRoot, part, shade } from './common';
+import { ball, beam, box, cone, cyl, detail, faceColors, jitter, mesh, metal, modelRoot, part, shade } from './common';
 
 export function createCatapultModel(p: CatapultParams): THREE.Group {
   const root = modelRoot('catapult', 'catapult');
@@ -38,7 +38,12 @@ export function createCatapultModel(p: CatapultParams): THREE.Group {
   arm.add(detail(mesh('bucket-lip', box(0.46, 0.08, 0.06), p.wood, [0, 0.34, -1.5])));
   base.add(arm);
   const ammo = part('ammo', [0, 0.46, -1.7]);
-  ammo.add(mesh('ammo-stone', faceColors(jitter(ball(0.24, 1), 0.08, 7), '#8d8a84', '#6a675f', 7), '#8d8a84'));
+  if (p.fire) {
+    ammo.add(mesh('ammo-pot', faceColors(jitter(ball(0.24, 1), 0.05, 9), '#5a3a22', '#3a2414', 9), '#5a3a22'));
+    ammo.add(detail(mesh('ammo-flame', cone(0.16, 0.42, 6), '#ff8a1f', [0, 0.3, 0], [0, 0, 0], { emissive: 1.6 })));
+    base.add(detail(metal('brazier', cyl(0.22, 0.14, 0.3, 7), p.metal, [0.35, 0.95, -1.05])));
+    base.add(detail(mesh('brazier-fire', cone(0.18, 0.4, 6), '#ffb13d', [0.35, 1.28, -1.05], [0, 0, 0], { emissive: 1.8 })));
+  } else ammo.add(mesh('ammo-stone', faceColors(jitter(ball(0.24, 1), 0.08, 7), '#8d8a84', '#6a675f', 7), '#8d8a84'));
   arm.add(ammo);
   return root;
 }

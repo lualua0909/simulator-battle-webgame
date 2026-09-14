@@ -46,7 +46,7 @@ test('every bot builds a legal army on every map', () => {
 test('battle is deterministic and finishes', () => {
   const run = () => {
     const { terrain, armies } = botArmies('song-xanh', 7);
-    const sim = new BattleSim(SEED, terrain.map, terrain, armies, 12345);
+    const sim = new BattleSim({ ...SEED, settings: { ...SEED.settings, battleTimeLimit: 240 } }, terrain.map, terrain, armies, 12345);
     const sums: number[] = [];
     while (!sim.result && sim.tick < 30 * 300) {
       sim.step();
@@ -63,7 +63,7 @@ test('battle is deterministic and finishes', () => {
 
 // ------------------------------------------------------------------ skills
 
-const ARENA: MapDef = { ...SEED.maps[0], id: 'arena', size: 80, heightScale: 0, river: { enabled: false, width: 8, meander: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
+const ARENA: MapDef = { ...SEED.maps[0], id: 'arena', size: 80, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
 const NOOP: WeaponDef = { ...SEED.weapons.find((w) => w.id === 'club')!, id: 'noop', damage: 0, range: 0.3, cooldown: 60, knockback: 0 };
 const DUMMY: UnitDef = { ...SEED.units.find((u) => u.id === 'clubber')!, id: 'dummy', hp: 5000, speed: 0, weaponId: 'noop', skillIds: [] };
 

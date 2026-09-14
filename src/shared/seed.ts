@@ -18,6 +18,7 @@ const factions: Faction[] = [
   { id: 'trung-co', name: 'Trung cổ', color: '#3f7fd6', icon: '🛡️', order: 2 },
   { id: 'phuong-dong', name: 'Phương Đông', color: '#d23c3c', icon: '🏮', order: 3 },
   { id: 'huyen-thoai', name: 'Huyền thoại', color: '#8e44ad', icon: '🐉', order: 4 },
+  { id: 'thanh-tri', name: 'Thành trì', color: '#7d776e', icon: '🏰', order: 5 },
 ];
 
 const P = (p: Partial<ParticleDef> & Pick<ParticleDef, 'id' | 'name'>): ParticleDef => ({
@@ -84,6 +85,8 @@ const projectiles: ProjectileDef[] = [
   Proj({ id: 'boulder', name: 'Tảng đá', model: 'boulder', scale: 1, hitRadius: 0.8, impactParticleId: 'debris', lifetime: 12 }),
   Proj({ id: 'fireball', name: 'Cầu lửa', model: 'fireball', color: '#ff7a1a', gravity: 2, hitRadius: 0.5, trailParticleId: 'fire-trail', impactParticleId: 'explosion' }),
   Proj({ id: 'bullet', name: 'Đạn chì', model: 'bullet', color: '#ffe7a0', gravity: 1.5, hitRadius: 0.18, lifetime: 2, impactParticleId: 'spark' }),
+  Proj({ id: 'fire-pot', name: 'Hũ dầu lửa', model: 'boulder', scale: 0.9, color: '#ff7a1a', hitRadius: 0.8, lifetime: 12, trailParticleId: 'fire-trail', impactParticleId: 'explosion' }),
+  Proj({ id: 'shuriken', name: 'Phi tiêu', model: 'shuriken', gravity: 2, hitRadius: 0.25, lifetime: 3, stick: true, impactParticleId: 'spark' }),
   Proj({ id: 'meteor', name: 'Thiên thạch', model: 'meteor', scale: 1.6, color: '#ff6a1a', gravity: 0, hitRadius: 1, trailParticleId: 'fire-trail', impactParticleId: 'explosion' }),
 ];
 
@@ -148,6 +151,16 @@ const weapons: WeaponDef[] = [
   W({ id: 'dragon-breath', name: 'Hơi thở rồng', attack: 'breath', damage: 14, damageType: 'fire', range: 13, cooldown: 0.2, windup: 0, knockback: 1, cleaveArc: 40, maxTargets: 12, fireParticleId: 'fire' }),
   W({ id: 'musket', name: 'Súng hỏa mai', attack: 'projectile', damage: 60, damageType: 'pierce', range: 34, cooldown: 3.4, windup: 0.55, knockback: 6, knockUp: 1.5, projectileId: 'bullet', projectileSpeed: 110, spread: 0.5, hitParticleId: 'hit-chunk', fireParticleId: 'muzzle-flash', areaParticleId: 'gun-smoke', castStyle: 'gun' }),
   W({ id: 'zap', name: 'Tia sét', attack: 'chain', damage: 28, damageType: 'magic', range: 14, cooldown: 1.6, windup: 0.35, knockback: 2, chainCount: 2, chainRange: 5, chainFalloff: 0.7, stunDuration: 0.25, hitParticleId: 'lightning-spark', vfxColor: '#8fd3ff', castStyle: 'palm' }),
+  W({ id: 'katana', name: 'Kiếm katana', attack: 'melee', damage: 45, damageType: 'slash', range: 1.3, cooldown: 0.75, windup: 0.2, knockback: 3, hitParticleId: 'spark' }),
+  W({ id: 'fire-catapult', name: 'Máy bắn đá lửa', attack: 'projectile', damage: 120, damageType: 'fire', range: 72, minRange: 14, cooldown: 7, windup: 1, knockback: 14, knockUp: 7, splashRadius: 5, projectileId: 'fire-pot', projectileSpeed: 20, spread: 1.4, burnDps: 20, burnDuration: 4, hitParticleId: 'ember' }),
+  W({ id: 'phi-tieu', name: 'Ném phi tiêu', attack: 'projectile', damage: 30, damageType: 'pierce', range: 18, cooldown: 5, windup: 0.3, knockback: 1, projectileId: 'shuriken', projectileSpeed: 30, spread: 1.5, volley: 3, initialCooldown: 1, hitParticleId: 'hit-chunk', castStyle: 'throw' }),
+  W({ id: 'chem-luot', name: 'Chém lướt', attack: 'dash', damage: 90, damageType: 'slash', range: 14, minRange: 3, cooldown: 7, windup: 0.25, knockback: 8, initialCooldown: 2, hitParticleId: 'spark', castStyle: 'swing' }),
+  // ---- siege structures
+  W({ id: 'none', name: 'Không tấn công', attack: 'melee', damage: 0, damageType: 'blunt', range: 0.3, cooldown: 60, windup: 0 }),
+  W({ id: 'keep-arrows', name: 'Tên từ lỗ châu mai', attack: 'projectile', damage: 30, damageType: 'pierce', range: 40, cooldown: 1.4, windup: 0.2, knockback: 1, projectileId: 'arrow', projectileSpeed: 28, spread: 1.2, volley: 2, hitParticleId: 'hit-chunk' }),
+  W({ id: 'tower-bow', name: 'Nỏ tháp cung', attack: 'projectile', damage: 28, damageType: 'pierce', range: 42, cooldown: 1.1, windup: 0.2, knockback: 1, projectileId: 'arrow', projectileSpeed: 30, spread: 1, volley: 2, hitParticleId: 'hit-chunk' }),
+  W({ id: 'tower-gun', name: 'Súng tháp', attack: 'projectile', damage: 70, damageType: 'pierce', range: 38, cooldown: 2.2, windup: 0.3, knockback: 6, knockUp: 1.5, projectileId: 'bullet', projectileSpeed: 110, spread: 0.6, hitParticleId: 'hit-chunk', fireParticleId: 'muzzle-flash', areaParticleId: 'gun-smoke', castStyle: 'gun' }),
+  W({ id: 'tesla-zap', name: 'Phóng điện', attack: 'chain', damage: 70, damageType: 'magic', range: 18, cooldown: 2.4, windup: 0.5, knockback: 3, chainCount: 4, chainRange: 6, chainFalloff: 0.8, stunDuration: 0.5, hitParticleId: 'lightning-spark', vfxColor: '#8fe4ff' }),
   // ---- skills
   W({ id: 'thien-loi', name: 'Thiên lôi (sét giáng)', attack: 'strike', damage: 140, damageType: 'magic', range: 32, cooldown: 9, windup: 0.8, knockback: 8, knockUp: 7, splashRadius: 3.2, strikeDelay: 0.45, stunDuration: 1.2, minTargets: 2, initialCooldown: 2, hitParticleId: 'lightning-spark', areaParticleId: 'shock-dust', vfxColor: '#a8dcff', castStyle: 'raise' }),
   W({ id: 'bao-sam', name: 'Bão sấm sét', attack: 'strike', damage: 75, damageType: 'magic', range: 34, cooldown: 18, windup: 1.1, knockback: 5, knockUp: 5, splashRadius: 2.6, strikeCount: 8, strikeDelay: 0.5, strikeInterval: 0.22, strikeSpread: 6.5, stunDuration: 0.8, minTargets: 4, initialCooldown: 4, hitParticleId: 'lightning-spark', areaParticleId: 'shock-dust', vfxColor: '#c9a8ff', castStyle: 'raise' }),
@@ -182,6 +195,12 @@ const U = (u: Partial<UnitDef> & Pick<UnitDef, 'id' | 'name' | 'factionId' | 'ro
   chargeBonus: 1,
   knockbackResist: 0,
   trampleDamage: 0,
+  structure: 'none',
+  siegeSide: 'any',
+  climbWalls: false,
+  spawnUnitId: null,
+  spawnInterval: 1,
+  spawnMax: 10,
   // Units up to 150 are free starters; the rest unlock for about 20× their army cost (1 coin = 1 VND).
   unlockCost: u.cost <= 150 ? 0 : Math.round((u.cost * 20) / 1000) * 1000,
   cardPrice: Math.min(500, Math.max(5, Math.round(u.cost / 50) * 5)),
@@ -189,6 +208,10 @@ const U = (u: Partial<UnitDef> & Pick<UnitDef, 'id' | 'name' | 'factionId' | 'ro
   starCoins: [1000, 2000, 4000, 8000, 16000],
   ...u,
 });
+
+/** Siege structure: immovable, siege armour. */
+const S = (u: Partial<UnitDef> & Pick<UnitDef, 'id' | 'name' | 'cost' | 'hp' | 'modelId' | 'structure'>): UnitDef =>
+  U({ factionId: 'thanh-tri', role: 'support', weaponId: 'none', speed: 0, mass: 500, armorClass: 'siege', knockbackResist: 1, ...u });
 
 const units: UnitDef[] = [
   U({ id: 'clubber', name: 'Chiến binh gậy', factionId: 'bo-lac', role: 'melee', cost: 70, hp: 100, speed: 3.6, weaponId: 'club', modelId: 'm-clubber', description: 'Rẻ, đông, đập bừa.' }),
@@ -202,7 +225,7 @@ const units: UnitDef[] = [
   U({ id: 'healer', name: 'Tu sĩ', factionId: 'trung-co', role: 'support', cost: 180, hp: 90, speed: 3.5, skillIds: ['hoi-mau-dien-rong'], weaponId: 'heal-staff', modelId: 'm-healer', description: 'Hồi máu đồng đội gần.' }),
   U({ id: 'knight', name: 'Hiệp sĩ', factionId: 'trung-co', role: 'melee', cost: 650, hp: 700, speed: 3.2, mass: 2, radius: 0.5, height: 1.9, armorClass: 'heavy', blockChance: 0.3, knockbackResist: 0.5, weaponId: 'knight-sword', modelId: 'm-knight' }),
   U({ id: 'cavalry', name: 'Kỵ binh', factionId: 'trung-co', role: 'melee', cost: 800, hp: 800, speed: 7, mass: 8, radius: 1, height: 2.6, armorClass: 'heavy', chargeBonus: 2.2, knockbackResist: 0.6, trampleDamage: 30, weaponId: 'lance', modelId: 'm-warhorse', riderModelId: 'm-rider-knight', description: 'Xung phong gây sát thương gấp đôi.' }),
-  U({ id: 'catapult', name: 'Máy bắn đá', factionId: 'trung-co', role: 'siege', cost: 1000, hp: 500, speed: 1.4, mass: 20, radius: 1.6, height: 2.2, armorClass: 'siege', knockbackResist: 0.8, weaponId: 'catapult', modelId: 'm-catapult', description: 'Bắn xa, nổ lan, không bắn được tầm gần.' }),
+  U({ id: 'catapult', name: 'Máy bắn đá', factionId: 'trung-co', role: 'siege', cost: 1000, hp: 500, speed: 1.4, mass: 20, radius: 1.6, height: 2.2, armorClass: 'siege', knockbackResist: 0.8, siegeSide: 'attack', weaponId: 'catapult', modelId: 'm-catapult', description: 'Bắn xa, nổ lan, không bắn được tầm gần.' }),
   U({ id: 'king', name: 'Nhà vua', factionId: 'trung-co', role: 'melee', cost: 1500, hp: 2200, speed: 3.4, mass: 3, radius: 0.6, height: 2.2, armorClass: 'heavy', knockbackResist: 0.6, skillIds: ['dam-dat'], weaponId: 'greatsword', modelId: 'm-king' }),
   U({ id: 'hoplite', name: 'Giáo binh', factionId: 'phuong-dong', role: 'melee', cost: 150, hp: 180, speed: 3.3, armorClass: 'light', blockChance: 0.5, weaponId: 'hoplite-spear', modelId: 'm-hoplite' }),
   U({ id: 'monk', name: 'Võ tăng', factionId: 'phuong-dong', role: 'melee', cost: 250, hp: 220, speed: 5.5, weaponId: 'monk-staff', modelId: 'm-monk', description: 'Nhanh, đánh liên hoàn.' }),
@@ -217,6 +240,16 @@ const units: UnitDef[] = [
   U({ id: 'pyromancer', name: 'Hỏa thuật sư', factionId: 'phuong-dong', role: 'ranged', cost: 800, hp: 170, speed: 3.5, skillIds: ['phun-lua', 'loc-lua'], weaponId: 'fireball-staff', modelId: 'm-pyromancer', description: 'Phun lửa từ tay, triệu hồi lốc lửa thiêu cháy.' }),
   U({ id: 'thunder-mage', name: 'Lôi pháp sư', factionId: 'huyen-thoai', role: 'ranged', cost: 900, hp: 140, speed: 3.4, skillIds: ['set-chuoi', 'thien-loi'], weaponId: 'zap', modelId: 'm-thunder-mage', description: 'Sét chuỗi từ tay, gọi thiên lôi giáng xuống.' }),
   U({ id: 'storm-lord', name: 'Thần sấm', factionId: 'huyen-thoai', role: 'ranged', cost: 2600, hp: 1800, speed: 3.6, mass: 3, radius: 0.7, height: 2.5, armorClass: 'heavy', knockbackResist: 0.7, castSpeed: 1.2, skillIds: ['bao-sam', 'set-chuoi', 'thien-loi'], weaponId: 'zap', modelId: 'm-storm-lord', description: 'Gọi bão sấm sét phủ kín chiến trường.' }),
+  U({ id: 'ninja', name: 'Ninja áo đen', factionId: 'phuong-dong', role: 'melee', cost: 300, hp: 170, speed: 5.8, climbWalls: true, siegeSide: 'attack', skillIds: ['chem-luot', 'phi-tieu'], weaponId: 'katana', modelId: 'm-ninja', description: 'Leo qua tường thành, chém lướt vào cung thủ trên tường.' }),
+  U({ id: 'fire-catapult', name: 'Máy bắn đá lửa', factionId: 'phuong-dong', role: 'siege', cost: 1300, hp: 550, speed: 1.3, mass: 20, radius: 1.6, height: 2.2, armorClass: 'siege', knockbackResist: 0.8, siegeSide: 'attack', weaponId: 'fire-catapult', modelId: 'm-fire-catapult', description: 'Ném hũ dầu nổ lửa, thiêu cháy tường và quân thủ.' }),
+  // ---- siege structures (speed 0, immovable)
+  S({ id: 'tuong-thanh', name: 'Tường thành', structure: 'wall', siegeSide: 'defense', cost: 25, hp: 400, radius: 1.45, height: 1.6, modelId: 'm-wall', unlockCost: 0, description: 'Khối 2×2 m, xếp chồng 3 tầng. Lính phe thủ đứng và đi lại trên mặt tường.' }),
+  S({ id: 'thap-canh', name: 'Tháp canh', structure: 'platform', siegeSide: 'defense', cost: 200, hp: 1800, radius: 1.45, height: 6, modelId: 'm-watchtower', description: 'Sàn cho 2 lính, tăng 30% tầm bắn cho lính đứng trên.' }),
+  S({ id: 'thap-cung', name: 'Tháp cung', structure: 'building', siegeSide: 'defense', cost: 400, hp: 1600, radius: 1.5, height: 7, weaponId: 'tower-bow', modelId: 'm-bow-tower', description: 'Bắn loạt 2 mũi tên, tầm xa.' }),
+  S({ id: 'thap-sung', name: 'Tháp súng', structure: 'building', siegeSide: 'defense', cost: 550, hp: 1800, radius: 1.5, height: 6.5, weaponId: 'tower-gun', modelId: 'm-gun-tower', description: 'Đạn chì mạnh, xuyên giáp nhẹ.' }),
+  S({ id: 'tru-dien', name: 'Trụ phóng điện', structure: 'building', siegeSide: 'defense', cost: 700, hp: 1400, radius: 1.2, height: 6, weaponId: 'tesla-zap', modelId: 'm-tesla', description: 'Sét chuỗi lan nhiều mục tiêu, gây choáng.' }),
+  S({ id: 'nha-linh', name: 'Nhà lính', structure: 'building', siegeSide: 'any', cost: 600, hp: 2200, radius: 2.4, height: 4.5, spawnUnitId: 'clubber', modelId: 'm-barracks', description: 'Mỗi giây sinh 1 lính, tối đa 10 lính còn sống.' }),
+  S({ id: 'nha-chinh', name: 'Nhà chính', structure: 'core', siegeSide: 'defense', cost: 50, hp: 6000, radius: 3.2, height: 9, weaponId: 'keep-arrows', modelId: 'm-keep', unlockCost: 0, description: 'Bắt buộc có 1. Bị phá là phe thủ thua.' }),
 ];
 
 const A = (a: Omit<AssetDef, 'scale' | 'seed' | 'sculpt'> & Partial<Pick<AssetDef, 'scale' | 'seed'>>): AssetDef => ({ scale: 1, seed: 1, sculpt: null, ...a });
@@ -250,8 +283,18 @@ const assets: AssetDef[] = [
   A({ id: 'm-pyromancer', name: 'Hỏa thuật sư', kind: 'humanoid', params: { skin: '#e8b88a', shirt: '#b3262e', armor: 'robe', armorColor: '#9a1f1f', head: 'hood', headColor: '#4a0f0f', hair: 'none', weapon: 'none' } }),
   A({ id: 'm-thunder-mage', name: 'Lôi pháp sư', kind: 'humanoid', params: { shirt: '#2a3f8a', armor: 'robe', armorColor: '#26357a', head: 'wizard', headColor: '#1a2560', hair: 'long', hairColor: '#e8e8e8', beard: 'long', weapon: 'staff', orbColor: '#8fe4ff', woodColor: '#3a3048' } }),
   A({ id: 'm-storm-lord', name: 'Thần sấm', kind: 'humanoid', scale: 1.35, params: { bulk: 1.3, skin: '#e8c0a0', shirt: '#4a2a8a', pants: '#2a2440', armor: 'plate', armorColor: '#b8c4d8', head: 'horned', headColor: '#c9ced6', hair: 'long', hairColor: '#f2d27a', beard: 'long', cape: true, capeColor: '#b3262e', weapon: 'hammer', metalColor: '#dfe6f0', woodColor: '#5a3a24' } }),
+  A({ id: 'm-ninja', name: 'Ninja áo đen', kind: 'humanoid', params: { skin: '#e8b88a', shirt: '#17171b', pants: '#17171b', boots: '#0e0e10', armor: 'none', head: 'ninja', headColor: '#121215', hair: 'none', brows: 'angry', weapon: 'katana', metalColor: '#dfe6ee', woodColor: '#2a2a2e' } }),
+  A({ id: 'm-fire-catapult', name: 'Máy bắn đá lửa', kind: 'catapult', params: { wood: '#6b3f22', metal: '#3f3a36', rope: '#b89a5a', fire: true } }),
+  A({ id: 'm-wall', name: 'Tường thành', kind: 'structure', params: { type: 'wall' } }),
+  A({ id: 'm-watchtower', name: 'Tháp canh', kind: 'structure', params: { type: 'watchtower' } }),
+  A({ id: 'm-bow-tower', name: 'Tháp cung', kind: 'structure', params: { type: 'bow-tower', roof: '#2f5f9a' } }),
+  A({ id: 'm-gun-tower', name: 'Tháp súng', kind: 'structure', params: { type: 'gun-tower', roof: '#4a4f58' } }),
+  A({ id: 'm-tesla', name: 'Trụ phóng điện', kind: 'structure', params: { type: 'tesla', accent: '#7fe0ff' } }),
+  A({ id: 'm-barracks', name: 'Nhà lính', kind: 'structure', params: { type: 'barracks' } }),
+  A({ id: 'm-keep', name: 'Nhà chính', kind: 'structure', params: { type: 'keep', roof: '#b3262e' } }),
   A({ id: 'tree-pine', name: 'Cây thông', kind: 'tree', params: { type: 'pine', leaf: '#2f6a3a', leaf2: '#3f7f42', height: 7 } }),
   A({ id: 'tree-oak', name: 'Cây sồi', kind: 'tree', params: { type: 'oak', leaf: '#3f8a3a', leaf2: '#5fa845', height: 6 } }),
+  A({ id: 'tree-snow', name: 'Thông phủ tuyết', kind: 'tree', seed: 4, params: { type: 'pine', trunk: '#5a4636', leaf: '#e6eef3', leaf2: '#3f6a4a', height: 7 } }),
   A({ id: 'tree-birch', name: 'Cây bạch dương', kind: 'tree', params: { type: 'birch', trunk: '#e8e4da', leaf: '#8fbf4a', leaf2: '#b4d25a', height: 6.5 } }),
   A({ id: 'tree-dead', name: 'Cây khô', kind: 'tree', params: { type: 'dead', trunk: '#5a4636', height: 5 } }),
   A({ id: 'tree-palm', name: 'Cây cọ', kind: 'tree', params: { type: 'palm', trunk: '#9a7a4a', leaf: '#4f9a3f', leaf2: '#6fb44a', height: 7 } }),
@@ -268,7 +311,8 @@ const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef =>
   size: 140,
   heightScale: 3,
   hilliness: 1,
-  river: { enabled: false, width: 8, meander: 10 },
+  river: { enabled: false, width: 8, meander: 10, ford: 0 },
+  rise: 0,
   trees: { perHectare: 10, kinds: ['tree-oak'] },
   rocks: { perHectare: 6, kinds: ['rock-gray'] },
   bushes: { perHectare: 25, kinds: ['bush-green'] },
@@ -280,14 +324,20 @@ const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef =>
   skyBottom: '#d6ecff',
   fog: 0.25,
   deployDepth: 28,
+  defenseDepth: 0,
   budget: 3000,
   ...m,
 });
 
 const maps: MapDef[] = [
   M({ id: 'dong-co', name: 'Đồng cỏ', seed: 1234, trees: { perHectare: 12, kinds: ['tree-oak', 'tree-birch'] }, bushes: { perHectare: 30, kinds: ['bush-green', 'bush-berry'] } }),
-  M({ id: 'song-xanh', name: 'Dòng sông', seed: 777, size: 150, heightScale: 3.5, river: { enabled: true, width: 9, meander: 12 }, trees: { perHectare: 16, kinds: ['tree-oak', 'tree-pine'] }, rocks: { perHectare: 10, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 30, kinds: ['bush-green'] }, grassColor: '#62a34a', budget: 4000 }),
+  M({ id: 'song-xanh', name: 'Dòng sông', seed: 777, size: 150, heightScale: 3.5, river: { enabled: true, width: 9, meander: 12, ford: 0 }, trees: { perHectare: 16, kinds: ['tree-oak', 'tree-pine'] }, rocks: { perHectare: 10, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 30, kinds: ['bush-green'] }, grassColor: '#62a34a', budget: 4000 }),
   M({ id: 'rung-thong', name: 'Rừng thông', seed: 4242, heightScale: 5, hilliness: 1.4, trees: { perHectare: 55, kinds: ['tree-pine'] }, rocks: { perHectare: 12, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 20, kinds: ['bush-green'] }, grassColor: '#4f8f45', skyTop: '#6a9ccc', skyBottom: '#dfe9ef', fog: 0.45, budget: 5000 }),
+  // ---- made for sieges (the red side has room for a castle)
+  M({ id: 'thanh-tren-doi', name: 'Thành trên đồi', seed: 3131, size: 150, heightScale: 2.2, hilliness: 0.9, rise: 9, trees: { perHectare: 6, kinds: ['tree-oak', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 18, kinds: ['bush-green'] }, grassColor: '#6aa84a', defenseDepth: 56, budget: 5000 }),
+  M({ id: 'deo-song', name: 'Đèo sông', seed: 5150, size: 160, heightScale: 3, hilliness: 1.1, river: { enabled: true, width: 11, meander: 4, ford: 14 }, trees: { perHectare: 12, kinds: ['tree-pine', 'tree-oak'] }, rocks: { perHectare: 12, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 20, kinds: ['bush-green'] }, grassColor: '#5e9e48', defenseDepth: 50, budget: 5000 }),
+  M({ id: 'thanh-sa-mac', name: 'Thành sa mạc', seed: 7272, size: 160, heightScale: 1.5, hilliness: 0.6, trees: { perHectare: 2, kinds: ['tree-palm', 'tree-cactus'] }, rocks: { perHectare: 4, kinds: ['rock-sand'] }, bushes: { perHectare: 4, kinds: ['bush-dry'] }, grassColor: '#dcbc78', dirtColor: '#c29a58', sandColor: '#ecd9a4', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.15, defenseDepth: 58, budget: 6000 }),
+  M({ id: 'thanh-tuyet', name: 'Thành tuyết', seed: 8484, size: 150, heightScale: 4, hilliness: 1.2, trees: { perHectare: 22, kinds: ['tree-snow', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray'] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#e8eef2', dirtColor: '#9aa3ad', sandColor: '#cfd8df', waterColor: '#6fa8c8', skyTop: '#9fb4c8', skyBottom: '#eef3f7', fog: 0.6, defenseDepth: 54, budget: 5000 }),
   M({ id: 'sa-mac', name: 'Sa mạc', seed: 9001, size: 160, heightScale: 4, hilliness: 0.8, trees: { perHectare: 6, kinds: ['tree-palm', 'tree-cactus'] }, rocks: { perHectare: 14, kinds: ['rock-sand'] }, bushes: { perHectare: 8, kinds: ['bush-dry'] }, grassColor: '#d8b870', dirtColor: '#c29a58', sandColor: '#e8d39a', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.2, budget: 6000 }),
 ];
 
@@ -302,7 +352,7 @@ const bots: BotDef[] = [
 
 const settings: Settings = {
   maxUnitsPerSide: 150,
-  battleTimeLimit: 240,
+  battleTimeLimit: 600,
   ragdollLimit: 80,
   corpseLimit: 800,
   gravity: 9.8,
@@ -324,6 +374,18 @@ const settings: Settings = {
     starBonus: 0.1,
     dailyBox: { chest: 'golden', coins: [200, 500], cards: 40, kinds: 3 },
     hourlyBox: { chest: 'silver', coins: [50, 150], cards: 12, kinds: 2 },
+  },
+  siege: {
+    defenseBudget: 1,
+    attackBudget: 1,
+    tierHeight: 1.6,
+    maxTiers: 3,
+    maxWallBlocks: 400,
+    towerRangeBonus: 0.3,
+    towerCapacity: 2,
+    fallDamage: 15,
+    rubbleSlow: 0.55,
+    climbSpeed: 1.4,
   },
 };
 

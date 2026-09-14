@@ -9,15 +9,16 @@ import PlayerHud from '@/components/player/PlayerHud';
 import { usePlayer } from '@/components/player/PlayerProvider';
 import type { ArmyStars, BattleStart } from '@/shared/net';
 import { generateBotArmy } from '@/game/bot/generate';
+import { generateSiegeDefense } from '@/game/bot/siege';
 import { useOnline } from '@/game/net/client';
 import { BattleEngine, type BattleStats, type CinematicKind, type PointerInfo } from '@/game/render/engine';
 import { unitThumbnails } from '@/game/render/thumbnails';
-import { armyCost, type Armies, type Placement } from '@/game/sim/army';
-import type { Side } from '@/game/sim/terrain';
+import { armyCost, canField, cellKeyOf, gridCells, isGridStructure, overlapsGrid, sideBudget, snapToCell, type Armies, type Placement } from '@/game/sim/army';
+import { wallCenter, wallIndex, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import { useConfig } from '@/game/useConfig';
 import UnitPalette from './UnitPalette';
-import { BattleHud, CinematicBars, Handoff, OnlineLobby, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_NAME } from './panels';
+import { BattleHud, CinematicBars, Handoff, OnlineLobby, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_NAME, type ModeChoice } from './panels';
 
 export type Mode = 'ai' | 'local' | 'online';
 type Phase = 'setup' | 'lobby' | 'deploy' | 'handoff' | 'battle' | 'result';
@@ -54,6 +55,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [budget, setBudget] = useState(3000);
   const [botId, setBotId] = useState('');
   const [blind, setBlind] = useState(true);
+  /** Offline mode choice: open battle, or siege with that side defending. */
+  const [choice, setChoice] = useState<ModeChoice>('battle');
   const [armies, setArmiesState] = useState<Armies>(EMPTY);
   const armiesRef = useRef<Armies>(EMPTY);
   const [side, setSide] = useState<Side>('blue');
@@ -149,12 +152,15 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     if (mode === 'online' && !net.seat && phase === 'deploy') setPhase('lobby');
   }, [mode, net.seat, phase]);
 
+  /** Siege mode: the defending side (null = open battle). */
+  const defense: Side | null = mode === 'online' ? net.room?.defense ?? null : choice === 'battle' ? null : choice;
+
   useEffect(() => {
     if (!engine || !mapId) return;
-    engine.loadMap(mapId);
+    engine.loadMap(mapId, defense);
     setArmies(EMPTY);
     setMapVersion((v) => v + 1);
-  }, [engine, mapId, setArmies]);
+  }, [engine, mapId, defense, setArmies]);
 
   // deployment preview
   useEffect(() => {
@@ -166,15 +172,19 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   /** Units this player may field: free ones, plus the ones unlocked with coins. */
   const owned = useMemo(() => (bundle?.units ?? []).filter((u) => isUnlocked(u, player)), [bundle, player]);
 
-  // Keep the selection on a unit the player owns (the wallet loads after the content).
-  useEffect(() => {
-    if (!selected || owned.some((u) => u.id === selected)) return;
-    setSelected([...owned].sort((a, b) => a.cost - b.cost)[0]?.id ?? null);
-  }, [owned, selected]);
   const maxUnits = bundle?.settings.maxUnitsPerSide ?? 150;
   const mySide: Side = mode === 'online' ? net.seat?.side ?? 'blue' : side;
   const myArmy = armies[mySide];
   const spent = bundle ? armyCost(bundle, myArmy) : 0;
+  const myBudget = bundle ? sideBudget(bundle.settings, budget, mySide, defense) : budget;
+  const wallBlocks = myArmy.filter((p) => units.get(p.unitId)?.structure === 'wall').length;
+
+  // Keep the selection on a unit the player owns and may field here (the wallet loads after the content).
+  useEffect(() => {
+    const usable = owned.filter((u) => canField(u, mySide, defense));
+    if (selected && usable.some((u) => u.id === selected)) return;
+    setSelected([...usable].sort((a, b) => a.cost - b.cost)[0]?.id ?? null);
+  }, [owned, selected, mySide, defense]);
   const me = mode === 'online' && net.seat ? net.room?.players[net.seat.side] : undefined;
   const locked = mode === 'online' && !!me?.ready;
 
@@ -182,57 +192,120 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     (x: number, z: number): boolean => {
       const t = engine?.terrain;
       const u = selected ? units.get(selected) : undefined;
-      if (!t || !u || !bundle || !isUnlocked(u, player)) return false;
+      if (!t || !u || !bundle || !isUnlocked(u, player) || !canField(u, mySide, defense)) return false;
       const army = armiesRef.current[mySide];
-      if (!t.inZone(mySide, x, z) || army.length >= maxUnits) return false;
-      if (armyCost(bundle, army) + u.cost > budget) return false;
+      const siege = bundle.settings.siege;
+      if (isGridStructure(u)) ({ x, z } = snapToCell(x, z));
+      if (!t.inZone(mySide, x, z)) return false;
+      if (armyCost(bundle, army) + u.cost > myBudget) return false;
+      const cells = gridCells(units, army);
+      const key = cellKeyOf(x, z);
+      const cell = cells.get(key);
+      const isBuilding = (id: string) => ['building', 'core'].includes(units.get(id)?.structure ?? '');
+      if (isGridStructure(u)) {
+        if (u.structure === 'wall' && army.filter((p) => units.get(p.unitId)?.structure === 'wall').length >= siege.maxWallBlocks) return false;
+        if (cell) return u.structure === 'wall' && cell.unitId === u.id && cell.blocks < siege.maxTiers;
+        const one = new Map([[key, true]]);
+        return !army.some((p) => isBuilding(p.unitId) && overlapsGrid(one, p.x, p.z, units.get(p.unitId)!.radius));
+      }
+      const blocks = army.filter((p) => units.get(p.unitId)?.structure === 'wall').length;
+      if (army.length - blocks >= maxUnits) return false;
+      if (u.structure === 'core' && army.some((p) => units.get(p.unitId)?.structure === 'core')) return false;
+      if (u.structure !== 'none' && overlapsGrid(cells, x, z, u.radius)) return false;
+      if (u.structure === 'none' && cell?.kind === 'platform' && cell.riders >= siege.towerCapacity) return false;
       for (const p of army) {
         const other = units.get(p.unitId);
-        const min = (u.radius + (other?.radius ?? 0.4)) * 0.9;
+        if (!other || isGridStructure(other)) continue;
+        const min = (u.radius + other.radius) * 0.9;
         if ((p.x - x) ** 2 + (p.z - z) ** 2 < min * min) return false;
       }
       return true;
     },
-    [engine, selected, units, bundle, mySide, maxUnits, budget, player],
+    [engine, selected, units, bundle, mySide, maxUnits, myBudget, player, defense],
   );
 
   const place = useCallback(
     (x: number, z: number): boolean => {
       if (!selected || !canPlace(x, z)) return false;
+      const u = units.get(selected);
+      if (u && isGridStructure(u)) ({ x, z } = snapToCell(x, z));
       const cur = armiesRef.current;
       setArmies({ ...cur, [mySide]: [...cur[mySide], { unitId: selected, x, z }] });
       return true;
     },
-    [selected, canPlace, mySide, setArmies],
+    [selected, canPlace, mySide, setArmies, units],
   );
 
+  /** Removes the nearest unit or building; on a wall cell with nobody on it, its top block. */
   const erase = useCallback(
     (x: number, z: number) => {
       const cur = armiesRef.current;
       let best = -1;
       let bestD = Infinity;
       cur[mySide].forEach((p, i) => {
-        const r = Math.max(1.2, (units.get(p.unitId)?.radius ?? 0.5) + 0.6);
+        const u = units.get(p.unitId);
+        if (u && isGridStructure(u)) return;
+        const r = Math.max(1.2, (u?.radius ?? 0.5) + 0.6);
         const d = (p.x - x) ** 2 + (p.z - z) ** 2;
         if (d < r * r && d < bestD) {
           bestD = d;
           best = i;
         }
       });
+      if (best < 0) {
+        const key = cellKeyOf(x, z);
+        cur[mySide].forEach((p, i) => {
+          const u = units.get(p.unitId);
+          if (u && isGridStructure(u) && cellKeyOf(p.x, p.z) === key) best = i;
+        });
+      }
       if (best >= 0) setArmies({ ...cur, [mySide]: cur[mySide].filter((_, i) => i !== best) });
     },
     [mySide, units, setArmies],
   );
 
-  const paint = useRef<{ active: boolean; erase: boolean; x: number; z: number }>({ active: false, erase: false, x: 0, z: 0 });
+  // The defenders always start with their keep, at the back of the zone.
+  useEffect(() => {
+    const t = engine?.terrain;
+    if (phase !== 'deploy' || !bundle || !t || defense !== mySide || t.defense !== defense || locked) return;
+    const army = armiesRef.current[mySide];
+    if (army.some((p) => units.get(p.unitId)?.structure === 'core')) return;
+    const core = bundle.units.find((u) => u.structure === 'core' && canField(u, mySide, defense));
+    if (!core) return;
+    const zone = t.zones[mySide];
+    const x = mySide === 'blue' ? zone.x0 + core.radius + 4 : zone.x1 - core.radius - 4;
+    setArmies({ ...armiesRef.current, [mySide]: [{ unitId: core.id, x, z: 0 }, ...army] });
+  }, [engine, phase, bundle, defense, mySide, locked, armies, units, setArmies, mapVersion]);
+
+  /** `tiers`: wall height the stroke builds every cell up to (the start cell's height after the click). */
+  const paint = useRef<{ active: boolean; erase: boolean; x: number; z: number; cell: string; tiers: number }>({ active: false, erase: false, x: 0, z: 0, cell: '', tiers: 1 });
   pointerRef.current = (p: PointerInfo) => {
     if (phase !== 'deploy' || locked) return;
     if (p.type === 'down' && p.button === 0 && p.hit) {
       const del = tool === 'erase' || p.ctrl;
-      paint.current = { active: true, erase: del, x: p.x, z: p.z };
+      paint.current = { active: true, erase: del, x: p.x, z: p.z, cell: cellKeyOf(p.x, p.z), tiers: 1 };
       snapshot();
       if (del) erase(p.x, p.z);
       else if (!place(p.x, p.z) && engine?.terrain && !engine.terrain.inZone(mySide, p.x, p.z)) flash(`Chỉ được đặt trong vùng phe ${SIDE_NAME[mySide]}`);
+      paint.current.tiers = gridCells(units, armiesRef.current[mySide]).get(paint.current.cell)?.blocks ?? 1;
+    } else if (p.type === 'move' && paint.current.active && p.hit && !paint.current.erase && selected && isGridStructure(units.get(selected) ?? { structure: 'none' })) {
+      // Walls: drag lays a line cell by cell, raising each cell to the start cell's height.
+      const key = cellKeyOf(p.x, p.z);
+      if (key === paint.current.cell) return;
+      const [x0, z0] = paint.current.cell.split(',').map(Number);
+      const x1 = wallIndex(p.x);
+      const z1 = wallIndex(p.z);
+      const steps = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
+      for (let i = 1; i <= steps; i++) {
+        const ix = Math.round(x0 + ((x1 - x0) * i) / steps);
+        const iz = Math.round(z0 + ((z1 - z0) * i) / steps);
+        const cx = wallCenter(ix);
+        const cz = wallCenter(iz);
+        for (let k = 0; k < paint.current.tiers; k++) {
+          if ((gridCells(units, armiesRef.current[mySide]).get(cellKeyOf(cx, cz))?.blocks ?? 0) >= paint.current.tiers || !place(cx, cz)) break;
+        }
+      }
+      paint.current.cell = key;
     } else if (p.type === 'move' && paint.current.active && p.hit && (p.shift || paint.current.erase)) {
       const u = selected ? units.get(selected) : undefined;
       const spacing = Math.max(1, (u?.radius ?? 0.5) * 2.2);
@@ -303,9 +376,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const botArmy = useCallback(
     (enemy: Placement[]): Placement[] => {
       if (!bundle || !bot || !engine?.terrain) return [];
-      return generateBotArmy({ bot, content: bundle, terrain: engine.terrain, side: 'red', budget: Math.round(budget * bot.budgetMultiplier), enemy, seed: randomSeed() });
+      const redBudget = Math.round(sideBudget(bundle.settings, budget, 'red', defense) * bot.budgetMultiplier);
+      if (defense === 'red') return generateSiegeDefense({ bot, content: bundle, terrain: engine.terrain, side: 'red', budget: redBudget, seed: randomSeed() });
+      return generateBotArmy({ bot, content: bundle, terrain: engine.terrain, side: 'red', budget: redBudget, enemy, seed: randomSeed() });
     },
-    [bundle, bot, engine, budget],
+    [bundle, bot, engine, budget, defense],
   );
 
   const startBattle = useCallback(
@@ -338,8 +413,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   };
   onStartRef.current = (s) => {
     if (bundle && s.configVersion !== bundle.version) flash('Cảnh báo: cấu hình game khác máy chủ — hãy tải lại trang để đồng bộ.');
-    if (engine && engine.map?.id !== s.mapId) {
-      engine.loadMap(s.mapId);
+    if (engine && (engine.map?.id !== s.mapId || (engine.terrain?.defense ?? null) !== s.defense)) {
+      engine.loadMap(s.mapId, s.defense);
       setMapVersion((v) => v + 1);
     }
     startBattle(s.armies, s.seed, s.stars);
@@ -381,7 +456,9 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   const fillRandom = () => {
     if (!bundle || !engine?.terrain) return;
-    const army = generateBotArmy({ bot: { ...RANDOM_FILL, maxUnits: maxUnits }, content: { ...bundle, units: owned }, terrain: engine.terrain, side: mySide, budget, seed: randomSeed() });
+    const opts = { bot: { ...RANDOM_FILL, maxUnits: maxUnits }, content: { ...bundle, units: owned }, terrain: engine.terrain, side: mySide, budget: myBudget, seed: randomSeed() };
+    const army = defense === mySide ? generateSiegeDefense(opts) : generateBotArmy(opts);
+    if (defense === mySide && army.length === 0) return flash('Chưa có Nhà chính trong bộ sưu tập để xây thành');
     snapshot();
     setArmies({ ...armiesRef.current, [mySide]: army });
   };
@@ -423,7 +500,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const totals = useMemo(() => ({ blue: armies.blue.length, red: armies.red.length }), [armies]);
+  const totals = useMemo(() => {
+    const count = (army: Placement[]) => army.filter((p) => units.get(p.unitId)?.structure !== 'wall').length;
+    return { blue: count(armies.blue), red: count(armies.red) };
+  }, [armies, units]);
   const resultSide: Side | undefined = mode === 'online' ? net.seat?.side : mode === 'ai' ? 'blue' : undefined;
 
   // ------------------------------------------------------------------ render
@@ -441,7 +521,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
         {bundle && phase === 'setup' && mode !== 'online' && (
           <div className="my-auto">
-            <SetupPanel bundle={bundle} mode={mode} mapId={mapId} setMapId={setMapId} budget={budget} setBudget={setBudget} botId={botId} setBotId={setBotId} blind={blind} setBlind={setBlind} onStart={enterDeploy} />
+            <SetupPanel bundle={bundle} mode={mode} mapId={mapId} setMapId={setMapId} budget={budget} setBudget={setBudget} botId={botId} setBotId={setBotId} blind={blind} setBlind={setBlind} choice={choice} setChoice={setChoice} onStart={enterDeploy} />
           </div>
         )}
 
@@ -484,20 +564,24 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 <Link href="/" className="btn px-2 py-1 text-sm">
                   ←
                 </Link>
-                <span className={`rounded-lg px-2 py-1 font-display text-white ${mySide === 'blue' ? 'bg-blue-team' : 'bg-red-team'}`}>Phe {SIDE_NAME[mySide]}</span>
+                <span className={`rounded-lg px-2 py-1 font-display text-white ${mySide === 'blue' ? 'bg-blue-team' : 'bg-red-team'}`}>
+                  Phe {SIDE_NAME[mySide]}
+                  {defense && (defense === mySide ? ' · 🏰 Thủ thành' : ' · 🔥 Công thành')}
+                </span>
                 <div className="w-44">
                   <div className="flex justify-between text-xs font-bold">
                     <span>Ngân sách</span>
-                    <span className={spent > budget ? 'text-red-team' : ''}>
-                      {spent}/{budget}
+                    <span className={spent > myBudget ? 'text-red-team' : ''}>
+                      {spent}/{myBudget}
                     </span>
                   </div>
                   <div className="h-2.5 overflow-hidden rounded-full border-2 border-ink bg-white">
-                    <div className="h-full bg-gold" style={{ width: `${Math.min(100, (spent / budget) * 100)}%` }} />
+                    <div className="h-full bg-gold" style={{ width: `${Math.min(100, (spent / myBudget) * 100)}%` }} />
                   </div>
                 </div>
                 <span className="text-xs font-bold">
-                  {myArmy.length}/{maxUnits} lính
+                  {myArmy.length - wallBlocks}/{maxUnits} lính
+                  {wallBlocks > 0 && ` · ${wallBlocks} khối tường`}
                 </span>
                 <button className={`btn px-2 py-1 text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')}>
                   ✚ Đặt
@@ -530,14 +614,14 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 {mode === 'online' && net.room && net.seat && <RoomBar bundle={bundle} room={net.room} mySide={net.seat.side} onSettings={net.settings} />}
                 {mode === 'ai' && bot && (
                   <div className="panel pointer-events-auto p-2 text-xs">
-                    Đối thủ: <b>{bot.name}</b> · {bot.reactive ? 'sẽ chọn quân sau khi xem đội hình của bạn' : `${armies.red.length} lính (${armyCost(bundle, armies.red)})`}
+                    Đối thủ: <b>{bot.name}</b> · {bot.reactive ? 'sẽ chọn quân sau khi xem đội hình của bạn' : `${totals.red} lính (${armyCost(bundle, armies.red)})`}
                   </div>
                 )}
               </div>
             </div>
             <div className="mt-auto flex items-end gap-2">
               <div className="pointer-events-none hidden max-w-60 text-xs leading-tight text-ink/80 drop-shadow lg:block">
-                Chuột trái: đặt · Shift+kéo: rải · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE
+                Chuột trái: đặt · Shift+kéo: rải · Tường: kéo để xây dãy, bấm lên tường để chồng tầng · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE
               </div>
               <div className="flex-1">
                 <UnitPalette
@@ -550,7 +634,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                     setSelected(id);
                     setTool('place');
                   }}
-                  budgetLeft={budget - spent}
+                  budgetLeft={myBudget - spent}
+                  available={(u) => canField(u, mySide, defense)}
                   player={player}
                   stars={mode === 'ai' || (mode === 'online' && net.room?.useStars) ? player?.stars : undefined}
                 />
@@ -569,6 +654,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             onPause={() => setPaused((p) => !p)}
             onStop={backToDeploy}
             stopLabel={mode === 'online' ? 'Về xếp quân' : 'Dừng trận'}
+            timeLimit={bundle.settings.battleTimeLimit}
+            defense={engine?.sim?.defense ?? defense}
           />
         )}
         {desync && phase === 'battle' && <div className="panel pointer-events-auto absolute left-1/2 top-20 -translate-x-1/2 px-3 py-1 text-sm text-red-team">Hai máy đang lệch trận (desync) — kết quả có thể khác nhau.</div>}
@@ -578,6 +665,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         <ResultModal
           result={result}
           mySide={resultSide}
+          siege={!!(engine?.sim?.defense ?? defense)}
           onRematch={mode === 'online' ? backToDeploy : () => startBattle(armiesRef.current, randomSeed(), mode === 'ai' ? aiStars : undefined)}
           rematchLabel={mode === 'online' ? 'Trận mới' : 'Đấu lại'}
           onEdit={backToDeploy}
