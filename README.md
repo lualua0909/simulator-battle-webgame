@@ -6,7 +6,7 @@ Game mô phỏng đại chiến kiểu *Totally Accurate Battle Simulator*: xế
 - **3 chế độ**: đấu với máy (6 bot có hồ sơ riêng), 2 người 1 máy (xếp quân bí mật), đấu online qua mã phòng (Socket.IO).
 - **CMS** tại `/admin`: quản lý lính, kỹ năng & vũ khí, đạn, particle, asset 3D, bản đồ, bot, cài đặt + bảng khắc chế giáp. Lưu trên Firestore, có preview trực tiếp và đấu thử với hình nộm.
 - **Kỹ năng hoành tráng**: sét chuỗi phóng từ tay, thiên lôi và bão sấm giáng từ trời, lốc xoáy / lốc lửa hút bổng quân địch, thiên thạch, phun lửa, dậm đất, súng hỏa mai, mưa tên, ném tảng đá, hồi máu diện rộng. Admin gán kỹ năng cho từng lính và chỉnh tốc độ đánh, tốc độ chạy, tốc độ ra kỹ năng.
-- **Xưởng img2threejs** tại `/admin/studio`: tạo model 3D từ ảnh mẫu + mô tả bằng Claude, xuất TypeScript/GLB/OBJ/STL/PLY/USDZ hoặc thay model nhân vật trong game.
+- **Xưởng mô hình** tại `/models`: xem mọi lính/kỹ năng/asset. Root/admin sửa ngay tại đó thông số, kỹ năng (gán + chỉ số), giá lính, tải model (TypeScript/GLB/OBJ/STL/PLY/USDZ) và yêu cầu Claude generate lại model bằng img2threejs.
 - **Mô hình 3D procedural** theo chuẩn img2threejs, dựng hoàn toàn bằng code: người (nhiều kiểu giáp/mũ/vũ khí), ngựa, voi/ma mút, rồng, đại bàng, máy bắn đá, cây (thông/sồi/bạch dương/khô/cọ/xương rồng), đá, bụi, sông, địa hình.
 
 ## Chạy
@@ -85,7 +85,7 @@ Mọi kiểu đều có thể **kênh** (`duration` > 0: lặp hiệu ứng mỗ
 
 **Hình ảnh** (`src/game/render/effects.ts`, chỉ để hiển thị): tia sét zigzag phân nhánh nhấp nháy theo tay/mục tiêu, vòng cảnh báo, sóng xung kích, vết cháy trên đất, thiên thạch rơi kèm vệt lửa, lốc xoáy xoay nhiều tầng kèm bụi và mảnh vỡ, tia điện quanh tay khi niệm, lửa trên lính đang cháy, đèn chớp sáng và rung camera (tắt được trong Cài đặt). Màu sét/lốc/sóng chỉnh bằng `vfxColor`; particle phụ (`areaParticleId`) dùng cho vùng nổ, chân lốc và khói nòng súng. Model mới theo chuẩn img2threejs: súng hỏa mai (socket `muzzle`), đầu trượng (socket `staff.tip`), đạn vạch sáng, thiên thạch, phễu lốc xoáy (`src/game/models/effects.ts`). Hiệu ứng phát ra từ socket `mouth` → `muzzle` → `staff.tip` → `hand.R`.
 
-**Đấu thử:** editor kỹ năng và editor lính có khung *Đấu thử* chạy engine trận thật với bản nháp chưa lưu (1 lính vs hình nộm; kỹ năng hồi máu thì có đồng đội bị đánh). Xem công khai tại `/models?skill=<id>` hoặc `/models?unit=<id>&arena=1`.
+**Đấu thử:** editor kỹ năng và `/models` có khung *Đấu thử* chạy engine trận thật với bản nháp chưa lưu (1 lính vs hình nộm; kỹ năng hồi máu thì có đồng đội bị đánh). Xem công khai tại `/models?skill=<id>` hoặc `/models?unit=<id>&arena=1`.
 
 **Dữ liệu Firestore có sẵn:** nội dung mặc định mới (kỹ năng, lính, particle…) không tự ghi vào Firestore đã có dữ liệu. Trang Tổng quan của CMS hiện khung *Nội dung mặc định mới*: chọn mục muốn thêm, có tùy chọn gán kỹ năng mặc định cho lính mặc định chưa có kỹ năng. Mục đang có không bị sửa hay xóa.
 
@@ -95,9 +95,20 @@ Các factory trong `src/game/models/` tuân theo quy ước của skill img2thre
 
 **Giới hạn:** chưa có ảnh tham chiếu nên đây là bản dựng *reference-free, cách điệu*. Tỉ lệ người lấy từ bảng canon 4 đầu của skill (đầu, cánh tay, cẳng tay, cẳng chân); hông, đùi, vai là lựa chọn thiết kế và được ghi chú trong code. Đã kiểm tra bằng screenshot thật nhiều góc, nhưng **chưa chạy vòng so khớp ảnh có gate của img2threejs** vì vòng đó cần ảnh gốc. Khi có ảnh cho từng đối tượng, chạy pipeline img2threejs cho đối tượng đó rồi thay factory tương ứng.
 
-## Xưởng img2threejs (`/admin/studio`)
+## Xưởng mô hình (`/models`)
 
-Tạo model 3D từ **ảnh mẫu (tuỳ chọn) + mô tả**, rồi tải về hoặc thay model nhân vật trong game.
+Mọi chức năng liên quan tới nhân vật gộp ở đây (editor lính và `/admin/studio` cũ chuyển hướng về trang này). Khách chỉ xem; root/admin có thêm panel bên phải với 4 tab, mọi chỉnh sửa là bản nháp xem trước trực tiếp trong khung 3D / *Đấu thử*, bấm *Lưu* (Ctrl/⌘+S) để ghi:
+
+- **Thông số:** tên, phe, vai trò, tốc độ, máu, giáp, va chạm, bay…
+- **Kỹ năng:** đòn cơ bản, tối đa 6 kỹ năng (thêm/bỏ/đổi thứ tự) và sửa chỉ số từng kỹ năng. Kỹ năng dùng chung giữa các lính, panel báo lính nào bị ảnh hưởng.
+- **Giá:** giá, DPS, máu hiệu dụng, hiệu quả/giá xếp hạng với mọi lính, gợi ý giá cân bằng.
+- **Mô hình:** chọn model/người cưỡi, tải về, hoàn tác model img2threejs, và *Yêu cầu Claude generate lại* (pipeline bên dưới). Chọn version để xem thử trong khung 3D trước khi *Thay model của asset* hoặc *Tạo asset riêng cho lính này*.
+
+Chọn asset ở danh sách bên trái để dùng tab Mô hình cho cây/đá/bụi; chọn kỹ năng để sửa chỉ số và xem đấu thử.
+
+### Claude generate lại model (img2threejs)
+
+Claude dựng model mới dựa trên asset gốc, **góp ý/mô tả (tuỳ chọn) + ảnh mẫu (tuỳ chọn)**.
 
 **Engine.** Có `ANTHROPIC_API_KEY` thì server gọi Claude API (`claude-opus-5`, streaming, structured output, bật server-side fallback khi bị từ chối). Không có key thì dùng Claude Code CLI (`claude -p --safe-mode`, không tool) với login sẵn trên máy chủ. Cách này chỉ chạy trên máy đã đăng nhập `claude`.
 
@@ -108,8 +119,8 @@ Tạo model 3D từ **ảnh mẫu (tuỳ chọn) + mô tả**, rồi tải về 
 3. **Gate tất định**: cấu trúc spec, rig khớp animation (tên part, cha–con, khớp không xoay), socket, chạm đất, kích thước so với model gốc, mảnh lơ lửng, ngân sách tam giác, vị trí khớp. Gate chặn thì Claude tự sửa, tối đa 2 lần.
 4. Trình duyệt render 4 góc (trước, ¾, trái, sau). Claude so với ảnh mẫu, chấm điểm từng đặc điểm, rồi quyết định dừng hay sửa. Chỉ dừng khi độ giống ≥ 80%, mọi đặc điểm quan trọng ≥ 70% và không có gate chặn. Số vòng tự sửa tối đa là 3, và vòng lặp dừng sớm nếu điểm không tăng. Mỗi lần sửa tạo một version mới, admin có thể góp ý để sửa tiếp.
 
-**Xuất file:** TypeScript (file độc lập gồm kit + code dựng, chỉ cần `three`; test đảm bảo dựng ra đúng model đã xem trong CMS), GLB/glTF (giữ `userData` part/socket/rig trong extras), OBJ và PLY (màu theo đỉnh), STL, USDZ, spec JSON.
+**Xuất file:** TypeScript (model img2threejs: file độc lập gồm kit + code dựng, chỉ cần `three`, test đảm bảo dựng ra đúng model đã xem; preset procedural: module độc lập chứa cây node/part/socket và lưới đã bake), GLB/glTF (giữ `userData` part/socket/rig trong extras), OBJ và PLY (màu theo đỉnh), STL, USDZ, spec JSON.
 
-**Dùng trong game:** chọn asset cùng rig rồi bấm *Thay model*. Spec được lưu trong asset (`sculpt`), nên game, thumbnail, preview, chế độ online và file JSON sao lưu đều dùng được ngay; animation, ragdoll và người cưỡi vẫn chạy. Bấm *Hoàn tác* để trở về model procedural. Có thể *Lưu thành asset mới* rồi bấm *Tạo lính* để mở form lính mới đã chọn sẵn model đó (hoặc từ *Quân lính* bấm *Model mới (Xưởng)*).
+**Dùng trong game:** bấm *Thay model của asset*. Spec được lưu trong asset (`sculpt`), nên game, thumbnail, preview, chế độ online và file JSON sao lưu đều dùng được ngay; animation, ragdoll và người cưỡi vẫn chạy. Bấm *Hoàn tác về procedural* để trở về model cũ. *Tạo asset riêng cho lính này* không đụng asset dùng chung (nhớ *Lưu* lính).
 
-**Giới hạn:** đây là bản rút gọn chạy trong CMS. Pipeline không chạy bộ gate Python, `state.json` hay các phép đo Divine Eye của skill img2threejs. Model dựng hoàn toàn từ primitive (hợp style low-poly của game), và mặt bị che trong ảnh chỉ là suy đoán. Mỗi model tốn vài lượt gọi Claude; số token hiện trong từng job.
+**Giới hạn:** đây là bản rút gọn chạy trong web. Không còn tạo đạo cụ tự do (prop) từ số 0: model luôn dựa trên một asset. Pipeline không chạy bộ gate Python, `state.json` hay các phép đo Divine Eye của skill img2threejs. Model dựng hoàn toàn từ primitive (hợp style low-poly của game), và mặt bị che trong ảnh chỉ là suy đoán. Mỗi model tốn vài lượt gọi Claude; số token hiện trong từng job.

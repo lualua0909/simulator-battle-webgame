@@ -12,11 +12,13 @@ interface Props {
   bundle: ConfigBundle | null;
   errors: Record<string, string>;
   isNew?: boolean;
+  /** One column (narrow side panels). */
+  compact?: boolean;
 }
 
-export default function DocForm({ fields, doc, onChange, bundle, errors, isNew = true }: Props) {
+export default function DocForm({ fields, doc, onChange, bundle, errors, isNew = true, compact = false }: Props) {
   return (
-    <div className="grid grid-cols-1 gap-x-4 gap-y-2.5 md:grid-cols-2">
+    <div className={`grid grid-cols-1 gap-x-4 gap-y-2.5 ${compact ? '' : 'md:grid-cols-2'}`}>
       {fields.map((f, i) =>
         f.type === 'section' ? (
           <h3 key={`s${i}`} className="col-span-full mt-3 border-b-2 border-ink/15 pb-1 font-display text-sm first:mt-0">

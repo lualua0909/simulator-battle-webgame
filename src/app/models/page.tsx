@@ -13,6 +13,8 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
       initialUnit={one('unit')}
       initialAsset={one('asset')}
       initialSkill={one('skill')}
+      from={one('from')}
+      modelId={one('modelId')}
       arena={one('arena') === '1'}
       yaw={yaw !== undefined ? Number(yaw) : undefined}
       explode={one('explode') === '1'}

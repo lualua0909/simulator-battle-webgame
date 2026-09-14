@@ -19,7 +19,7 @@ Mục lục:
 flowchart LR
   subgraph Browser["Trình duyệt"]
     Game["/play<br/>Game client<br/>(Three.js + sim tất định)"]
-    Models["/models<br/>Xem mô hình"]
+    Models["/models<br/>Xưởng mô hình (sửa lính, Claude)"]
     CMS["/admin<br/>CMS + Xưởng"]
     FBClient["Firebase Auth SDK<br/>(client)"]
   end
@@ -597,7 +597,7 @@ Xếp theo mức độ ưu tiên khuyến nghị. Đây là nhận định từ 
 | GET / POST | `/api/admin/studio` | root/admin | trạng thái engine + danh sách job / tạo job |
 | GET / DELETE | `/api/admin/studio/{id}` | root/admin | chi tiết job / xóa job (không khi đang chạy) |
 | POST | `/api/admin/studio/{id}/run` | root/admin | chạy bước `spec` / `review` (stream NDJSON) hoặc `stop` |
-| GET | `/api/admin/studio/{id}/export?v=N` | root/admin | tải file TypeScript của version |
+| POST | `/api/admin/studio/codegen` | root/admin | sinh file TypeScript từ sculpt spec (version hoặc asset đã áp dụng) |
 | GET / POST | `/api/admin/users` | root/admin | danh sách / tạo user (giới hạn role cấp được) |
 | GET / PATCH / DELETE | `/api/admin/users/{uid}` | root/admin + `canManage` cho PATCH/DELETE | xem / sửa / xóa user |
 | POST | `/api/admin/users/{uid}/notify` | root/admin | gửi push FCM tới mọi thiết bị của user |

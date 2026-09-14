@@ -1,8 +1,6 @@
-import Studio from '@/components/admin/studio/Studio';
+import { redirect } from 'next/navigation';
 
-export const metadata = { title: 'Xưởng img2threejs — CMS' };
-
-export default async function StudioPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { job } = await searchParams;
-  return <Studio initialJob={typeof job === 'string' ? job : undefined} />;
+// The img2threejs studio now lives in the model workshop (tab "Mô hình" of a unit or asset).
+export default function StudioPage() {
+  redirect('/models');
 }

@@ -145,8 +145,8 @@ export default function DocEditor({ collection, id, from, modelId }: { collectio
           <span>
             🧪 Asset đang dùng model img2threejs <b>{doc.sculpt.spec.name}</b> (v{doc.sculpt.version}). Các tham số procedural bên dưới chỉ có tác dụng khi hoàn tác.
           </span>
-          <Link className="underline" href={`/admin/studio?job=${doc.sculpt.studioId}`}>
-            Mở trong Xưởng
+          <Link className="underline" href={`/models?asset=${String(doc.id)}`}>
+            Mở trong Xưởng mô hình
           </Link>
           <button className="btn ml-auto px-2 py-0.5 text-xs" onClick={() => change({ ...doc, sculpt: null })}>
             Hoàn tác về procedural

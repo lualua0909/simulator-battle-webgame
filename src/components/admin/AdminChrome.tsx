@@ -25,12 +25,11 @@ export function AdminNav() {
     <nav className="flex flex-col gap-0.5">
       {item('/admin', '🏠 Tổng quan', true)}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Nội dung game</div>
-      {COLLECTIONS.map((c) => item(`/admin/c/${c}`, `${COLLECTION_SPECS[c].icon} ${COLLECTION_SPECS[c].label}`))}
+      {item('/models', '🪖 Nhân vật & mô hình')}
+      {COLLECTIONS.filter((c) => c !== 'units').map((c) => item(`/admin/c/${c}`, `${COLLECTION_SPECS[c].icon} ${COLLECTION_SPECS[c].label}`))}
       {item('/admin/settings', '⚙️ Cài đặt & khắc chế')}
       {item('/admin/users', '👥 Người dùng')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
-      {item('/admin/studio', '🧪 Xưởng img2threejs')}
-      {item('/models', '🧱 Xưởng mô hình')}
       {item('/play?mode=ai', '⚔️ Mở game')}
       <button
         className="mt-2 rounded-lg px-2 py-1.5 text-left text-sm font-bold hover:bg-white"

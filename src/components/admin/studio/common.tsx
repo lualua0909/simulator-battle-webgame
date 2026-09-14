@@ -1,10 +1,5 @@
 'use client';
 
-import { SCULPT_KINDS, type SculptKind } from '@/game/sculpt/rigs';
-import { ENUM_LABELS } from '@/shared/fields';
-
-export const KIND_LABELS = Object.fromEntries(SCULPT_KINDS.map((k) => [k, k === 'prop' ? 'Đạo cụ tự do (chỉ tải về)' : ENUM_LABELS[k]])) as Record<SculptKind, string>;
-
 export interface RunState {
   jobId: string;
   text: string;
