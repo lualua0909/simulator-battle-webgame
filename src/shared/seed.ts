@@ -356,6 +356,7 @@ const settings: Settings = {
   ragdollLimit: 80,
   corpseLimit: 800,
   gravity: 9.8,
+  waterSlow: 0.55,
   friendlyFire: true,
   cameraShake: true,
   deathParticleId: 'death-poof',
@@ -386,6 +387,12 @@ const settings: Settings = {
     fallDamage: 15,
     rubbleSlow: 0.55,
     climbSpeed: 1.4,
+    safeFall: 2.5,
+    dashRangedPriority: 60,
+    dashWallPriority: 120,
+    botWallShare: 0.35,
+    botTowerShare: 0.28,
+    botCastleHalf: 6,
   },
 };
 

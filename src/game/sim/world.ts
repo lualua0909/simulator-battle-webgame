@@ -18,14 +18,11 @@ const RETARGET_TICKS = 10;
 const TURN_RATE = 0.3;
 const ACCEL = 0.25;
 const GROUND_REACH = 2.6;
-const WATER_SLOW = 0.55;
 const DEG = 0.017453292519943295;
 /** A skill whose conditions fail looks again after this long. */
 const SKILL_RETRY = 0.3;
 /** Damage-over-time reports one `hit` event per this many ticks per unit. */
 const DOT_EVENT_TICKS = 6;
-/** Falls shorter than this do no damage. */
-const SAFE_FALL = 2.5;
 
 export type SimEvent =
   | { type: 'hit'; x: number; y: number; z: number; dx: number; dz: number; weaponId: string; targetId: number; blocked: boolean; damage: number }
@@ -603,7 +600,7 @@ export class BattleSim {
           const reach = w.range + u.radius + t.radius;
           if (dist > reach * 0.9) want = 1;
         }
-        const water = !u.flying && this.terrain.inWater(u.x, u.z) ? WATER_SLOW : 1;
+        const water = !u.flying && this.terrain.inWater(u.x, u.z) ? this.content.settings.waterSlow : 1;
         const rubble = !u.flying && !u.onWall && this.cellAt(u.x, u.z)?.unit.alive === false ? this.content.settings.siege.rubbleSlow : 1;
         const sp = u.def.speed * water * rubble * want;
         dvx = nx * sp;
@@ -666,7 +663,8 @@ export class BattleSim {
         this.events.push({ type: 'land', unitId: u.id, x: u.x, y: u.y, z: u.z });
         const drop = u.fallY - ground;
         u.fallY = NaN;
-        if (drop > SAFE_FALL && !u.def.climbWalls) this.fallDamage(u, (drop - SAFE_FALL) * this.content.settings.siege.fallDamage);
+        const siege = this.content.settings.siege;
+        if (drop > siege.safeFall && !u.def.climbWalls) this.fallDamage(u, (drop - siege.safeFall) * siege.fallDamage);
       }
       return;
     }
@@ -1087,7 +1085,8 @@ export class BattleSim {
       const dz = v.z - u.z;
       const d2 = dx * dx + dz * dz;
       if (d2 > w.range * w.range || d2 < w.minRange * w.minRange) continue;
-      const score = d2 - (isRanged(v.weapon) ? 60 : 0) - (v.onWall ? 120 : 0);
+      const siege = this.content.settings.siege;
+      const score = d2 - (isRanged(v.weapon) ? siege.dashRangedPriority : 0) - (v.onWall ? siege.dashWallPriority : 0);
       if (score < bestScore) {
         bestScore = score;
         best = v.id;

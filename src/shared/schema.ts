@@ -473,6 +473,15 @@ export const siegeSettingsSchema = z.object({
   rubbleSlow: z.number().min(0.1).max(1).default(0.55),
   /** Wall climbing speed (m/s). */
   climbSpeed: z.number().min(0.2).max(10).default(1.4),
+  /** Falls up to this height (m) do no damage. */
+  safeFall: z.number().min(0).max(20).default(2.5),
+  /** Dash target choice: nearer by this many m² for shooters / for units on walls. */
+  dashRangedPriority: z.number().min(0).max(1000).default(60),
+  dashWallPriority: z.number().min(0).max(1000).default(120),
+  /** Bot castles: budget shares of walls and towers, largest enclosure half size (cells from the keep). */
+  botWallShare: z.number().min(0).max(1).default(0.35),
+  botTowerShare: z.number().min(0).max(1).default(0.28),
+  botCastleHalf: z.number().int().min(2).max(20).default(6),
 });
 
 export const settingsSchema = z.object({
@@ -482,6 +491,8 @@ export const settingsSchema = z.object({
   ragdollLimit: z.number().int().min(0).max(400).default(80),
   corpseLimit: z.number().int().min(0).max(3000).default(800),
   gravity: z.number().min(1).max(40).default(9.8),
+  /** Speed multiplier of ground units wading through water. */
+  waterSlow: z.number().min(0.1).max(1).default(0.55),
   friendlyFire: z.boolean().default(true),
   /** Camera shake from big blasts (lightning, meteors). */
   cameraShake: z.boolean().default(true),

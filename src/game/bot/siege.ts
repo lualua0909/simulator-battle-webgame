@@ -41,7 +41,7 @@ export function generateSiegeDefense(opts: SiegeDefenseOptions): Placement[] {
   const depth = zone.x1 - zone.x0;
   const width = zone.z1 - zone.z0;
   // Enclosure half size in cells, fitted to the zone.
-  const half = clamp(Math.floor((Math.min(depth, width) - 8) / (2 * WALL_CELL)), 2, 6);
+  const half = clamp(Math.floor((Math.min(depth, width) - 8) / (2 * WALL_CELL)), 2, Math.max(2, siege.botCastleHalf));
   const backX = side === 'blue' ? zone.x0 : zone.x1;
   const cx = wallIndex(backX + front * (half * WALL_CELL + 4));
   const cz = wallIndex(clamp(rng.range(-width * 0.15, width * 0.15), zone.z0 + half * WALL_CELL + 2, zone.z1 - half * WALL_CELL - 2));
@@ -79,7 +79,7 @@ export function generateSiegeDefense(opts: SiegeDefenseOptions): Placement[] {
   const wallCells = cells.map((c) => ({ ...toWorld(c), front: c[0] === half })).filter(inZone);
 
   // ---- budget shares: walls, towers, garrison
-  const wallBudget = left * 0.35;
+  const wallBudget = left * siege.botWallShare;
   const tiers = wall ? clamp(Math.floor(wallBudget / Math.max(1, wallCells.length * wall.cost)), 1, siege.maxTiers) : 0;
   const frontCells = wallCells.filter((p) => p.front);
   const watch = platform && frontCells.length > 2 ? frontCells[Math.floor(frontCells.length / 2)] : null;
@@ -93,7 +93,7 @@ export function generateSiegeDefense(opts: SiegeDefenseOptions): Placement[] {
   }
 
   // Towers just inside the corners, the stronger ones in front.
-  const towerBudget = budget * 0.28;
+  const towerBudget = budget * siege.botTowerShare;
   let towerSpent = 0;
   const inset = (half - 2) * WALL_CELL;
   const corners = [
