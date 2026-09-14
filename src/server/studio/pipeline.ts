@@ -20,7 +20,7 @@ import {
   type StudioVersion,
   type VersionSource,
 } from '@/shared/studio';
-import { getDoc } from '../db';
+import { getDoc } from '../content';
 import { callClaude, type ImageMediaType, type LlmBlock } from './llm';
 import { repairRequest, reviewRequest, specRequest, STUDIO_SYSTEM_PROMPT, type JobFacts } from './prompts';
 import { addUsage, addVersion, getImage, getJob, getVersion, listVersions, updateJob, updateVersion } from './store';
@@ -50,8 +50,8 @@ function imageBlock(dataUrl: string): LlmBlock {
   return { type: 'image', mediaType: m[1] as ImageMediaType, data: m[2] };
 }
 
-function facts(job: StudioJob): JobFacts {
-  const base = job.baseAssetId ? getDoc('assets', job.baseAssetId) : null;
+async function facts(job: StudioJob): Promise<JobFacts> {
+  const base = job.baseAssetId ? await getDoc('assets', job.baseAssetId) : null;
   return { name: job.name, kind: job.kind, prompt: job.prompt, hasImage: job.hasImage, reference: referenceRig(job.kind, base), base };
 }
 
@@ -140,7 +140,7 @@ async function settle(job: StudioJob, f: JobFacts, first: Candidate, signal: Abo
 }
 
 export async function specStep(job: StudioJob, signal: AbortSignal, emit: Emit): Promise<void> {
-  const f = facts(job);
+  const f = await facts(job);
   const image = job.hasImage ? getImage(job.id) : null;
   emit({ t: 'status', text: image ? 'Claude đang phân tích ảnh mẫu và viết sculpt spec…' : 'Claude đang viết sculpt spec từ mô tả (không có ảnh mẫu)…' });
   const content: LlmBlock[] = [...(image ? [imageBlock(image)] : []), { type: 'text', text: specRequest(f) }];
@@ -158,7 +158,7 @@ export interface ReviewInput {
 export async function reviewStep(job: StudioJob, input: ReviewInput, signal: AbortSignal, emit: Emit): Promise<void> {
   const version = getVersion(job.id, input.version);
   if (!version) throw new Error(`Không có version ${input.version}`);
-  const f = facts(job);
+  const f = await facts(job);
   const image = job.hasImage ? getImage(job.id) : null;
   const round = input.feedback ? 0 : countReviews(job.id) + 1;
   // Manual reviews may go past the planned number of rounds.

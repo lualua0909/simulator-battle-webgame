@@ -48,6 +48,11 @@ export default function CollectionList({ collection }: { collection: CollectionN
         </h1>
         <span className="text-sm opacity-60">{rows ? `${rows.length} mục` : ''}</span>
         <input className="field ml-auto w-56" placeholder="Tìm theo tên / id…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {collection === 'units' && (
+          <Link href="/admin/studio" className="btn px-3 py-1" title="Tạo model bằng img2threejs, lưu thành asset rồi tạo lính dùng model đó">
+            🧪 Model mới (Xưởng)
+          </Link>
+        )}
         <Link href={`/admin/c/${collection}/new`} className="btn btn-gold px-3 py-1">
           + Tạo mới
         </Link>

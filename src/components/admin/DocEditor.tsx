@@ -16,7 +16,8 @@ function isSculpted(doc: Doc | null): doc is Doc & { sculpt: NonNullable<AssetDe
   return Boolean(doc && doc.sculpt);
 }
 
-export default function DocEditor({ collection, id, from }: { collection: CollectionName; id: string; from?: string }) {
+/** `modelId` pre-selects the model of a new unit (e.g. an asset just made in the img2threejs studio). */
+export default function DocEditor({ collection, id, from, modelId }: { collection: CollectionName; id: string; from?: string; modelId?: string }) {
   const router = useRouter();
   const spec = COLLECTION_SPECS[collection];
   const { bundle, reload } = useConfig();
@@ -37,7 +38,10 @@ export default function DocEditor({ collection, id, from }: { collection: Collec
         } else if (from) {
           const d = await api<Doc>(`/api/admin/${collection}/${from}`);
           if (!cancelled) setDoc({ ...d, id: `${from}-copy`, name: `${String(d.name)} (bản sao)` });
-        } else if (bundle && !cancelled) setDoc((prev) => prev ?? spec.blank(bundle));
+        } else if (bundle && !cancelled) {
+          const model = collection === 'units' ? bundle.assets.find((a) => a.id === modelId) : undefined;
+          setDoc((prev) => prev ?? { ...spec.blank(bundle), ...(model && { modelId: model.id, name: model.name }) });
+        }
       } catch (e) {
         if (!cancelled) setStatus({ ok: false, text: e instanceof Error ? e.message : String(e) });
       }
@@ -45,7 +49,7 @@ export default function DocEditor({ collection, id, from }: { collection: Collec
     return () => {
       cancelled = true;
     };
-  }, [collection, id, from, isNew, bundle, spec]);
+  }, [collection, id, from, modelId, isNew, bundle, spec]);
 
   const change = (next: Doc) => {
     if (collection === 'assets' && doc && next.kind !== doc.kind && (ASSET_KINDS as readonly string[]).includes(String(next.kind))) {

@@ -1,7 +1,7 @@
-import { getBundle } from '@/server/db';
+import { getBundle } from '@/server/content';
 
 export const dynamic = 'force-dynamic';
 
-export function GET() {
-  return Response.json(getBundle(), { headers: { 'cache-control': 'no-store' } });
+export async function GET() {
+  return Response.json(await getBundle(), { headers: { 'cache-control': 'no-store' } });
 }

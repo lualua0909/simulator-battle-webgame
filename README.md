@@ -4,7 +4,7 @@ Game mô phỏng đại chiến kiểu *Totally Accurate Battle Simulator*: xế
 
 - **Next.js 16 (App Router) + Three.js** (engine tự viết, không dùng R3F), **Rapier** cho ragdoll.
 - **3 chế độ**: đấu với máy (6 bot có hồ sơ riêng), 2 người 1 máy (xếp quân bí mật), đấu online qua mã phòng (Socket.IO).
-- **CMS** tại `/admin`: quản lý lính, vũ khí/sát thương, đạn, particle, asset 3D, bản đồ, bot, cài đặt + bảng khắc chế giáp. SQLite, có preview trực tiếp.
+- **CMS** tại `/admin`: quản lý lính, vũ khí/sát thương, đạn, particle, asset 3D, bản đồ, bot, cài đặt + bảng khắc chế giáp. Lưu trên Firestore, có preview trực tiếp.
 - **Xưởng img2threejs** tại `/admin/studio`: tạo model 3D từ ảnh mẫu + mô tả bằng Claude, xuất TypeScript/GLB/OBJ/STL/PLY/USDZ hoặc thay model nhân vật trong game.
 - **Mô hình 3D procedural** theo chuẩn img2threejs, dựng hoàn toàn bằng code: người (nhiều kiểu giáp/mũ/vũ khí), ngựa, voi/ma mút, rồng, đại bàng, máy bắn đá, cây (thông/sồi/bạch dương/khô/cọ/xương rồng), đá, bụi, sông, địa hình.
 
@@ -27,7 +27,7 @@ npm start
 | --- | --- |
 | `npm test` | test mô phỏng (tất định, bot hợp lệ, seed CMS hợp lệ) + sculpt spec (gate, phản chiếu, file TS xuất ra khớp model) |
 | `npm run typecheck` | kiểm tra TypeScript |
-| `npm run db:reset` | khôi phục dữ liệu CMS mặc định |
+| `npm run db:reset` | ghi đè nội dung CMS trên Firestore bằng dữ liệu mặc định |
 | `npm run shots -- models` | chụp ảnh mọi mô hình vào `.shots/models` (cần server đang chạy) |
 
 Biến môi trường: xem `.env.example` (`FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_ROOT_EMAILS`, `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, `DATABASE_PATH`, `PORT`, `ANTHROPIC_API_KEY`).
@@ -49,7 +49,7 @@ Tài khoản: Firebase Auth (email/mật khẩu + Google). Hồ sơ lưu ở Fir
 ```
 server.ts                  custom server: Next.js + Socket.IO
 src/shared/                schema zod (nguồn chuẩn cho CMS + game), seed, form CMS, kiểm tra tham chiếu
-src/server/                SQLite (better-sqlite3), phiên admin (HMAC cookie), phòng online
+src/server/                nội dung CMS trên Firestore (bản sao sống trong RAM), SQLite cho job Xưởng, phiên đăng nhập, phòng online
 src/game/sim/              mô phỏng tất định 30 Hz: địa hình, mục tiêu, di chuyển, va chạm, đòn đánh, đạn, nổ lan
 src/game/bot/              bot chọn quân theo chiến thuật + khắc chế + xếp đội hình
 src/game/models/           factory mô hình procedural (img2threejs), bake thành part cho instancing
@@ -60,6 +60,8 @@ src/components/            UI game + CMS
 ```
 
 **Online không gửi từng khung hình.** Server chỉ kiểm tra đội hình hai bên theo dữ liệu CMS, chọn seed, rồi hai trình duyệt tự chạy cùng một trận. Mô phỏng chỉ dùng `+ - * /`, `Math.sqrt` và PRNG có seed (không dùng `Math.sin/cos/random`), nên kết quả trùng từng bit giữa các trình duyệt. Mỗi giây hai máy gửi checksum; nếu lệch, UI báo desync. Ragdoll, particle và animation chỉ để hiển thị, không ảnh hưởng kết quả.
+
+**Nội dung CMS trên Firestore:** mỗi collection CMS là một collection Firestore cùng tên (`units`, `weapons`, `assets`…, id tài liệu = id nội dung) cộng tài liệu `settings/global`. Server giữ bản sao trong RAM qua snapshot listener, nên lưu trong CMS hay sửa trực tiếp trên Firebase Console đều có hiệu lực ở trận tiếp theo, không cần khởi động lại. Tài liệu sửa tay bị sai schema sẽ bị bỏ qua và ghi log. Trường `sculpt` của asset lưu dạng chuỗi JSON (Firestore không nhận mảng lồng mảng). Lần đầu gặp Firestore trống, server tự chuyển nội dung từ SQLite cũ (`data/game.db`) nếu có, không thì ghi dữ liệu mặc định. Chưa kết nối được Firestore (thiếu credential, mất mạng) thì game chạy bằng dữ liệu mặc định, CMS từ chối lưu, server tự thử lại.
 
 **Hiển thị:** mỗi (loại lính × bộ phận) là một `InstancedMesh`, nên số draw call không tăng theo quân số. Lính chết được giao cho ragdoll Rapier (khớp cầu tại pivot, vũ khí rơi tự do), sau vài giây đóng băng thành xác. Giới hạn ragdoll/xác chỉnh trong CMS.
 
@@ -84,6 +86,6 @@ Tạo model 3D từ **ảnh mẫu (tuỳ chọn) + mô tả**, rồi tải về 
 
 **Xuất file:** TypeScript (file độc lập gồm kit + code dựng, chỉ cần `three`; test đảm bảo dựng ra đúng model đã xem trong CMS), GLB/glTF (giữ `userData` part/socket/rig trong extras), OBJ và PLY (màu theo đỉnh), STL, USDZ, spec JSON.
 
-**Dùng trong game:** chọn asset cùng rig rồi bấm *Thay model*. Spec được lưu trong asset (`sculpt`), nên game, thumbnail, preview, chế độ online và file JSON sao lưu đều dùng được ngay; animation, ragdoll và người cưỡi vẫn chạy. Bấm *Hoàn tác* để trở về model procedural. Có thể *Lưu thành asset mới* rồi gán cho lính.
+**Dùng trong game:** chọn asset cùng rig rồi bấm *Thay model*. Spec được lưu trong asset (`sculpt`), nên game, thumbnail, preview, chế độ online và file JSON sao lưu đều dùng được ngay; animation, ragdoll và người cưỡi vẫn chạy. Bấm *Hoàn tác* để trở về model procedural. Có thể *Lưu thành asset mới* rồi bấm *Tạo lính* để mở form lính mới đã chọn sẵn model đó (hoặc từ *Quân lính* bấm *Model mới (Xưởng)*).
 
 **Giới hạn:** đây là bản rút gọn chạy trong CMS. Pipeline không chạy bộ gate Python, `state.json` hay các phép đo Divine Eye của skill img2threejs. Model dựng hoàn toàn từ primitive (hợp style low-poly của game), và mặt bị che trong ảnh chỉ là suy đoán. Mỗi model tốn vài lượt gọi Claude; số token hiện trong từng job.

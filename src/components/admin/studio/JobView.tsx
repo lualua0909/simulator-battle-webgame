@@ -8,7 +8,7 @@ import { weaponStyleOf } from '@/game/sculpt/rigs';
 import { bakeModel } from '@/game/models/bake';
 import { useConfig } from '@/game/useConfig';
 import { assetParamDefaults } from '@/shared/fields';
-import { RIG_OF_KIND, type AssetDef, type AssetKind, type WeaponDef } from '@/shared/schema';
+import { RIG_OF_KIND, UNIT_ASSET_KINDS, type AssetDef, type AssetKind, type WeaponDef } from '@/shared/schema';
 import type { SculptSpec } from '@/shared/sculpt';
 import type { StudioJobDetail, StudioVersion, VersionSource } from '@/shared/studio';
 import ModelViewer, { type PreviewAnim } from '../../ModelViewer';
@@ -412,7 +412,7 @@ function ApplyPanel({ job, version }: { job: StudioJobDetail; version: StudioVer
     act(async () => {
       const kind = job.kind as AssetKind;
       await api('/api/admin/assets', { method: 'POST', body: JSON.stringify({ id: newId, name: newName, kind, scale: 1, seed: 1, params: assetParamDefaults(kind), sculpt }) });
-    }, `Đã tạo asset "${newId}" ✓ — gán cho lính trong mục Quân lính`);
+    }, `Đã tạo asset "${newId}" ✓ — bấm "Tạo lính" bên dưới để dùng cho lính mới`);
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border-2 border-ink bg-parch/60 p-2 text-sm">
@@ -448,9 +448,16 @@ function ApplyPanel({ job, version }: { job: StudioJobDetail; version: StudioVer
                 {a.name}
               </Link>
               <span className="opacity-70">đang dùng v{a.sculpt!.version}</span>
-              <button className="btn ml-auto px-2 py-0 text-xs" disabled={saving} onClick={() => void revert(a.id)}>
-                Hoàn tác
-              </button>
+              <span className="ml-auto flex gap-1">
+                {(UNIT_ASSET_KINDS as readonly string[]).includes(a.kind) && (
+                  <Link href={`/admin/c/units/new?modelId=${a.id}`} className="btn px-2 py-0 text-xs">
+                    Tạo lính
+                  </Link>
+                )}
+                <button className="btn px-2 py-0 text-xs" disabled={saving} onClick={() => void revert(a.id)}>
+                  Hoàn tác
+                </button>
+              </span>
             </li>
           ))}
         </ul>

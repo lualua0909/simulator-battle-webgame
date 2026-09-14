@@ -3,10 +3,10 @@ import { DashboardActions } from '@/components/admin/AdminChrome';
 import { COLLECTIONS } from '@/shared/schema';
 import { COLLECTION_SPECS } from '@/shared/fields';
 import { findRefIssues } from '@/shared/validate';
-import { contentVersion, getContent } from '@/server/db';
+import { contentVersion, getContent } from '@/server/content';
 
-export default function Dashboard() {
-  const content = getContent();
+export default async function Dashboard() {
+  const content = await getContent();
   const issues = findRefIssues(content);
   return (
     <div className="flex flex-col gap-4">

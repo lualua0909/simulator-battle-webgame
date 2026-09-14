@@ -1,5 +1,5 @@
 import { COLLECTION_SCHEMAS, isCollection, type CollectionDocs, type CollectionName } from '@/shared/schema';
-import { getDoc, listDocs, putDoc } from '@/server/db';
+import { getDoc, listDocs, putDoc } from '@/server/content';
 import { checkRefs, guard, issuesOf, jsonError, readJson } from '@/server/admin';
 
 type Ctx = { params: Promise<{ collection: string }> };
@@ -9,7 +9,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   if (denied) return denied;
   const { collection } = await ctx.params;
   if (!isCollection(collection)) return jsonError(404, 'Không có collection này');
-  return Response.json(listDocs(collection));
+  return Response.json(await listDocs(collection));
 }
 
 export async function POST(req: Request, ctx: Ctx) {
@@ -22,9 +22,9 @@ export async function POST(req: Request, ctx: Ctx) {
   const parsed = COLLECTION_SCHEMAS[collection].safeParse(body);
   if (!parsed.success) return jsonError(422, 'Dữ liệu không hợp lệ', issuesOf(parsed.error));
   const doc = parsed.data as CollectionDocs[CollectionName];
-  if (getDoc(collection, doc.id)) return jsonError(409, `Đã tồn tại id "${doc.id}"`);
-  const refs = checkRefs(collection, doc);
+  if (await getDoc(collection, doc.id)) return jsonError(409, `Đã tồn tại id "${doc.id}"`);
+  const refs = await checkRefs(collection, doc);
   if (refs.length) return jsonError(422, 'Tham chiếu không hợp lệ', refs);
-  putDoc(collection, doc);
+  await putDoc(collection, doc);
   return Response.json(doc, { status: 201 });
 }

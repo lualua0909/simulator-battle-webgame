@@ -3,7 +3,7 @@ import { rigOfKind, SCULPT_KINDS } from '@/game/sculpt/rigs';
 import { idSchema, RIG_OF_KIND } from '@/shared/schema';
 import { IMAGE_DATA_URL } from '@/shared/studio';
 import { guard, issuesOf, jsonError, readJson } from '@/server/admin';
-import { getDoc } from '@/server/db';
+import { getDoc } from '@/server/content';
 import { engineStatus } from '@/server/studio/llm';
 import { createJob, listJobs } from '@/server/studio/store';
 
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return jsonError(422, 'Dữ liệu không hợp lệ', issuesOf(parsed.error));
   const input = parsed.data;
   if (input.baseAssetId) {
-    const base = getDoc('assets', input.baseAssetId);
+    const base = await getDoc('assets', input.baseAssetId);
     if (!base) return jsonError(422, `Không có asset "${input.baseAssetId}"`);
     if (RIG_OF_KIND[base.kind] !== rigOfKind(input.kind)) return jsonError(422, `Asset "${base.id}" loại ${base.kind} không dùng được rig của loại ${input.kind}`);
   }

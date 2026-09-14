@@ -2,12 +2,12 @@
 import type { CollectionDocs, CollectionName } from '@/shared/schema';
 import { findRefIssues } from '@/shared/validate';
 import { canAccessCms, type AppUser } from '@/shared/users';
-import { getContent } from './db';
+import { getContent } from './content';
 import { currentUser } from './users';
 
 /** Reference issues a create/update of this document would introduce. */
-export function checkRefs(collection: CollectionName, doc: CollectionDocs[CollectionName]): Array<{ path: string; message: string }> {
-  const content = getContent();
+export async function checkRefs(collection: CollectionName, doc: CollectionDocs[CollectionName]): Promise<Array<{ path: string; message: string }>> {
+  const content = await getContent();
   const list = content[collection] as Array<{ id: string }>;
   (content as unknown as Record<string, unknown>)[collection] = [...list.filter((d) => d.id !== doc.id), doc];
   return findRefIssues(content)

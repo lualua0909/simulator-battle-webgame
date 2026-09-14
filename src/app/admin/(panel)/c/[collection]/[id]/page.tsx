@@ -13,5 +13,6 @@ export default async function EditPage({
   const sp = await searchParams;
   if (!isCollection(collection)) notFound();
   const from = typeof sp.from === 'string' ? sp.from : undefined;
-  return <DocEditor key={`${collection}/${id}/${from ?? ''}`} collection={collection} id={id} from={from} />;
+  const modelId = typeof sp.modelId === 'string' ? sp.modelId : undefined;
+  return <DocEditor key={`${collection}/${id}/${from ?? ''}/${modelId ?? ''}`} collection={collection} id={id} from={from} modelId={modelId} />;
 }

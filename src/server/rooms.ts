@@ -8,7 +8,7 @@ import { armyCost, armySchema, validateArmy, type Placement } from '@/game/sim/a
 import { Terrain, type Side } from '@/game/sim/terrain';
 import type { ClientToServer, RoomState, ServerToClient } from '@/shared/net';
 import { idSchema } from '@/shared/schema';
-import { getBundle } from './db';
+import { getBundle } from './content';
 
 interface Player {
   socketId: string | null;
@@ -43,8 +43,8 @@ function newCode(): string {
   }
 }
 
-function publicState(room: Room): RoomState {
-  const bundle = getBundle();
+async function publicState(room: Room): Promise<RoomState> {
+  const bundle = await getBundle();
   const players: RoomState['players'] = {};
   for (const side of ['blue', 'red'] as const) {
     const p = room.players[side];
@@ -54,7 +54,10 @@ function publicState(room: Room): RoomState {
 }
 
 export function attachRooms(io: IO): void {
-  const broadcast = (room: Room) => io.to(room.code).emit('room:state', publicState(room));
+  const broadcast = async (room: Room) => {
+    const state = await publicState(room);
+    io.to(room.code).emit('room:state', state);
+  };
 
   io.on('connection', (socket: Sock) => {
     let room: Room | null = null;
@@ -73,17 +76,17 @@ export function attachRooms(io: IO): void {
         r.cleanup ??= setTimeout(() => rooms.delete(r.code), 60_000);
       } else {
         if (r.phase === 'battle') r.phase = 'lobby';
-        broadcast(r);
+        void broadcast(r);
       }
       room = null;
       side = null;
     };
 
-    socket.on('room:create', (req, ack) => {
+    socket.on('room:create', async (req, ack) => {
+      const bundle = await getBundle();
       const name = nameSchema.safeParse(req?.name);
       if (!name.success) return ack({ ok: false, error: 'Tên không hợp lệ' });
       leave();
-      const bundle = getBundle();
       const map = bundle.maps[0];
       if (!map) return ack({ ok: false, error: 'Chưa có bản đồ nào trong CMS' });
       const code = newCode();
@@ -93,7 +96,7 @@ export function attachRooms(io: IO): void {
       rooms.set(code, room);
       void socket.join(code);
       ack({ ok: true, code, side, token });
-      broadcast(room);
+      void broadcast(room);
     });
 
     socket.on('room:join', (req, ack) => {
@@ -122,25 +125,26 @@ export function attachRooms(io: IO): void {
       side = seat;
       void socket.join(code);
       ack({ ok: true, code, side: seat, token });
-      broadcast(target);
+      void broadcast(target);
     });
 
-    socket.on('room:settings', (req) => {
+    socket.on('room:settings', async (req) => {
+      const bundle = await getBundle();
       if (!room || side !== 'blue' || room.phase !== 'lobby') return;
       const parsed = z.object({ mapId: idSchema, budget: z.number().int().min(100).max(1_000_000) }).safeParse(req);
       if (!parsed.success) return;
-      if (!getBundle().maps.some((m) => m.id === parsed.data.mapId)) return;
+      if (!bundle.maps.some((m) => m.id === parsed.data.mapId)) return;
       room.mapId = parsed.data.mapId;
       room.budget = parsed.data.budget;
       for (const p of Object.values(room.players)) if (p) p.ready = false;
-      broadcast(room);
+      void broadcast(room);
     });
 
-    socket.on('room:ready', (req, ack) => {
+    socket.on('room:ready', async (req, ack) => {
+      const bundle = await getBundle();
       if (!room || !side || room.phase !== 'lobby') return ack({ ok: false, error: 'Không ở trong phòng chờ' });
       const army = armySchema.safeParse(req?.army);
       if (!army.success) return ack({ ok: false, error: 'Dữ liệu đội hình không hợp lệ' });
-      const bundle = getBundle();
       const map = bundle.maps.find((m) => m.id === room!.mapId);
       if (!map) return ack({ ok: false, error: 'Bản đồ không còn tồn tại' });
       if (army.data.length === 0) return ack({ ok: false, error: 'Chưa đặt lính nào' });
@@ -162,13 +166,13 @@ export function attachRooms(io: IO): void {
           configVersion: bundle.version,
         });
       }
-      broadcast(room);
+      void broadcast(room);
     });
 
     socket.on('room:unready', () => {
       if (!room || !side || room.phase !== 'lobby') return;
       room.players[side]!.ready = false;
-      broadcast(room);
+      void broadcast(room);
     });
 
     socket.on('battle:checksum', (req) => {
@@ -190,7 +194,7 @@ export function attachRooms(io: IO): void {
       if (!room || room.phase !== 'battle') return;
       room.phase = 'lobby';
       for (const p of Object.values(room.players)) if (p) p.ready = false;
-      broadcast(room);
+      void broadcast(room);
     });
 
     socket.on('room:leave', leave);

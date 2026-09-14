@@ -3,13 +3,13 @@ import { z } from 'zod';
 import { COLLECTIONS, COLLECTION_SCHEMAS, settingsSchema, type ContentBundle } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
 import { findRefIssues } from '@/shared/validate';
-import { getContent, replaceContent } from '@/server/db';
+import { getContent, replaceContent } from '@/server/content';
 import { guard, issuesOf, jsonError, readJson } from '@/server/admin';
 
 export async function GET() {
   const denied = await guard();
   if (denied) return denied;
-  return new Response(JSON.stringify(getContent(), null, 2), {
+  return new Response(JSON.stringify(await getContent(), null, 2), {
     headers: {
       'content-type': 'application/json',
       'content-disposition': `attachment; filename="battle-content-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -39,7 +39,7 @@ export async function PUT(req: Request) {
   }
   const refs = findRefIssues(content);
   if (refs.length) return jsonError(422, 'Tham chiếu không hợp lệ', refs.slice(0, 30));
-  replaceContent(content);
+  await replaceContent(content);
   return Response.json({ ok: true });
 }
 
@@ -50,6 +50,6 @@ export async function POST(req: Request) {
   const body = await readJson(req);
   if (body instanceof Response) return body;
   if ((body as { action?: string })?.action !== 'reset') return jsonError(400, 'Hành động không hỗ trợ');
-  replaceContent(SEED);
+  await replaceContent(SEED);
   return Response.json({ ok: true });
 }
