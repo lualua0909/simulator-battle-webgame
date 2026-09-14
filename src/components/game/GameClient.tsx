@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
+import { useAuth } from '@/components/auth/AuthProvider';
 import type { BattleStart } from '@/shared/net';
 import { generateBotArmy } from '@/game/bot/generate';
 import { useOnline } from '@/game/net/client';
@@ -86,11 +87,17 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   }, []);
 
   // ------------------------------------------------------------------ online
+  const { user, loading: authLoading, openAuth } = useAuth();
   const onStartRef = useRef<(s: BattleStart) => void>(() => {});
-  const net = useOnline(mode === 'online', {
+  const net = useOnline(mode === 'online' ? user?.uid ?? null : null, {
     onStart: (s) => onStartRef.current(s),
     onDesync: () => setDesync(true),
+    onResult: (res) => flash(res.ok ? 'Máy chủ đã xác nhận và lưu kết quả trận.' : `Kết quả không được lưu: ${res.error}`),
   });
+
+  useEffect(() => {
+    if (net.error) flash(net.error);
+  }, [net.error, flash]);
 
   // ------------------------------------------------------------------ bootstrap
   useEffect(() => {
@@ -132,6 +139,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     setMapId(net.room.mapId);
     setBudget(net.room.budget);
   }, [mode, net.room?.mapId, net.room?.budget]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lost the seat (signed out, or the room is gone after a reconnect) → back to the lobby.
+  useEffect(() => {
+    if (mode === 'online' && !net.seat && phase === 'deploy') setPhase('lobby');
+  }, [mode, net.seat, phase]);
 
   useEffect(() => {
     if (!engine || !mapId) return;
@@ -299,7 +311,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   );
 
   resultRef.current = (r) => {
-    if (mode === 'online') net.end(r.winner);
+    if (mode === 'online') net.end(r.winner === 'draw' ? 'draw' : r.winner === mySide ? 'win' : 'lose', r.tick);
     setResult(r);
     const show = () => setPhase((p) => (p === 'battle' ? 'result' : p));
     const winner = r.winner;
@@ -415,21 +427,25 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         {bundle && phase === 'lobby' && (
           <div className="my-auto">
             <OnlineLobby
+              playerName={user ? user.displayName || user.email || '' : null}
+              authLoading={authLoading}
+              onSignIn={() => openAuth('signin')}
               connected={net.connected}
+              error={net.error}
               initialCode={initialRoom}
               busy={busy}
-              onCreate={async (name) => {
+              onCreate={async () => {
                 setBusy(true);
-                const r = await net.create(name);
+                const r = await net.create();
                 setBusy(false);
                 if (!r.ok) return flash(r.error);
                 window.history.replaceState(null, '', `/play?mode=online&room=${r.code}`);
                 introPending.current = true;
                 setPhase('deploy');
               }}
-              onJoin={async (code, name) => {
+              onJoin={async (code) => {
                 setBusy(true);
-                const r = await net.join(code, name);
+                const r = await net.join(code);
                 setBusy(false);
                 if (!r.ok) return flash(r.error);
                 window.history.replaceState(null, '', `/play?mode=online&room=${r.code}`);

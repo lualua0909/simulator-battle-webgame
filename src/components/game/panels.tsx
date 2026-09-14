@@ -112,39 +112,41 @@ export function SetupPanel(props: {
   );
 }
 
-export function OnlineLobby(props: { connected: boolean; initialCode?: string; onCreate(name: string): void; onJoin(code: string, name: string): void; busy: boolean }) {
-  const [name, setName] = useState(() => {
-    try {
-      return localStorage.getItem('battle-name') ?? '';
-    } catch {
-      return '';
-    }
-  });
+export function OnlineLobby(props: {
+  /** Signed-in player's name, or null when signed out. */
+  playerName: string | null;
+  authLoading: boolean;
+  onSignIn(): void;
+  connected: boolean;
+  error: string | null;
+  initialCode?: string;
+  onCreate(): void;
+  onJoin(code: string): void;
+  busy: boolean;
+}) {
   const [code, setCode] = useState(props.initialCode ?? '');
-  const save = () => {
-    try {
-      localStorage.setItem('battle-name', name);
-    } catch {
-      /* ignore */
-    }
-  };
-  const valid = name.trim().length > 0;
+  if (props.playerName === null) {
+    return (
+      <div className="panel pointer-events-auto mx-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
+        <h2 className="font-display text-2xl">Đấu online</h2>
+        <p className="text-sm">Cần đăng nhập để đấu online. Kết quả trận được lưu theo tài khoản.</p>
+        <button className="btn btn-gold" disabled={props.authLoading} onClick={props.onSignIn}>
+          👤 Đăng nhập
+        </button>
+        <Link href="/" className="text-sm underline">
+          ← Menu
+        </Link>
+      </div>
+    );
+  }
   return (
     <div className="panel pointer-events-auto mx-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
       <h2 className="font-display text-2xl">Đấu online</h2>
-      <p className="text-sm opacity-75">{props.connected ? 'Đã kết nối máy chủ.' : 'Đang kết nối máy chủ…'}</p>
-      <label className="text-sm font-bold">
-        Tên của bạn
-        <input className="field mt-1" maxLength={20} value={name} onChange={(e) => setName(e.target.value)} placeholder="Tướng quân" />
-      </label>
-      <button
-        className="btn btn-gold"
-        disabled={!valid || !props.connected || props.busy}
-        onClick={() => {
-          save();
-          props.onCreate(name.trim());
-        }}
-      >
+      <p className="text-sm">
+        Chơi với tên <b>{props.playerName}</b>
+      </p>
+      <p className={`text-sm ${props.error ? 'text-red-team' : 'opacity-75'}`}>{props.connected ? 'Đã kết nối máy chủ.' : (props.error ?? 'Đang kết nối máy chủ…')}</p>
+      <button className="btn btn-gold" disabled={!props.connected || props.busy} onClick={props.onCreate}>
         Tạo phòng mới
       </button>
       <div className="flex items-center gap-2 text-xs uppercase opacity-60">
@@ -154,11 +156,8 @@ export function OnlineLobby(props: { connected: boolean; initialCode?: string; o
         <input className="field font-mono uppercase" maxLength={5} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="MÃ PHÒNG" />
         <button
           className="btn"
-          disabled={!valid || code.length < 5 || !props.connected || props.busy}
-          onClick={() => {
-            save();
-            props.onJoin(code, name.trim());
-          }}
+          disabled={code.length < 5 || !props.connected || props.busy}
+          onClick={() => props.onJoin(code)}
         >
           Vào phòng
         </button>

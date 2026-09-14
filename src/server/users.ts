@@ -1,5 +1,4 @@
 // Firestore-backed user profiles and the Firebase session cookie.
-import { cookies } from 'next/headers';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { FieldValue, Timestamp, type DocumentSnapshot } from 'firebase-admin/firestore';
 import { ROLE, USERS_COLLECTION, type AppUser, type Role } from '@/shared/users';
@@ -81,8 +80,14 @@ export async function removeFcmTokens(uid: string, tokens: string[]): Promise<vo
 
 /** Signed-in, enabled user behind the session cookie, or null. */
 export async function currentUser(): Promise<AppUser | null> {
+  // Imported lazily: server.ts loads this module (via rooms.ts) before Next.js sets up its request storage.
+  const { cookies } = await import('next/headers');
   const jar = await cookies();
-  const cookie = jar.get(SESSION_COOKIE)?.value;
+  return userFromSessionCookie(jar.get(SESSION_COOKIE)?.value);
+}
+
+/** Enabled user for a session cookie value (also used by the Socket.IO handshake), or null. */
+export async function userFromSessionCookie(cookie: string | undefined): Promise<AppUser | null> {
   if (!cookie) return null;
   try {
     const decoded = await adminAuth().verifySessionCookie(cookie, true);
