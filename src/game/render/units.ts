@@ -12,12 +12,15 @@ import type { Ragdoll, RagdollWorld } from './ragdoll';
 
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
 const STRIKE_TIME = 0.45;
+const EMIT_SOCKETS = ['mouth', 'muzzle', 'staff.tip', 'hand.R', 'rider.muzzle', 'rider.staff.tip', 'rider.hand.R'];
 const RAGDOLL_SECONDS = 6;
 
 interface TypeVis {
   template: ModelTemplate;
   poser: Poser;
   style: AttackStyle;
+  /** Motion per ability id (basic attack and skills). */
+  styles: Map<string, AttackStyle>;
   meshes: (THREE.InstancedMesh | null)[];
   used: number;
   refSpeed: number;
@@ -93,7 +96,7 @@ export class UnitRenderer {
         return m;
       });
       maxParts = Math.max(maxParts, template.parts.length);
-      this.types.set(id, { template, poser: new Poser(template, style), style, meshes, used: 0, refSpeed: Math.max(1, def.speed), stride: Math.max(0.5, template.bounds.max.y * 0.32) });
+      this.types.set(id, { template, poser: new Poser(template, style), style, styles: new Map(), meshes, used: 0, refSpeed: Math.max(1, def.speed), stride: Math.max(0.5, template.bounds.max.y * 0.32) });
     }
     this.pose = Array.from({ length: maxParts }, () => new THREE.Matrix4());
     this.vis = sim.units.map((u) => {
@@ -185,21 +188,30 @@ export class UnitRenderer {
     }
 
     let attack = -1;
-    const w = u.weapon;
+    const act = u.action ?? u.lastAction;
     const since = (sim.tick - u.lastAttackTick) * SIM_DT;
-    if (u.windupLeft >= 0 && w.windup > 0) attack = THREE.MathUtils.clamp(1 - u.windupLeft / w.windup, 0, 1);
-    else if (since >= 0 && since < STRIKE_TIME) attack = 1 + since / STRIKE_TIME;
+    // Fast attackers get a shorter follow-through so the next swing is not cut off.
+    const strikeTime = Math.min(STRIKE_TIME, (act.def.cooldown / act.rate) * 0.8);
+    if (u.action && u.windupLeft >= 0 && u.windupTotal > 0) attack = THREE.MathUtils.clamp(1 - u.windupLeft / u.windupTotal, 0, 1);
+    else if (u.channelLeft > 0) attack = 1.25;
+    else if (since >= 0 && since < strikeTime) attack = 1 + since / strikeTime;
     if (v.type.style === 'breath' && since < 0.45) attack = 1.5;
 
     const t = v.type;
     t.poser.compute(
-      { time: this.time, speed: v.speed, phase: v.phase, attack, airborne: u.airborne, stunned: u.stun > 0, leanX: v.leanX, leanZ: v.leanZ, seed: v.seed, refSpeed: t.refSpeed },
+      { time: this.time, speed: v.speed, phase: v.phase, attack, style: this.styleOf(t, act.def), airborne: u.airborne, stunned: u.stun > 0, leanX: v.leanX, leanZ: v.leanZ, seed: v.seed, refSpeed: t.refSpeed },
       this.pose,
     );
     this.tmpE.set(-v.tumble, v.yaw, 0, 'YXZ');
     this.tmpQ.setFromEuler(this.tmpE);
     this.rootM.compose(this.tmpP.set(x, y, z), this.tmpQ, this.one);
     for (let k = 0; k < t.template.parts.length; k++) v.world[k].multiplyMatrices(this.rootM, this.pose[k]);
+  }
+
+  private styleOf(type: TypeVis, weapon: WeaponDef): AttackStyle {
+    let style = type.styles.get(weapon.id);
+    if (!style) type.styles.set(weapon.id, (style = attackStyleFor(type.template, weapon)));
+    return style;
   }
 
   onHit(e: HitEvent): void {
@@ -266,6 +278,12 @@ export class UnitRenderer {
       if (v.sink > 2.5) v.gone = true;
       excess--;
     }
+  }
+
+  /** Where a unit's attacks and spells leave from: mouth, muzzle, staff orb or weapon hand (a mount's rider when the mount has none). */
+  emitPoint(unitId: number, out: THREE.Vector3): boolean {
+    for (const name of EMIT_SOCKETS) if (this.socketPosition(unitId, name, out)) return true;
+    return false;
   }
 
   /** World position of a named socket on a unit (e.g. dragon "mouth"). */

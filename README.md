@@ -4,7 +4,8 @@ Game mô phỏng đại chiến kiểu *Totally Accurate Battle Simulator*: xế
 
 - **Next.js 16 (App Router) + Three.js** (engine tự viết, không dùng R3F), **Rapier** cho ragdoll.
 - **3 chế độ**: đấu với máy (6 bot có hồ sơ riêng), 2 người 1 máy (xếp quân bí mật), đấu online qua mã phòng (Socket.IO).
-- **CMS** tại `/admin`: quản lý lính, vũ khí/sát thương, đạn, particle, asset 3D, bản đồ, bot, cài đặt + bảng khắc chế giáp. Lưu trên Firestore, có preview trực tiếp.
+- **CMS** tại `/admin`: quản lý lính, kỹ năng & vũ khí, đạn, particle, asset 3D, bản đồ, bot, cài đặt + bảng khắc chế giáp. Lưu trên Firestore, có preview trực tiếp và đấu thử với hình nộm.
+- **Kỹ năng hoành tráng**: sét chuỗi phóng từ tay, thiên lôi và bão sấm giáng từ trời, lốc xoáy / lốc lửa hút bổng quân địch, thiên thạch, phun lửa, dậm đất, súng hỏa mai, mưa tên, ném tảng đá, hồi máu diện rộng. Admin gán kỹ năng cho từng lính và chỉnh tốc độ đánh, tốc độ chạy, tốc độ ra kỹ năng.
 - **Xưởng img2threejs** tại `/admin/studio`: tạo model 3D từ ảnh mẫu + mô tả bằng Claude, xuất TypeScript/GLB/OBJ/STL/PLY/USDZ hoặc thay model nhân vật trong game.
 - **Mô hình 3D procedural** theo chuẩn img2threejs, dựng hoàn toàn bằng code: người (nhiều kiểu giáp/mũ/vũ khí), ngựa, voi/ma mút, rồng, đại bàng, máy bắn đá, cây (thông/sồi/bạch dương/khô/cọ/xương rồng), đá, bụi, sông, địa hình.
 
@@ -55,7 +56,8 @@ src/game/bot/              bot chọn quân theo chiến thuật + khắc chế 
 src/game/models/           factory mô hình procedural (img2threejs), bake thành part cho instancing
 src/game/sculpt/           sculpt spec → Three.js (kit, builder, gate, rig contract, xuất TypeScript)
 src/server/studio/         xưởng img2threejs: gọi Claude (API hoặc CLI), prompt, pipeline, lưu job/version
-src/game/render/           engine Three.js: lính instanced + animation lò xo, ragdoll Rapier, particle, đạn, camera
+src/game/render/           engine Three.js: lính instanced + animation lò xo, ragdoll Rapier, particle, đạn, hiệu ứng kỹ năng, camera
+src/game/arena.ts          đấu trường thử kỹ năng (1 lính vs hình nộm) cho preview CMS và /models
 src/components/            UI game + CMS
 ```
 
@@ -66,6 +68,26 @@ src/components/            UI game + CMS
 **Nội dung CMS trên Firestore:** mỗi collection CMS là một collection Firestore cùng tên (`units`, `weapons`, `assets`…, id tài liệu = id nội dung) cộng tài liệu `settings/global`. Server giữ bản sao trong RAM qua snapshot listener, nên lưu trong CMS hay sửa trực tiếp trên Firebase Console đều có hiệu lực ở trận tiếp theo, không cần khởi động lại. Tài liệu sửa tay bị sai schema sẽ bị bỏ qua và ghi log. Trường `sculpt` của asset lưu dạng chuỗi JSON (Firestore không nhận mảng lồng mảng). Lần đầu gặp Firestore trống, server tự chuyển nội dung từ SQLite cũ (`data/game.db`) nếu có, không thì ghi dữ liệu mặc định. Chưa kết nối được Firestore (thiếu credential, mất mạng) thì game chạy bằng dữ liệu mặc định, CMS từ chối lưu, server tự thử lại.
 
 **Hiển thị:** mỗi (loại lính × bộ phận) là một `InstancedMesh`, nên số draw call không tăng theo quân số. Lính chết được giao cho ragdoll Rapier (khớp cầu tại pivot, vũ khí rơi tự do), sau vài giây đóng băng thành xác. Giới hạn ragdoll/xác chỉnh trong CMS.
+
+## Kỹ năng & hiệu ứng
+
+Danh mục CMS **Kỹ năng & vũ khí** (collection `weapons`) chứa mọi đòn. Mỗi lính có **1 đòn cơ bản** (`weaponId`, quyết định cách di chuyển và chọn mục tiêu) và tối đa **6 kỹ năng** (`skillIds`). Trong trận, lính tự tung kỹ năng theo thứ tự đã chọn khi hồi chiêu xong, mục tiêu trong tầm và có đủ `minTargets` địch trong vùng (kỹ năng vùng tự nhắm vào cụm địch đông nhất). Lúc niệm hoặc kênh, lính đứng yên và quay về mục tiêu. Người chơi không điều khiển kỹ năng.
+
+| Kiểu | Làm gì |
+| --- | --- |
+| `melee`, `projectile`, `breath`, `heal` | như trước; `heal` có bán kính thì hồi cả vùng |
+| `chain` | sét trúng mục tiêu rồi nhảy sang `chainCount` địch gần nhất, sát thương giảm theo `chainFalloff` |
+| `strike` | vòng cảnh báo trên đất, sau `strikeDelay` giây giáng sét hoặc thiên thạch (`strikeVfx`); `strikeCount` lần rải trong `strikeSpread` m, trúng cả lính bay |
+| `vortex` | lốc xoáy sinh trước mục tiêu, đuổi địch gần nhất trong `duration` giây, hút xoáy (`pull`), nhấc bổng (`lift`, lính nặng/kháng đẩy khó bị nhấc), tan thì quăng văng |
+| `nova` | chấn động quanh người ra đòn, chỉ trúng địch |
+
+Mọi kiểu đều có thể **kênh** (`duration` > 0: lặp hiệu ứng mỗi `interval` giây, ví dụ phun lửa liên tục, bắn liên thanh), gây **choáng** (`stunDuration`) và **cháy** (`burnDps` × `burnDuration`, sát thương lửa theo bảng khắc chế). Lính có `attackSpeed` (chia hồi chiêu + thời gian vung của đòn cơ bản) và `castSpeed` (chia hồi chiêu, thời gian niệm và nhịp kênh của kỹ năng). Kỹ năng vẫn chạy trong mô phỏng tất định nên đấu online không lệch.
+
+**Hình ảnh** (`src/game/render/effects.ts`, chỉ để hiển thị): tia sét zigzag phân nhánh nhấp nháy theo tay/mục tiêu, vòng cảnh báo, sóng xung kích, vết cháy trên đất, thiên thạch rơi kèm vệt lửa, lốc xoáy xoay nhiều tầng kèm bụi và mảnh vỡ, tia điện quanh tay khi niệm, lửa trên lính đang cháy, đèn chớp sáng và rung camera (tắt được trong Cài đặt). Màu sét/lốc/sóng chỉnh bằng `vfxColor`; particle phụ (`areaParticleId`) dùng cho vùng nổ, chân lốc và khói nòng súng. Model mới theo chuẩn img2threejs: súng hỏa mai (socket `muzzle`), đầu trượng (socket `staff.tip`), đạn vạch sáng, thiên thạch, phễu lốc xoáy (`src/game/models/effects.ts`). Hiệu ứng phát ra từ socket `mouth` → `muzzle` → `staff.tip` → `hand.R`.
+
+**Đấu thử:** editor kỹ năng và editor lính có khung *Đấu thử* chạy engine trận thật với bản nháp chưa lưu (1 lính vs hình nộm; kỹ năng hồi máu thì có đồng đội bị đánh). Xem công khai tại `/models?skill=<id>` hoặc `/models?unit=<id>&arena=1`.
+
+**Dữ liệu Firestore có sẵn:** nội dung mặc định mới (kỹ năng, lính, particle…) không tự ghi vào Firestore đã có dữ liệu. Trang Tổng quan của CMS hiện khung *Nội dung mặc định mới*: chọn mục muốn thêm, có tùy chọn gán kỹ năng mặc định cho lính mặc định chưa có kỹ năng. Mục đang có không bị sửa hay xóa.
 
 ## Về mô hình 3D (img2threejs)
 

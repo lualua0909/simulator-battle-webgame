@@ -9,6 +9,8 @@ import {
   botSchema,
   mapSchema,
   particleSchema,
+  unitSchema,
+  weaponSchema,
   type AssetDef,
   type ConfigBundle,
   type ProjectileDef,
@@ -16,7 +18,8 @@ import {
   type WeaponDef,
 } from '@/shared/schema';
 import { ENUM_LABELS, isEnvKind } from '@/shared/fields';
-import { generateBotArmy, unitPower } from '@/game/bot/generate';
+import { abilityCaster } from '@/game/arena';
+import { abilityDps, generateBotArmy, unitPower } from '@/game/bot/generate';
 import { createAssetModel, createUnitModel } from '@/game/models';
 import { bakeModel, type ModelTemplate } from '@/game/models/bake';
 import { createProjectileModel } from '@/game/models/projectiles';
@@ -26,6 +29,7 @@ import { createSkirt, createTerrainMesh, createWater, createZoneOverlay } from '
 import { armyCost } from '@/game/sim/army';
 import { Terrain } from '@/game/sim/terrain';
 import ModelViewer, { type PreviewAnim } from '../ModelViewer';
+import SkillArena from '../SkillArena';
 
 type Doc = Record<string, unknown>;
 
@@ -34,6 +38,17 @@ function useDraft<T>(doc: Doc): [T, string] {
   const deferred = useDeferredValue(doc);
   const key = JSON.stringify(deferred);
   return [useMemo(() => JSON.parse(key) as T, [key]), key];
+}
+
+/** `value` once it has stopped changing for `ms` (the arena restarts a whole battle engine). */
+function useSettled<T>(value: T, ms = 700): T {
+  const [settled, setSettled] = useState(value);
+  const key = JSON.stringify(value);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSettled(JSON.parse(key) as T), ms);
+    return () => window.clearTimeout(t);
+  }, [key, ms]);
+  return settled;
 }
 
 function tryBake(build: () => THREE.Object3D): ModelTemplate | null {
@@ -74,10 +89,17 @@ function Frame({ title, children, tools }: { title: string; children: React.Reac
 export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) {
   const [unit] = useDraft<UnitDef>(doc);
   const [anim, setAnim] = useState<PreviewAnim>('idle');
+  const [arena, setArena] = useState(false);
+  // A new document has no id yet; the preview does not need one.
+  const parsed = unitSchema.safeParse({ ...unit, id: unit.id || 'draft' });
+  const fighter = useSettled(parsed.success ? parsed.data : null);
+  const skills = (unit.skillIds ?? []).map((id) => bundle.weapons.find((w) => w.id === id)).filter((w): w is WeaponDef => !!w);
+  // Skills fire soon after the round starts, so a long first cooldown does not hide them.
+  const quickSkills = useMemo(() => skills.map((w) => ({ ...w, initialCooldown: Math.min(w.initialCooldown, 0.8) })), [JSON.stringify(skills)]); // eslint-disable-line react-hooks/exhaustive-deps
   const assets = useMemo(() => new Map(bundle.assets.map((a) => [a.id, a])), [bundle]);
   const template = useMemo(() => tryBake(() => createUnitModel(unit, assets)), [unit.modelId, unit.riderModelId, assets]); // eslint-disable-line react-hooks/exhaustive-deps
   const weapon = bundle.weapons.find((w) => w.id === unit.weaponId);
-  const safe = { ...unit, hp: Number(unit.hp) || 1, cost: Number(unit.cost) || 1 };
+  const safe = { ...unit, hp: Number(unit.hp) || 1, cost: Number(unit.cost) || 1, attackSpeed: Number(unit.attackSpeed) || 1, castSpeed: Number(unit.castSpeed) || 1, skillIds: unit.skillIds ?? [] };
   const { dps, ehp } = unitPower(safe, bundle);
   const eff = (u: UnitDef) => {
     const p = unitPower(u, bundle);
@@ -87,10 +109,31 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
   const all = bundle.units.filter((u) => u.id !== unit.id).map(eff);
   const rank = all.filter((e) => e > mine).length + 1;
   return (
-    <Frame title="Xem trước" tools={<AnimButtons anim={anim} setAnim={setAnim} />}>
+    <Frame
+      title="Xem trước"
+      tools={
+        <div className="flex gap-1">
+          {!arena && <AnimButtons anim={anim} setAnim={setAnim} />}
+          <button type="button" className={`btn px-2 py-0.5 text-xs ${arena ? 'btn-gold' : ''}`} onClick={() => setArena((a) => !a)} title="Lính đánh hình nộm bằng đòn cơ bản và kỹ năng (bản nháp chưa lưu)">
+            ⚔️ Đấu thử
+          </button>
+        </div>
+      }
+    >
       <div className="h-80 overflow-hidden rounded-lg border-2 border-ink/20">
-        <ModelViewer template={template} weapon={weapon} anim={anim} />
+        {!arena ? (
+          <ModelViewer template={template} weapon={weapon} anim={anim} />
+        ) : fighter ? (
+          <SkillArena bundle={bundle} caster={fighter} abilities={quickSkills} />
+        ) : (
+          <p className="p-3 text-sm">Dữ liệu lính chưa hợp lệ</p>
+        )}
       </div>
+      {skills.length > 0 && (
+        <p className="text-xs">
+          <b>Kỹ năng:</b> {skills.map((w) => `${w.name} (${ENUM_LABELS[w.attack] ?? w.attack}, hồi ${(w.cooldown / safe.castSpeed).toFixed(1)}s)`).join(' · ')}
+        </p>
+      )}
       <dl className="grid grid-cols-2 gap-x-3 text-sm">
         <dt>Sát thương / giây</dt>
         <dd className="text-right font-bold">{dps.toFixed(1)}</dd>
@@ -189,13 +232,48 @@ function WeaponTable({ weapon, bundle }: { weapon: WeaponDef; bundle: ConfigBund
 export function WeaponPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) {
   const [w] = useDraft<WeaponDef>(doc);
   const users = bundle.units.filter((u) => u.weaponId === w.id);
+  const casters = bundle.units.filter((u) => u.skillIds.includes(w.id));
   const flight = w.attack === 'projectile' && w.projectileSpeed ? (Number(w.range) / Number(w.projectileSpeed)).toFixed(2) : null;
+  const parsed = weaponSchema.safeParse({ ...w, id: w.id || 'draft' });
+  const [asSkill, setAsSkill] = useState<boolean>(() => casters.length > 0 || users.length === 0);
+  const [bodyId, setBodyId] = useState<string>(() => (casters[0] ?? users[0])?.id ?? '');
+  const body = bundle.units.find((u) => u.id === bodyId);
+  const draft = useSettled(parsed.success ? parsed.data : null);
+  const practice = useMemo(() => (draft ? abilityCaster(bundle, draft, asSkill, body) : null), [bundle, draft, asSkill, body]);
   return (
-    <Frame title="Bảng sát thương">
-      <WeaponTable weapon={w} bundle={bundle} />
-      {flight && <p className="text-xs">Thời gian bay ở tầm tối đa: {flight}s</p>}
-      <p className="text-xs opacity-70">Dùng bởi: {users.length ? users.map((u) => u.name).join(', ') : 'chưa có lính nào'}</p>
-    </Frame>
+    <div className="flex flex-col gap-3">
+      <Frame
+        title="Đấu thử với hình nộm"
+        tools={
+          <div className="flex items-center gap-1 text-xs">
+            <select className="field py-0.5 text-xs" value={asSkill ? 'skill' : 'basic'} onChange={(e) => setAsSkill(e.target.value === 'skill')}>
+              <option value="skill">Kỹ năng</option>
+              <option value="basic">Đòn cơ bản</option>
+            </select>
+            <select className="field w-32 py-0.5 text-xs" value={bodyId} onChange={(e) => setBodyId(e.target.value)} title="Mô hình người ra đòn">
+              <option value="">— hình nộm —</option>
+              {bundle.units.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      >
+        <div className="h-72 overflow-hidden rounded-lg border-2 border-ink/20">
+          {practice ? <SkillArena bundle={bundle} caster={practice.caster} abilities={practice.abilities} /> : <p className="p-3 text-sm">Dữ liệu chưa hợp lệ</p>}
+        </div>
+        <p className="text-xs opacity-70">Chạy bằng engine trận thật với bản nháp chưa lưu; lần dùng đầu được rút ngắn để xem nhanh. Chuột phải kéo để xoay, lăn chuột để zoom.</p>
+      </Frame>
+      <Frame title="Bảng sát thương">
+        <WeaponTable weapon={w} bundle={bundle} />
+        {parsed.success && <p className="text-xs">Sát thương / giây ước tính (tính cả vùng, kênh, cháy): {abilityDps(parsed.data).toFixed(1)}</p>}
+        {flight && <p className="text-xs">Thời gian bay ở tầm tối đa: {flight}s</p>}
+        <p className="text-xs opacity-70">Đòn cơ bản của: {users.length ? users.map((u) => u.name).join(', ') : 'chưa có lính nào'}</p>
+        <p className="text-xs opacity-70">Kỹ năng của: {casters.length ? casters.map((u) => u.name).join(', ') : 'chưa có lính nào'}</p>
+      </Frame>
+    </div>
   );
 }
 

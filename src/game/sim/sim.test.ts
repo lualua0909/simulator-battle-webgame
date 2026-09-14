@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { COLLECTIONS, COLLECTION_SCHEMAS, settingsSchema } from '@/shared/schema';
+import { COLLECTIONS, COLLECTION_SCHEMAS, settingsSchema, type MapDef, type UnitDef, type WeaponDef } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
 import { findRefIssues } from '@/shared/validate';
 import { generateBotArmy } from '../bot/generate';
 import { armyCost, validateArmy, type Armies } from './army';
 import { Terrain } from './terrain';
-import { BattleSim } from './world';
+import { BattleSim, type SimEvent } from './world';
 
 test('seed content passes schemas and reference checks', () => {
   for (const c of COLLECTIONS) {
@@ -59,6 +59,108 @@ test('battle is deterministic and finishes', () => {
   assert.ok(a.result, 'battle must end');
   assert.deepEqual(a.sums, b.sums);
   assert.deepEqual(a.result, b.result);
+});
+
+// ------------------------------------------------------------------ skills
+
+const ARENA: MapDef = { ...SEED.maps[0], id: 'arena', size: 80, heightScale: 0, river: { enabled: false, width: 8, meander: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
+const NOOP: WeaponDef = { ...SEED.weapons.find((w) => w.id === 'club')!, id: 'noop', damage: 0, range: 0.3, cooldown: 60, knockback: 0 };
+const DUMMY: UnitDef = { ...SEED.units.find((u) => u.id === 'clubber')!, id: 'dummy', hp: 5000, speed: 0, weaponId: 'noop', skillIds: [] };
+
+/** One caster (blue) against a tight block of passive dummies (red). */
+function skillArena(caster: Partial<UnitDef>, opts: { dummies?: number; gap?: number; seed?: number } = {}) {
+  const unit: UnitDef = { ...DUMMY, id: 'caster', hp: 100000, speed: 0, ...caster };
+  const content = { ...SEED, units: [...SEED.units, DUMMY, unit], weapons: [...SEED.weapons, NOOP] };
+  const terrain = new Terrain(ARENA, []);
+  const red = Array.from({ length: opts.dummies ?? 9 }, (_, i) => ({ unitId: 'dummy', x: (opts.gap ?? 10) + (i % 3) * 1.1, z: (Math.floor(i / 3) - 1) * 1.1 }));
+  const sim = new BattleSim(content, ARENA, terrain, { blue: [{ unitId: 'caster', x: 0, z: 0 }], red }, opts.seed ?? 99);
+  const events: SimEvent[] = [];
+  const run = (seconds: number, each?: () => void) => {
+    for (let i = 0; i < seconds * 30 && !sim.result; i++) {
+      sim.step();
+      events.push(...sim.events);
+      each?.();
+    }
+  };
+  const hurt = () => sim.units.filter((u) => u.side === 'red' && u.hp < u.def.hp).length;
+  return { sim, events, run, hurt };
+}
+
+test('sky lightning telegraphs, strikes the group and stuns it', () => {
+  const a = skillArena({ weaponId: 'noop', skillIds: ['thien-loi'] });
+  let stunned = 0;
+  a.run(4, () => (stunned = Math.max(stunned, a.sim.units.filter((u) => u.side === 'red' && u.stun > 0.5).length)));
+  const warn = a.events.findIndex((e) => e.type === 'warn');
+  const strike = a.events.findIndex((e) => e.type === 'strike');
+  assert.ok(warn >= 0 && strike > warn, 'warn must precede strike');
+  assert.ok(a.hurt() >= 3, `hurt ${a.hurt()}`);
+  assert.ok(stunned >= 2, `stunned ${stunned}`);
+});
+
+test('chain lightning jumps between enemies with falloff', () => {
+  const a = skillArena({ weaponId: 'noop', skillIds: ['set-chuoi'] });
+  a.run(3);
+  const chain = a.events.find((e) => e.type === 'chain');
+  assert.ok(chain && chain.type === 'chain' && chain.targets.length === 7, `targets ${chain && chain.type === 'chain' ? chain.targets.length : 0}`);
+  const hits = a.events.filter((e) => e.type === 'hit' && e.weaponId === 'set-chuoi').map((e) => (e.type === 'hit' ? e.damage : 0));
+  assert.ok(hits[0] > hits[hits.length - 1], 'later jumps hit softer');
+});
+
+test('whirlwind lifts light units, then collapses', () => {
+  const a = skillArena({ weaponId: 'noop', skillIds: ['loc-xoay'] }, { gap: 6 });
+  let lifted = 0;
+  a.run(12, () => (lifted = Math.max(lifted, a.sim.units.filter((u) => u.side === 'red' && u.airborne).length)));
+  assert.ok(a.events.some((e) => e.type === 'zone-end'), 'zone must end');
+  assert.equal(a.sim.zones.length, 0);
+  assert.ok(lifted >= 3, `lifted ${lifted}`);
+  assert.ok(a.hurt() >= 3);
+});
+
+test('channelled flame pulses repeatedly and sets targets on fire', () => {
+  const a = skillArena({ weaponId: 'noop', skillIds: ['phun-lua'] }, { gap: 4 });
+  let burning = 0;
+  a.run(5, () => (burning = Math.max(burning, a.sim.units.filter((u) => u.side === 'red' && u.burnLeft > 0).length)));
+  const pulses = a.events.filter((e) => e.type === 'attack' && e.weaponId === 'phun-lua').length;
+  assert.ok(pulses >= 14, `pulses ${pulses}`);
+  assert.ok(burning >= 2, `burning ${burning}`);
+});
+
+test('ground slam knocks nearby enemies into the air', () => {
+  const a = skillArena({ weaponId: 'noop', skillIds: ['dam-dat'] }, { gap: 1.2 });
+  let airborne = 0;
+  a.run(4, () => (airborne = Math.max(airborne, a.sim.units.filter((u) => u.side === 'red' && u.airborne).length)));
+  assert.ok(a.events.some((e) => e.type === 'nova'));
+  assert.ok(airborne >= 3, `airborne ${airborne}`);
+});
+
+test('area skills wait for enough targets', () => {
+  const a = skillArena({ weaponId: 'noop', skillIds: ['bao-sam'] }, { dummies: 2 });
+  a.run(8);
+  assert.equal(a.events.filter((e) => e.type === 'warn').length, 0);
+});
+
+test('attack speed and cast speed scale how often abilities fire', () => {
+  const count = (caster: Partial<UnitDef>, id: string) => {
+    const a = skillArena({ speed: 3.5, ...caster }, { gap: 1.2 });
+    a.run(20);
+    return a.events.filter((e) => e.type === 'attack' && e.weaponId === id).length;
+  };
+  const slow = count({ weaponId: 'sword' }, 'sword');
+  const fast = count({ weaponId: 'sword', attackSpeed: 2 }, 'sword');
+  assert.ok(fast >= slow * 1.8 && fast <= slow * 2.2, `sword ${slow} vs ${fast}`);
+  const cast = count({ weaponId: 'noop', skillIds: ['set-chuoi'], speed: 0 }, 'set-chuoi');
+  const quick = count({ weaponId: 'noop', skillIds: ['set-chuoi'], speed: 0, castSpeed: 2 }, 'set-chuoi');
+  assert.ok(cast >= 2 && quick >= cast * 1.6, `chain ${cast} vs ${quick}`);
+});
+
+test('battles with every skill stay deterministic', () => {
+  const run = () => {
+    const a = skillArena({ weaponId: 'zap', skillIds: ['bao-sam', 'loc-xoay', 'mua-thien-thach', 'phun-lua', 'loat-dan', 'dam-dat'], speed: 3 }, { dummies: 30, gap: 14, seed: 5 });
+    const sums: number[] = [];
+    a.run(25, () => a.sim.tick % 30 === 0 && sums.push(a.sim.checksum()));
+    return sums;
+  };
+  assert.deepEqual(run(), run());
 });
 
 test('different seeds diverge', () => {

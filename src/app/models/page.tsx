@@ -12,6 +12,8 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
     <ModelsGallery
       initialUnit={one('unit')}
       initialAsset={one('asset')}
+      initialSkill={one('skill')}
+      arena={one('arena') === '1'}
       yaw={yaw !== undefined ? Number(yaw) : undefined}
       explode={one('explode') === '1'}
       anim={(one('anim') as 'idle' | 'walk' | 'attack' | undefined) ?? 'idle'}

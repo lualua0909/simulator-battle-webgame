@@ -21,11 +21,13 @@ interface RefRule {
 const RULES: RefRule[] = [
   { from: 'units', field: 'factionId', to: 'factions', requiredWhen: () => true },
   { from: 'units', field: 'weaponId', to: 'weapons', requiredWhen: () => true },
+  { from: 'units', field: 'skillIds', to: 'weapons' },
   { from: 'units', field: 'modelId', to: 'assets', kinds: UNIT_ASSET_KINDS, requiredWhen: () => true },
   { from: 'units', field: 'riderModelId', to: 'assets', kinds: ['humanoid'] },
   { from: 'weapons', field: 'projectileId', to: 'projectiles', requiredWhen: (d) => d.attack === 'projectile' },
   { from: 'weapons', field: 'hitParticleId', to: 'particles' },
   { from: 'weapons', field: 'fireParticleId', to: 'particles' },
+  { from: 'weapons', field: 'areaParticleId', to: 'particles' },
   { from: 'projectiles', field: 'trailParticleId', to: 'particles' },
   { from: 'projectiles', field: 'impactParticleId', to: 'particles' },
   { from: 'maps', field: 'trees.kinds', to: 'assets', kinds: ['tree'] },
@@ -35,6 +37,7 @@ const RULES: RefRule[] = [
   { from: 'settings', field: 'deathParticleId', to: 'particles' },
   { from: 'settings', field: 'splashParticleId', to: 'particles' },
   { from: 'settings', field: 'landParticleId', to: 'particles' },
+  { from: 'settings', field: 'burnParticleId', to: 'particles' },
 ];
 
 export interface RefIssue {

@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { COLLECTIONS } from '@/shared/schema';
-import { COLLECTION_SPECS } from '@/shared/fields';
+import { COLLECTION_SPECS, SETTINGS_FIELDS } from '@/shared/fields';
+import type { MissingDefaults } from '@/shared/merge';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { api, ApiError } from './api';
 
@@ -95,6 +96,74 @@ export function DashboardActions() {
         />
       </div>
       {msg && <p className="text-sm">{msg}</p>}
+    </div>
+  );
+}
+
+/** Pick default documents (new skills, units, particles…) to add without touching existing content. */
+export function DefaultsMerge({ missing }: { missing: MissingDefaults }) {
+  const router = useRouter();
+  const [picked, setPicked] = useState(() => new Set(missing.docs.map((d) => `${d.collection}/${d.id}`)));
+  const [skills, setSkills] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const toggle = (key: string) =>
+    setPicked((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ added: number; skilled: number; settings: boolean; skipped: string[] }>('/api/admin/bundle', { method: 'POST', body: JSON.stringify({ action: 'merge', docs: [...picked], skills }) });
+      setMsg(`Đã thêm ${r.added} mục, gán kỹ năng cho ${r.skilled} lính${r.settings ? ', cập nhật cài đặt' : ''}.${r.skipped.length ? ` Bỏ qua (thiếu tham chiếu): ${r.skipped.join(', ')}` : ''}`);
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <p className="opacity-70">Bản cập nhật có thêm nội dung mặc định (kỹ năng, lính, particle…) mà dữ liệu hiện tại chưa có. Chọn mục muốn thêm: mục đang có không bị sửa hay xóa. Mục mặc định bạn từng xóa cũng nằm trong danh sách, hãy bỏ chọn nếu không muốn thêm lại.</p>
+      {COLLECTIONS.map((c) => {
+        const docs = missing.docs.filter((d) => d.collection === c);
+        if (docs.length === 0) return null;
+        return (
+          <div key={c}>
+            <div className="font-bold">
+              {COLLECTION_SPECS[c].icon} {COLLECTION_SPECS[c].label}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {docs.map((d) => {
+                const key = `${c}/${d.id}`;
+                const on = picked.has(key);
+                return (
+                  <button type="button" key={key} onClick={() => toggle(key)} className={`rounded-full border-2 px-2 py-0.5 text-xs font-bold ${on ? 'border-ink bg-gold' : 'border-ink/30 bg-white opacity-60'}`}>
+                    {d.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      {missing.unskilled.length > 0 && (
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={skills} onChange={(e) => setSkills(e.target.checked)} />
+          Gán kỹ năng mặc định cho lính chưa có kỹ năng: {missing.unskilled.map((u) => u.name).join(', ')}
+        </label>
+      )}
+      {missing.settings.length > 0 && <p className="text-xs opacity-70">Cài đặt còn trống sẽ được điền: {missing.settings.map((k) => SETTINGS_FIELDS.find((f) => 'key' in f && f.key === k)?.label ?? k).join(', ')}</p>}
+      <div>
+        <button className="btn btn-gold" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Đang thêm…' : '＋ Thêm nội dung đã chọn'}
+        </button>
+      </div>
+      {msg && <p>{msg}</p>}
     </div>
   );
 }

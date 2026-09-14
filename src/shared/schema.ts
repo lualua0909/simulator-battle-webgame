@@ -6,11 +6,14 @@ import { checkSculptSpec, sculptSpecSchema, type SculptRig } from './sculpt';
 export const DAMAGE_TYPES = ['blunt', 'slash', 'pierce', 'fire', 'magic'] as const;
 export const ARMOR_CLASSES = ['unarmored', 'light', 'heavy', 'beast', 'siege'] as const;
 export const ROLES = ['melee', 'ranged', 'support', 'siege'] as const;
-export const ATTACK_KINDS = ['melee', 'projectile', 'breath', 'heal'] as const;
+export const ATTACK_KINDS = ['melee', 'projectile', 'breath', 'heal', 'chain', 'strike', 'vortex', 'nova'] as const;
+/** Body animation while winding up / releasing an ability ('auto' = derived from the kind and the held weapon). */
+export const CAST_STYLES = ['auto', 'swing', 'thrust', 'bow', 'throw', 'cast', 'gun', 'raise', 'palm', 'slam'] as const;
+export const STRIKE_VFX = ['lightning', 'meteor'] as const;
 export const UNIT_ASSET_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'catapult'] as const;
 export const ENV_ASSET_KINDS = ['tree', 'rock', 'bush'] as const;
 export const ASSET_KINDS = [...UNIT_ASSET_KINDS, ...ENV_ASSET_KINDS] as const;
-export const PROJECTILE_MODELS = ['arrow', 'spear', 'stone', 'boulder', 'fireball', 'orb'] as const;
+export const PROJECTILE_MODELS = ['arrow', 'spear', 'stone', 'boulder', 'fireball', 'orb', 'bullet', 'meteor'] as const;
 export const PARTICLE_SHAPES = ['cube', 'tetra', 'sphere'] as const;
 export const PARTICLE_DIRECTIONS = ['up', 'sphere', 'hemisphere', 'forward'] as const;
 export const BOT_STRATEGIES = ['balanced', 'rush', 'ranged', 'tank', 'swarm', 'elite', 'counter'] as const;
@@ -54,6 +57,12 @@ export const unitSchema = z.object({
   height: z.number().min(0.3).max(20),
   armorClass: z.enum(ARMOR_CLASSES),
   weaponId: idSchema,
+  /** Extra abilities (documents of `weapons`), cast automatically in list order when ready. */
+  skillIds: z.array(idSchema).max(6).default([]),
+  /** Basic attack rate multiplier: cooldown and windup are divided by it. */
+  attackSpeed: z.number().min(0.1).max(10).default(1),
+  /** Skill rate multiplier: skill cooldown, cast time and channel interval are divided by it. */
+  castSpeed: z.number().min(0.1).max(10).default(1),
   modelId: idSchema,
   riderModelId: refOrNull,
   flying: z.boolean().default(false),
@@ -87,6 +96,38 @@ export const weaponSchema = z.object({
   volley: z.number().int().min(1).max(20).default(1),
   hitParticleId: refOrNull,
   fireParticleId: refOrNull,
+  // ---- skill behaviour (every kind)
+  castStyle: z.enum(CAST_STYLES).default('auto'),
+  /** Seconds before a skill can first be cast in a battle. */
+  initialCooldown: z.number().min(0).max(60).default(0),
+  /** A skill waits until this many enemies stand within its area around the target. */
+  minTargets: z.number().int().min(1).max(50).default(1),
+  /** Channel: repeat the effect every `interval` s for this long (vortex: lifetime of the whirlwind). */
+  duration: z.number().min(0).max(30).default(0),
+  interval: z.number().min(0.05).max(5).default(0.2),
+  // ---- status effects on hit
+  stunDuration: z.number().min(0).max(10).default(0),
+  burnDps: z.number().min(0).max(1000).default(0),
+  burnDuration: z.number().min(0).max(30).default(0),
+  // ---- chain: jumps from the target to the nearest enemies
+  chainCount: z.number().int().min(0).max(20).default(4),
+  chainRange: z.number().min(0.5).max(30).default(6),
+  chainFalloff: z.number().min(0).max(1).default(0.8),
+  // ---- strike: blasts that fall from the sky after a telegraph
+  strikeVfx: z.enum(STRIKE_VFX).default('lightning'),
+  strikeCount: z.number().int().min(1).max(30).default(1),
+  strikeDelay: z.number().min(0).max(10).default(0.5),
+  strikeInterval: z.number().min(0).max(5).default(0.15),
+  strikeSpread: z.number().min(0).max(30).default(0),
+  // ---- vortex: a travelling whirlwind that pulls, lifts and flings
+  zoneSpeed: z.number().min(0).max(20).default(3),
+  pull: z.number().min(0).max(40).default(8),
+  lift: z.number().min(0).max(40).default(8),
+  // ---- visuals
+  /** Lightning, whirlwind, shockwave and telegraph colour. */
+  vfxColor: hex.default('#9fd8ff'),
+  /** Secondary particles: at a strike / nova / whirlwind base, or where a projectile leaves (gun smoke). */
+  areaParticleId: refOrNull,
 });
 
 // ---------------------------------------------------------------- projectiles
@@ -148,7 +189,7 @@ export const humanoidParamsSchema = z.object({
   cape: z.boolean().default(false),
   capeColor: hex.default('#b3262e'),
   weapon: z
-    .enum(['none', 'club', 'bigclub', 'sword', 'greatsword', 'axe', 'spear', 'lance', 'hammer', 'bow', 'staff', 'pitchfork', 'stone'])
+    .enum(['none', 'club', 'bigclub', 'sword', 'greatsword', 'axe', 'spear', 'lance', 'hammer', 'bow', 'staff', 'pitchfork', 'stone', 'musket'])
     .default('none'),
   offhand: z.enum(['none', 'shield-round', 'shield-kite', 'buckler']).default('none'),
   woodColor: hex.default('#8a5a2b'),
@@ -344,9 +385,13 @@ export const settingsSchema = z.object({
   corpseLimit: z.number().int().min(0).max(3000).default(800),
   gravity: z.number().min(1).max(40).default(9.8),
   friendlyFire: z.boolean().default(true),
+  /** Camera shake from big blasts (lightning, meteors). */
+  cameraShake: z.boolean().default(true),
   deathParticleId: refOrNull,
   splashParticleId: refOrNull,
   landParticleId: refOrNull,
+  /** Flames on burning units. */
+  burnParticleId: refOrNull,
   damageMatrix: z.object(Object.fromEntries(DAMAGE_TYPES.map((d) => [d, armorRow])) as Record<DamageType, typeof armorRow>),
 });
 

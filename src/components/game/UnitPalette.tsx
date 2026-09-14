@@ -70,6 +70,7 @@ function Tab({ active, onClick, children, color }: { active: boolean; onClick():
 
 function UnitInfo({ unit, bundle }: { unit: UnitDef; bundle: ConfigBundle }) {
   const weapon = bundle.weapons.find((w) => w.id === unit.weaponId);
+  const skills = unit.skillIds.map((id) => bundle.weapons.find((w) => w.id === id)).filter((w) => !!w);
   const { dps } = unitPower(unit, bundle);
   return (
     <div className="hidden w-52 shrink-0 rounded-lg border-2 border-ink/30 bg-white p-2 text-xs sm:block">
@@ -86,9 +87,21 @@ function UnitInfo({ unit, bundle }: { unit: UnitDef; bundle: ConfigBundle }) {
         <dd className="text-right font-bold">{weapon?.range}m</dd>
         <dt>Tốc độ</dt>
         <dd className="text-right font-bold">{unit.speed}</dd>
+        {unit.attackSpeed !== 1 && (
+          <>
+            <dt>Tốc độ đánh</dt>
+            <dd className="text-right font-bold">×{unit.attackSpeed}</dd>
+          </>
+        )}
         <dt>Giáp</dt>
         <dd className="text-right font-bold">{unit.armorClass}</dd>
       </dl>
+      {skills.length > 0 && (
+        <p className="mt-1">
+          <b>✨ Kỹ năng:</b> {skills.map((w) => w.name).join(', ')}
+          {unit.castSpeed !== 1 && <span className="opacity-70"> (tốc độ ×{unit.castSpeed})</span>}
+        </p>
+      )}
       {unit.description && <p className="mt-1 italic opacity-80">{unit.description}</p>}
     </div>
   );

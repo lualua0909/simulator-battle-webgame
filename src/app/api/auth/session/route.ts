@@ -20,8 +20,11 @@ export async function POST(req: Request) {
   let decoded;
   try {
     decoded = await adminAuth().verifyIdToken(parsed.data.idToken, true);
-  } catch {
-    return jsonError(401, 'Phiên đăng nhập không hợp lệ');
+  } catch (e) {
+    // Only token problems are the client's fault; anything else (e.g. missing service account) is server config.
+    if ((e as { code?: string })?.code?.startsWith('auth/')) return jsonError(401, 'Phiên đăng nhập không hợp lệ');
+    console.error('verifyIdToken:', e);
+    return jsonError(500, 'Máy chủ chưa cấu hình Firebase Admin (FIREBASE_SERVICE_ACCOUNT)');
   }
   const user = await syncUserOnLogin(decoded, parsed.data.displayName);
   if (user.disabled) return jsonError(403, 'Tài khoản đã bị khoá');

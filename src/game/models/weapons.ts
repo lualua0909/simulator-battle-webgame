@@ -2,7 +2,7 @@
 // Weapon frame: grip at the origin; in the humanoid guard pose +Y is up and +Z forward.
 import * as THREE from 'three';
 import type { HumanoidParams } from '@/shared/schema';
-import { ball, beam, box, cone, cyl, detail, jitter, mesh, metal, shade, sweep } from './common';
+import { ball, beam, box, cone, cyl, detail, jitter, mesh, metal, shade, socket, sweep } from './common';
 
 export type WeaponKind = HumanoidParams['weapon'];
 export type OffhandKind = HumanoidParams['offhand'];
@@ -72,7 +72,25 @@ export function createWeaponModel(kind: WeaponKind, c: WeaponColors): THREE.Grou
       g.add(mesh('staff-shaft', cyl(0.026, 0.03, 1.6), c.wood, [0, 0.3, 0]));
       g.add(mesh('staff-orb', ball(0.085, 1), c.orb, [0, 1.18, 0], [0, 0, 0], { emissive: 0.6 }));
       g.add(detail(mesh('staff-cradle', cone(0.07, 0.1, 5), shade(c.wood, 0.8), [0, 1.1, 0], [Math.PI, 0, 0])));
+      // Spells (lightning, flame) leave from the orb.
+      g.add(socket('staff.tip', [0, 1.18, 0]));
       break;
+    case 'musket': {
+      // Flintlock musket: in the aim pose the barrel runs along +Z from the firing hand.
+      const iron = shade(c.metal, 0.55);
+      g.add(mesh('musket-butt', box(0.075, 0.15, 0.24), c.wood, [0, -0.045, -0.24], [0.18, 0, 0]));
+      g.add(mesh('musket-wrist', box(0.05, 0.075, 0.18), c.wood, [0, -0.005, -0.05]));
+      g.add(mesh('musket-forestock', box(0.06, 0.055, 0.62), c.wood, [0, 0.012, 0.33]));
+      g.add(metal('musket-barrel', beam([0, 0.052, -0.08], [0, 0.052, 0.92], 0.02, 0.017, 6), iron));
+      g.add(detail(metal('musket-muzzle-ring', cyl(0.025, 0.025, 0.035, 6), iron, [0, 0.052, 0.9], [Math.PI / 2, 0, 0])));
+      g.add(detail(metal('musket-band', cyl(0.036, 0.036, 0.03, 6), c.metal, [0, 0.03, 0.46], [Math.PI / 2, 0, 0])));
+      g.add(detail(metal('musket-lock', box(0.014, 0.045, 0.1), c.metal, [0.036, 0.03, 0.02])));
+      g.add(detail(metal('musket-hammer', box(0.012, 0.05, 0.022), iron, [0.04, 0.075, -0.015], [-0.4, 0, 0])));
+      g.add(detail(metal('musket-trigger-guard', new THREE.TorusGeometry(0.028, 0.006, 3, 8, Math.PI), c.metal, [0, -0.04, 0.02], [0, Math.PI / 2, Math.PI])));
+      g.add(detail(metal('musket-bayonet', cone(0.014, 0.26, 4), c.metal, [0.022, 0.03, 1.06], [Math.PI / 2, 0, 0])));
+      g.add(socket('muzzle', [0, 0.052, 0.95]));
+      break;
+    }
     case 'pitchfork':
       g.add(mesh('fork-shaft', cyl(0.024, 0.024, 1.5), c.wood, [0, 0.3, 0]));
       g.add(metal('fork-bar', box(0.26, 0.03, 0.03), c.metal, [0, 1.05, 0]));

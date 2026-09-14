@@ -593,7 +593,7 @@ Xếp theo mức độ ưu tiên khuyến nghị. Đây là nhận định từ 
 | GET / POST | `/api/admin/{collection}` | root/admin | liệt kê / tạo tài liệu |
 | GET / PUT / DELETE | `/api/admin/{collection}/{id}` | root/admin | đọc / sửa / xóa (chặn khi còn phụ thuộc) |
 | GET / PUT | `/api/admin/settings` | root/admin | cài đặt game |
-| GET / PUT / POST | `/api/admin/bundle` | root/admin | tải bundle JSON / nhập thay toàn bộ / `{action:"reset"}` |
+| GET / PUT / POST | `/api/admin/bundle` | root/admin | tải bundle JSON / nhập thay toàn bộ / `{action:"reset"}` / `{action:"merge", docs, skills}` thêm nội dung mặc định còn thiếu (không sửa mục đang có) |
 | GET / POST | `/api/admin/studio` | root/admin | trạng thái engine + danh sách job / tạo job |
 | GET / DELETE | `/api/admin/studio/{id}` | root/admin | chi tiết job / xóa job (không khi đang chạy) |
 | POST | `/api/admin/studio/{id}/run` | root/admin | chạy bước `spec` / `review` (stream NDJSON) hoặc `stop` |

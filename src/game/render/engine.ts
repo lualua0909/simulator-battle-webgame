@@ -9,6 +9,7 @@ import { BattleSim, SIM_DT, type BattleResult, type SimEvent } from '../sim/worl
 import { attackStyleFor, Poser } from './animate';
 import { basePitch, RtsCamera, type CameraView } from './camera';
 import { Cinematic, type Shot } from './cinematic';
+import { EffectRenderer, type EffectHost } from './effects';
 import { Fireworks } from './fireworks';
 import { ParticleSystem } from './particles';
 import { ProjectileRenderer } from './projectiles';
@@ -89,6 +90,12 @@ export class BattleEngine {
   private readonly units: UnitRenderer;
   private readonly projectiles: ProjectileRenderer;
   private readonly particles = new ParticleSystem();
+  private readonly effects: EffectRenderer;
+  private readonly effectHost: EffectHost;
+  /** Camera shake energy (0..1), decays every frame. */
+  private shakeAmount = 0;
+  /** Interpolation factor of the last rendered sim frame. */
+  private alpha = 1;
   private readonly fireworks = new Fireworks();
   private cine: ActiveCinematic | null = null;
   /** The battle sim waits (units idle) while the battle intro plays. */
@@ -142,7 +149,24 @@ export class BattleEngine {
     this.sun.shadow.normalBias = 0.03;
     this.units = new UnitRenderer(bundle);
     this.projectiles = new ProjectileRenderer(bundle);
-    this.scene.add(this.sky, this.hemi, this.sun, this.sun.target, this.mapGroup, this.units.group, this.projectiles.group, this.particles.group, this.fireworks.group);
+    this.effects = new EffectRenderer(bundle);
+    this.effectHost = {
+      particles: this.particles,
+      emitPoint: (id, out) => this.units.emitPoint(id, out),
+      chest: (id, out) => {
+        const u = this.sim?.units[id];
+        if (!u) return false;
+        const a = this.mode === 'battle' ? this.alpha : 1;
+        out.set(u.px + (u.x - u.px) * a, u.py + (u.y - u.py) * a + u.def.height * 0.55, u.pz + (u.z - u.pz) * a);
+        return true;
+      },
+      shake: (amount, x, z) => {
+        if (!this.bundle.settings.cameraShake) return;
+        const near = THREE.MathUtils.clamp(1 - Math.hypot(this.rts.target.x - x, this.rts.target.z - z) / 90, 0, 1);
+        this.shakeAmount = Math.min(1, this.shakeAmount + amount * near);
+      },
+    };
+    this.scene.add(this.sky, this.hemi, this.sun, this.sun.target, this.mapGroup, this.units.group, this.projectiles.group, this.effects.group, this.particles.group, this.fireworks.group);
 
     this.rts = new RtsCamera(this.camera, this.renderer.domElement);
     this.rts.pick = (x, y) => this.groundAt(x, y);
@@ -193,11 +217,13 @@ export class BattleEngine {
     this.sun.target.position.set(0, 0, 0);
 
     this.rts.setTerrain(terrain);
+    this.effects.setTerrain(terrain);
     this.sim = null;
     this.mode = 'deploy';
     this.units.clear();
     this.projectiles.clear();
     this.particles.clear();
+    this.effects.clear();
     this.resetRagdolls();
     this.setCine(null);
     this.clearVictory();
@@ -230,6 +256,7 @@ export class BattleEngine {
     this.units.build(this.sim);
     this.projectiles.clear();
     this.particles.clear();
+    this.effects.clear();
     this.clearVictory();
   }
 
@@ -240,6 +267,8 @@ export class BattleEngine {
     this.units.build(this.sim);
     this.projectiles.clear();
     this.particles.clear();
+    this.effects.clear();
+    this.shakeAmount = 0;
     this.mode = 'battle';
     this.acc = 0;
     this.resultSent = false;
@@ -415,6 +444,7 @@ export class BattleEngine {
     this.units.clear();
     this.projectiles.dispose();
     this.particles.dispose();
+    this.effects.dispose();
     this.fireworks.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -603,17 +633,26 @@ export class BattleEngine {
     }
     const animDt = this.mode === 'battle' && !this.holdSim ? simDt : dt;
     this.time += animDt;
+    this.alpha = this.acc / SIM_DT;
     if (sim) {
       this.ragdolls?.step(simDt);
       this.units.manage(simDt, this.bundle.settings);
-      this.units.update(sim, this.mode === 'battle' ? this.acc / SIM_DT : 1, animDt, this.hidden);
-      this.projectiles.update(sim, this.acc / SIM_DT, simDt, this.particles);
+      this.units.update(sim, this.mode === 'battle' ? this.alpha : 1, animDt, this.hidden);
+      this.projectiles.update(sim, this.alpha, simDt, this.particles);
     }
+    this.effects.update(animDt, this.mode === 'battle' ? sim : null, this.alpha, this.effectHost);
     this.particles.update(animDt);
     this.fireworks.update(dt);
     this.updateDusk(dt);
     this.water?.update(this.time);
     this.sky.position.copy(this.camera.position);
+    if (this.shakeAmount > 0.002) {
+      const s = this.shakeAmount * this.shakeAmount * (0.15 + this.camera.position.distanceTo(this.rts.target) * 0.01);
+      this.camera.position.x += (Math.random() * 2 - 1) * s;
+      this.camera.position.y += (Math.random() * 2 - 1) * s;
+      this.camera.position.z += (Math.random() * 2 - 1) * s;
+      this.shakeAmount = Math.max(0, this.shakeAmount - dt * 1.6);
+    }
     this.renderer.render(this.scene, this.camera);
     this.statsTimer += dt;
     if (sim && this.statsTimer > 0.25) {
@@ -646,11 +685,15 @@ export class BattleEngine {
           break;
         }
         case 'attack': {
+          this.effects.onEvent(e, this.effectHost);
           const w = this.weapons.get(e.weaponId);
-          if (!w?.fireParticleId) break;
+          if (!w?.fireParticleId && !(w?.attack === 'projectile' && w.areaParticleId)) break;
           const origin = this.tmp.set(e.x, e.y, e.z);
-          this.units.socketPosition(e.unitId, 'mouth', origin);
-          this.emit(w.fireParticleId, origin.x, origin.y, origin.z, { x: e.dx, y: e.dy, z: e.dz });
+          this.units.emitPoint(e.unitId, origin);
+          const dir = { x: e.dx, y: e.dy, z: e.dz };
+          this.emit(w.fireParticleId, origin.x, origin.y, origin.z, dir);
+          // Projectiles: the secondary particle lingers where the shot left (gun smoke).
+          if (w.attack === 'projectile') this.emit(w.areaParticleId, origin.x, origin.y, origin.z, dir);
           break;
         }
         case 'impact': {
@@ -672,6 +715,7 @@ export class BattleEngine {
           break;
         }
         default:
+          this.effects.onEvent(e, this.effectHost);
           break;
       }
     }

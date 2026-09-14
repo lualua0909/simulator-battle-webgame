@@ -1,6 +1,6 @@
 // Bot army generator: composition by strategy (optionally countering the enemy army),
 // then a formation inside the bot's deployment zone. Seeded, so repeatable.
-import type { ArmorClass, BotDef, ContentBundle, Role, UnitDef } from '@/shared/schema';
+import type { ArmorClass, BotDef, ContentBundle, Role, UnitDef, WeaponDef } from '@/shared/schema';
 import { ARMOR_CLASSES, DAMAGE_TYPES } from '@/shared/schema';
 import type { Placement } from '../sim/army';
 import { Rng, clamp } from '../sim/rng';
@@ -32,13 +32,27 @@ export interface BotArmyOptions {
   seed: number;
 }
 
+/** Rough damage (or healing) per second of one ability, counting the targets an area usually reaches. */
+export function abilityDps(w: WeaponDef): number {
+  let targets = w.attack === 'breath' ? 3 : w.cleaveArc > 0 ? Math.min(w.maxTargets, 1 + w.cleaveArc / 60) : 1;
+  if (w.splashRadius > 0) targets *= 1 + w.splashRadius / 2;
+  if (w.attack === 'chain') for (let j = 1, f = w.chainFalloff; j <= w.chainCount; j++, f *= w.chainFalloff) targets += f;
+  let perCast = w.damage * w.volley * targets;
+  if (w.attack === 'strike') perCast *= w.strikeCount;
+  if (w.attack === 'vortex') perCast *= w.duration;
+  else if (w.duration > 0) perCast *= 1 + w.duration / w.interval;
+  perCast += w.burnDps * w.burnDuration * targets;
+  const dps = perCast / Math.max(0.05, w.cooldown);
+  return w.attack === 'heal' ? dps * 0.8 : dps;
+}
+
 export function unitPower(unit: UnitDef, content: Content): { dps: number; ehp: number } {
-  const w = content.weapons.find((x) => x.id === unit.weaponId);
-  let dps = 0;
-  if (w) {
-    const spread = w.attack === 'breath' ? 3 : w.cleaveArc > 0 ? Math.min(w.maxTargets, 1 + w.cleaveArc / 60) : 1;
-    dps = (w.damage / w.cooldown) * w.volley * spread * (w.splashRadius > 0 ? 1 + w.splashRadius / 2 : 1);
-    if (w.attack === 'heal') dps *= 0.8;
+  const weapons = new Map(content.weapons.map((x) => [x.id, x]));
+  const w = weapons.get(unit.weaponId);
+  let dps = w ? abilityDps(w) * unit.attackSpeed : 0;
+  for (const id of unit.skillIds) {
+    const skill = weapons.get(id);
+    if (skill) dps += abilityDps(skill) * unit.castSpeed;
   }
   let taken = 0;
   for (const d of DAMAGE_TYPES) taken += content.settings.damageMatrix[d][unit.armorClass];
@@ -160,7 +174,7 @@ function counterPlan(opts: BotArmyOptions): { shares: Record<Role, number>; bonu
     }
     if (rangedShare > 0.4 && (u.blockChance > 0 || u.speed > 5 || u.flying)) b *= 1.5;
     if (flyingShare > 0.2) {
-      if (w && (w.attack === 'projectile' || w.attack === 'breath' || u.flying)) b *= 1.6;
+      if (w && (w.attack === 'projectile' || w.attack === 'breath' || w.attack === 'chain' || w.attack === 'strike' || u.flying)) b *= 1.6;
       else if (w?.attack === 'melee') b *= 0.6;
     }
     return b;

@@ -9,3 +9,6 @@ data/*.db
 data/*.db-*
 .shots/
 .DS_Store
+
+# Firebase service account keys
+*-firebase-adminsdk-*.json

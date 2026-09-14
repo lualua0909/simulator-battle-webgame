@@ -1,9 +1,10 @@
 // Export / import / reset the whole content bundle.
 import { z } from 'zod';
-import { COLLECTIONS, COLLECTION_SCHEMAS, settingsSchema, type ContentBundle } from '@/shared/schema';
+import { COLLECTIONS, COLLECTION_SCHEMAS, settingsSchema, type CollectionDocs, type CollectionName, type ContentBundle } from '@/shared/schema';
+import { mergeDefaults } from '@/shared/merge';
 import { SEED } from '@/shared/seed';
 import { findRefIssues } from '@/shared/validate';
-import { getContent, replaceContent } from '@/server/content';
+import { getContent, putDoc, putSettings, replaceContent } from '@/server/content';
 import { guard, issuesOf, jsonError, readJson } from '@/server/admin';
 
 export async function GET() {
@@ -43,13 +44,32 @@ export async function PUT(req: Request) {
   return Response.json({ ok: true });
 }
 
-/** { action: "reset" } restores the built-in default content. */
+async function putAdded<K extends CollectionName>(content: ContentBundle, collection: K, id: string): Promise<void> {
+  const doc = (content[collection] as CollectionDocs[K][]).find((d) => d.id === id);
+  if (doc) await putDoc(collection, doc);
+}
+
+const mergeSchema = z.object({ action: z.literal('merge'), docs: z.array(z.string().max(120)).max(2000), skills: z.boolean() });
+
+/**
+ * { action: "reset" } restores the built-in default content.
+ * { action: "merge", docs, skills } adds picked default documents the database lacks, keeping everything else.
+ */
 export async function POST(req: Request) {
   const denied = await guard();
   if (denied) return denied;
   const body = await readJson(req);
   if (body instanceof Response) return body;
-  if ((body as { action?: string })?.action !== 'reset') return jsonError(400, 'Hành động không hỗ trợ');
-  await replaceContent(SEED);
-  return Response.json({ ok: true });
+  const action = (body as { action?: string })?.action;
+  if (action === 'reset') {
+    await replaceContent(SEED);
+    return Response.json({ ok: true });
+  }
+  const merge = mergeSchema.safeParse(body);
+  if (!merge.success) return jsonError(400, 'Hành động không hỗ trợ');
+  const r = mergeDefaults(await getContent(), SEED, merge.data);
+  for (const { collection, id } of r.added) await putAdded(r.content, collection, id);
+  for (const id of r.skilled) await putDoc('units', r.content.units.find((u) => u.id === id)!);
+  if (r.settings) await putSettings(r.content.settings);
+  return Response.json({ ok: true, added: r.added.length, skilled: r.skilled.length, settings: r.settings, skipped: r.skipped });
 }

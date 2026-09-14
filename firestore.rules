@@ -1,11 +1,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Profiles are written only by the server (Admin SDK bypasses rules).
-    // CMS content (units, weapons, …, settings) has no rule: clients never touch it, the game reads /api/config.
+    // All writes go through the server (Admin SDK bypasses these rules); the web client
+    // never uses the Firestore SDK — the game reads /api/config, the CMS uses /api/admin.
+
+    // users/{uid}: profile created by /api/auth/session. Owner may read only their own doc.
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
+    }
+
+    // Everything else (units, weapons, … CMS content, settings/global, matches): server only.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

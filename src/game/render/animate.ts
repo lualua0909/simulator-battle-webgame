@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { WeaponDef } from '@/shared/schema';
 import type { ModelTemplate, SegmentTemplate } from '../models/bake';
 
-export type AttackStyle = 'swing' | 'thrust' | 'bow' | 'throw' | 'cast' | 'breath' | 'none';
+export type AttackStyle = 'swing' | 'thrust' | 'bow' | 'throw' | 'cast' | 'gun' | 'raise' | 'palm' | 'slam' | 'breath' | 'none';
 
 export interface AnimInput {
   time: number;
@@ -13,8 +13,10 @@ export interface AnimInput {
   speed: number;
   /** Accumulated gait phase (radians). */
   phase: number;
-  /** -1 idle; 0..1 windup; 1..2 strike follow-through. */
+  /** -1 idle; 0..1 windup; 1..2 strike follow-through (a channel holds ~1.25). */
   attack: number;
+  /** Motion of the current ability; the guard pose keeps following the held weapon. */
+  style?: AttackStyle;
   airborne: boolean;
   stunned: boolean;
   /** Spring lean (radians): forward, sideways. */
@@ -40,12 +42,18 @@ const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
 
 export function attackStyleFor(template: ModelTemplate, weapon: WeaponDef | undefined): AttackStyle {
   if (!weapon) return 'none';
-  if (weapon.attack === 'breath') return 'breath';
   const humanoid = template.segments.find((s) => s.rig === 'humanoid');
+  if (humanoid && weapon.castStyle && weapon.castStyle !== 'auto') return weapon.castStyle;
+  if (weapon.attack === 'breath') return humanoid ? 'palm' : 'breath';
   const kind = (humanoid?.meta.weapon as string | undefined) ?? 'none';
   if (weapon.attack === 'heal' || kind === 'staff') return 'cast';
   if (kind === 'bow') return 'bow';
-  if (weapon.attack === 'projectile') return humanoid ? 'throw' : 'none';
+  if (kind === 'musket') return 'gun';
+  if (!humanoid) return weapon.attack === 'melee' ? 'swing' : 'none';
+  if (weapon.attack === 'chain') return 'palm';
+  if (weapon.attack === 'strike' || weapon.attack === 'vortex') return 'raise';
+  if (weapon.attack === 'nova') return 'slam';
+  if (weapon.attack === 'projectile') return 'throw';
   if (kind === 'spear' || kind === 'lance' || kind === 'pitchfork') return 'thrust';
   return 'swing';
 }
@@ -180,6 +188,7 @@ export class Poser {
     // guard poses
     const guardArm = weaponHand === 'R' ? 'armR' : 'armL';
     const guardFore = weaponHand === 'R' ? 'forearmR' : 'forearmL';
+    const twist = weaponHand === 'R' ? 1 : -1;
     if (hasWeapon) {
       if (this.style === 'thrust') {
         this.r(seg, guardArm, -swing * 0.8 - 0.35, 0, 0);
@@ -187,6 +196,13 @@ export class Poser {
       } else if (this.style === 'bow') {
         this.r(seg, guardArm, -swing * 0.8 - 0.5, 0, 0);
         this.r(seg, guardFore, -0.7);
+      } else if (this.style === 'gun') {
+        // Musket held across the chest, muzzle forward; the free hand steadies the barrel.
+        const off = weaponHand === 'R' ? 'armL' : 'armR';
+        this.r(seg, guardArm, -swing * 0.3 - 0.75, 0.35 * twist, 0);
+        this.r(seg, guardFore, -0.8);
+        this.r(seg, off, -swing * 0.3 - 1.05, -0.55 * twist, 0);
+        this.r(seg, weaponHand === 'R' ? 'forearmL' : 'forearmR', -0.45);
       } else {
         this.r(seg, guardArm, -swing * 0.8 - 0.45, 0, 0);
         this.r(seg, guardFore, -0.9);
@@ -205,8 +221,8 @@ export class Poser {
     const settle = k > 1 ? clamp01((k - 1.33) * 1.5) : 0;
     const arm = weaponHand === 'R' ? 'armR' : 'armL';
     const fore = weaponHand === 'R' ? 'forearmR' : 'forearmL';
-    const twist = weaponHand === 'R' ? 1 : -1;
-    switch (this.style) {
+    const channel = k > 1.2 && k < 1.3 ? 1 : 0;
+    switch (a.style ?? this.style) {
       case 'swing':
       case 'throw': {
         const raise = -2.5 * wind * (1 - strike) + (-2.5 + 2.9) * strike * (1 - settle) - 2.5 * 0 * settle;
@@ -239,6 +255,54 @@ export class Poser {
         this.r(seg, arm, -1.9 * up - 1.2 * point, 0, 0);
         this.r(seg, fore, 0.6 * up);
         this.r(seg, 'head', -0.25 * up, 0, 0);
+        break;
+      }
+      case 'gun': {
+        // Steady the aim, then the recoil kicks the muzzle up and rocks the shoulders back.
+        const aim = wind * (1 - strike);
+        const kick = strike * (1 - settle);
+        this.r(seg, arm, -0.2 * aim - 0.3 * kick, 0, 0);
+        this.r(seg, weaponHand === 'R' ? 'armL' : 'armR', -0.15 * aim - 0.35 * kick, 0, 0);
+        this.r(seg, 'torso', 0.05 * aim - 0.2 * kick + Math.sin(t * 45) * 0.03 * channel, 0, 0);
+        this.r(seg, 'head', 0.12 * aim, 0, 0);
+        break;
+      }
+      case 'raise': {
+        // Both hands up to the sky, then flung down toward the target.
+        const up = wind * (1 - strike);
+        const release = strike * (1 - settle);
+        for (const s of ['L', 'R'] as const) {
+          const out = s === 'L' ? 1 : -1;
+          this.r(seg, `arm${s}`, -2.6 * up - 1.5 * release, 0, (0.45 * up + 0.15 * release) * out);
+          this.r(seg, `forearm${s}`, -0.25 * up + 0.4 * release);
+        }
+        this.r(seg, 'torso', -0.22 * up + 0.3 * release, 0, 0);
+        this.r(seg, 'head', -0.45 * up + 0.15 * release, 0, 0);
+        break;
+      }
+      case 'palm': {
+        // Draw the hand back, then thrust the open palm at the target (held while channelling).
+        const pull = wind * (1 - strike);
+        const push = strike * (1 - settle);
+        this.r(seg, arm, 0.55 * pull - 1.2 * push + Math.sin(t * 38) * 0.05 * channel, 0, 0);
+        this.r(seg, fore, -1.1 * pull + 0.8 * push);
+        this.r(seg, weaponHand === 'R' ? 'armL' : 'armR', 0.35 * push, 0, 0);
+        this.r(seg, 'torso', 0.12 * push, (-0.45 * pull + 0.3 * push) * twist, 0);
+        break;
+      }
+      case 'slam': {
+        // Fists overhead, then a crouching smash into the ground.
+        const lift = wind * (1 - strike);
+        const smash = strike * (1 - settle);
+        for (const s of ['L', 'R'] as const) {
+          const out = s === 'L' ? 1 : -1;
+          this.r(seg, `arm${s}`, -2.7 * lift - 0.7 * smash, 0, 0.25 * lift * out);
+          this.r(seg, `forearm${s}`, -0.4 * lift);
+          this.r(seg, `thigh${s}`, -0.55 * smash, 0, 0.1 * smash * out);
+          this.r(seg, `shin${s}`, 0.9 * smash);
+        }
+        this.r(seg, 'torso', -0.25 * lift + 0.65 * smash, 0, 0);
+        this.o(seg, 'hips', 0, -0.16 * smash, 0);
         break;
       }
       default:

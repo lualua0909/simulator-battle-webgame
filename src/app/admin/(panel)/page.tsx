@@ -1,13 +1,16 @@
 import Link from 'next/link';
-import { DashboardActions } from '@/components/admin/AdminChrome';
+import { DashboardActions, DefaultsMerge } from '@/components/admin/AdminChrome';
 import { COLLECTIONS } from '@/shared/schema';
 import { COLLECTION_SPECS } from '@/shared/fields';
+import { missingDefaults } from '@/shared/merge';
+import { SEED } from '@/shared/seed';
 import { findRefIssues } from '@/shared/validate';
 import { contentVersion, getContent } from '@/server/content';
 
 export default async function Dashboard() {
   const content = await getContent();
   const issues = findRefIssues(content);
+  const missing = missingDefaults(content, SEED);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline gap-3">
@@ -37,6 +40,12 @@ export default async function Dashboard() {
           </ul>
         )}
       </section>
+      {(missing.docs.length > 0 || missing.unskilled.length > 0 || missing.settings.length > 0) && (
+        <section className="panel p-4">
+          <h2 className="mb-2 font-display text-sm">Nội dung mặc định mới chưa có trong dữ liệu</h2>
+          <DefaultsMerge missing={missing} />
+        </section>
+      )}
       <section className="panel p-4">
         <h2 className="mb-2 font-display text-sm">Sao lưu & khôi phục</h2>
         <DashboardActions />

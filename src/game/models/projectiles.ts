@@ -1,7 +1,7 @@
 // Projectile models, authored pointing along +Z (velocity direction).
 import type * as THREE from 'three';
 import type { ProjectileDef } from '@/shared/schema';
-import { ball, beam, box, cone, faceColors, jitter, mesh, metal, modelRoot } from './common';
+import { ball, beam, box, cone, detail, faceColors, jitter, mesh, metal, modelRoot } from './common';
 
 export function createProjectileModel(def: Pick<ProjectileDef, 'model' | 'color' | 'scale'>): THREE.Group {
   const root = modelRoot(`projectile-${def.model}`, 'static');
@@ -29,6 +29,18 @@ export function createProjectileModel(def: Pick<ProjectileDef, 'model' | 'color'
       break;
     case 'orb':
       root.add(mesh('orb', ball(0.2, 1), tint ?? '#b36bff', [0, 0, 0], [0, 0, 0], { emissive: 1 }));
+      break;
+    case 'bullet':
+      // Tracer: a hot lead ball dragging a long glowing streak behind it.
+      root.add(mesh('bullet-ball', ball(0.055, 0), tint ?? '#ffe7a0', [0, 0, 0.05], [0, 0, 0], { emissive: 1 }));
+      root.add(mesh('bullet-streak', beam([0, 0, -1.8], [0, 0, 0.04], 0.008, 0.042, 5), tint ?? '#ffe7a0', [0, 0, 0], [0, 0, 0], { emissive: 1 }));
+      break;
+    case 'meteor':
+      // Burning rock with a flame cone streaming back from the direction of travel.
+      root.add(mesh('meteor-rock', faceColors(jitter(ball(0.45, 1), 0.16, 7), '#3a2a22', '#ff6a1a', 7, 0.85), '#3a2a22'));
+      root.add(mesh('meteor-glow', jitter(ball(0.36, 1), 0.1, 9), '#ffd27a', [0, 0, 0.08], [0, 0, 0], { emissive: 1 }));
+      root.add(mesh('meteor-flame', jitter(cone(0.46, 1.5, 7), 0.1, 11), tint ?? '#ff6a1a', [0, 0, -0.72], [-Math.PI / 2, 0, 0], { emissive: 0.9 }));
+      root.add(detail(mesh('meteor-flame-core', cone(0.24, 1.0, 6), '#ffd27a', [0, 0, -0.5], [-Math.PI / 2, 0, 0], { emissive: 1 })));
       break;
   }
   root.scale.setScalar(def.scale);
