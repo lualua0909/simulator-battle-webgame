@@ -1,8 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { isUnlocked, starScale, type PlayerState } from '@/shared/economy';
 import type { ConfigBundle, UnitDef } from '@/shared/schema';
 import { unitPower } from '@/game/bot/generate';
+import { LockIcon, StarIcon } from '@/components/player/icons';
 
 interface Props {
   bundle: ConfigBundle;
@@ -10,15 +12,19 @@ interface Props {
   selected: string | null;
   onSelect(id: string): void;
   budgetLeft: number;
+  /** The player's wallet (null for guests): locked units stay visible but greyed out. */
+  player: PlayerState | null;
+  /** Star levels shown on the tiles when they count in this battle. */
+  stars?: Record<string, number>;
 }
 
 const ROLE_LABEL: Record<UnitDef['role'], string> = { melee: 'Cận chiến', ranged: 'Tầm xa', support: 'Hỗ trợ', siege: 'Công thành' };
 
-export default function UnitPalette({ bundle, thumbs, selected, onSelect, budgetLeft }: Props) {
+export default function UnitPalette({ bundle, thumbs, selected, onSelect, budgetLeft, player, stars }: Props) {
   const factions = useMemo(() => [...bundle.factions].sort((a, b) => a.order - b.order), [bundle]);
   const [tab, setTab] = useState<string>('all');
   const [hover, setHover] = useState<UnitDef | null>(null);
-  const units = bundle.units.filter((u) => tab === 'all' || u.factionId === tab).sort((a, b) => a.cost - b.cost);
+  const units = bundle.units.filter((u) => tab === 'all' || u.factionId === tab).sort((a, b) => Number(isUnlocked(b, player)) - Number(isUnlocked(a, player)) || a.cost - b.cost);
   const info = hover ?? bundle.units.find((u) => u.id === selected) ?? null;
 
   return (
@@ -34,27 +40,36 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, budget
         ))}
       </div>
       <div className="flex gap-2">
-        <div className="grid flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-1.5 overflow-y-auto pr-1">
+        <div className="grid flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-1.5 overflow-y-auto pr-1">
           {units.map((u) => {
             const faction = bundle.factions.find((f) => f.id === u.factionId);
+            const locked = !isUnlocked(u, player);
             const tooExpensive = u.cost > budgetLeft;
+            const star = stars?.[u.id] ?? 0;
             return (
               <button
                 key={u.id}
                 onClick={() => onSelect(u.id)}
                 onMouseEnter={() => setHover(u)}
                 onMouseLeave={() => setHover(null)}
-                className={`relative flex flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive ? 'opacity-45' : ''}`}
+                className={`relative flex flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive || locked ? 'opacity-50' : ''}`}
                 style={{ boxShadow: `inset 0 -4px 0 ${faction?.color ?? '#999'}` }}
               >
-                {thumbs[u.id] ? <img src={thumbs[u.id]} alt="" className="h-14 w-14 object-contain" draggable={false} /> : <div className="h-14 w-14 animate-pulse rounded bg-parch" />}
-                <span className="line-clamp-1 text-[11px] font-bold leading-tight">{u.name}</span>
-                <span className="text-[11px] font-extrabold text-amber-700">{u.cost}</span>
+                {thumbs[u.id] ? <img src={thumbs[u.id]} alt="" className={`h-14 w-14 object-contain ${locked ? 'grayscale' : ''}`} draggable={false} /> : <div className="h-14 w-14 animate-pulse rounded bg-parch" />}
+                {locked && <LockIcon size={24} className="absolute right-1 top-1" />}
+                {star > 0 && (
+                  <span className="text-outline absolute left-1 top-0.5 flex items-center gap-0.5 leading-none">
+                    <StarIcon size={18} />
+                    {star}
+                  </span>
+                )}
+                <span className="line-clamp-1 w-full leading-tight">{u.name}</span>
+                <span className="text-amber-700">{u.cost}</span>
               </button>
             );
           })}
         </div>
-        {info && <UnitInfo unit={info} bundle={bundle} />}
+        {info && <UnitInfo unit={info} bundle={bundle} star={stars?.[info.id] ?? 0} />}
       </div>
     </div>
   );
@@ -68,21 +83,25 @@ function Tab({ active, onClick, children, color }: { active: boolean; onClick():
   );
 }
 
-function UnitInfo({ unit, bundle }: { unit: UnitDef; bundle: ConfigBundle }) {
+function UnitInfo({ unit, bundle, star }: { unit: UnitDef; bundle: ConfigBundle; star: number }) {
   const weapon = bundle.weapons.find((w) => w.id === unit.weaponId);
   const skills = unit.skillIds.map((id) => bundle.weapons.find((w) => w.id === id)).filter((w) => !!w);
   const { dps } = unitPower(unit, bundle);
+  const scale = starScale(star, bundle.settings.economy.starBonus);
   return (
-    <div className="hidden w-52 shrink-0 rounded-lg border-2 border-ink/30 bg-white p-2 text-xs sm:block">
-      <div className="font-display text-sm">{unit.name}</div>
+    <div className="hidden w-64 shrink-0 overflow-y-auto rounded-lg border-2 border-ink/30 bg-white p-2 text-xs sm:block">
+      <div className="font-display text-sm">
+        {unit.name}
+        {star > 0 && <span className="text-amber-700"> · {star} sao</span>}
+      </div>
       <div className="opacity-70">
         {ROLE_LABEL[unit.role]} · {weapon?.name}
       </div>
       <dl className="mt-1 grid grid-cols-2 gap-x-2">
         <dt>Máu</dt>
-        <dd className="text-right font-bold">{unit.hp}</dd>
+        <dd className="text-right font-bold">{Math.round(unit.hp * scale)}</dd>
         <dt>Sát thương/s</dt>
-        <dd className="text-right font-bold">{dps.toFixed(0)}</dd>
+        <dd className="text-right font-bold">{(dps * scale).toFixed(0)}</dd>
         <dt>Tầm</dt>
         <dd className="text-right font-bold">{weapon?.range}m</dd>
         <dt>Tốc độ</dt>

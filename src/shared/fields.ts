@@ -8,6 +8,7 @@ import {
   ATTACK_KINDS,
   BOT_STRATEGIES,
   CAST_STYLES,
+  CHEST_VARIANTS,
   DAMAGE_TYPES,
   ENV_ASSET_KINDS,
   FORMATIONS,
@@ -100,6 +101,12 @@ export const ENUM_LABELS: Record<string, string> = {
   tree: 'Cây',
   rock: 'Đá',
   bush: 'Bụi cây',
+  wooden: 'Rương gỗ',
+  silver: 'Rương bạc',
+  golden: 'Rương vàng',
+  giant: 'Rương khổng lồ',
+  magical: 'Rương phép thuật',
+  'super-magical': 'Rương siêu phép thuật',
 };
 
 const PARAM_LABELS: Record<string, string> = {
@@ -273,6 +280,10 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
       chargeBonus: 1,
       knockbackResist: 0,
       trampleDamage: 0,
+      unlockCost: 0,
+      cardPrice: 0,
+      starCards: [100, 200, 300, 400, 500],
+      starCoins: [1000, 2000, 4000, 8000, 16000],
     }),
   },
   weapons: {
@@ -592,6 +603,17 @@ export const SETTINGS_FIELDS: Field[] = [
   { type: 'ref', key: 'splashParticleId', label: 'Particle nước bắn', collection: 'particles', nullable: true },
   { type: 'ref', key: 'landParticleId', label: 'Particle tiếp đất', collection: 'particles', nullable: true },
   { type: 'ref', key: 'burnParticleId', label: 'Particle lửa trên lính đang cháy', collection: 'particles', nullable: true },
+  { type: 'section', label: 'Hộp quà & nâng sao (giá từng lính sửa ở /models, tab Thẻ & sao)' },
+  { type: 'slider', key: 'economy.boxHours', label: 'Hộp x giờ: số giờ chờ giữa hai hộp', min: 0.5, max: 24, step: 0.5, help: 'hộp x giờ xuất hiện sau khi mở hộp hằng ngày, đếm từ hộp mở gần nhất' },
+  { type: 'slider', key: 'economy.starBonus', label: 'Mỗi sao tăng máu và sát thương', min: 0, max: 0.5, step: 0.01, help: '0.1 = +10% mỗi sao; 5 sao = +50%' },
+  { type: 'select', key: 'economy.dailyBox.chest', label: 'Hộp hằng ngày: kiểu rương', options: CHEST_VARIANTS },
+  { type: 'range2', key: 'economy.dailyBox.coins', label: 'Hộp hằng ngày: coin (thấp nhất – cao nhất)', min: 0, max: 1_000_000, step: 10 },
+  { type: 'number', key: 'economy.dailyBox.cards', label: 'Hộp hằng ngày: tổng số thẻ', min: 0, max: 10_000, step: 1 },
+  { type: 'number', key: 'economy.dailyBox.kinds', label: 'Hộp hằng ngày: số loại lính', min: 1, max: 20, step: 1 },
+  { type: 'select', key: 'economy.hourlyBox.chest', label: 'Hộp x giờ: kiểu rương', options: CHEST_VARIANTS },
+  { type: 'range2', key: 'economy.hourlyBox.coins', label: 'Hộp x giờ: coin (thấp nhất – cao nhất)', min: 0, max: 1_000_000, step: 10 },
+  { type: 'number', key: 'economy.hourlyBox.cards', label: 'Hộp x giờ: tổng số thẻ', min: 0, max: 10_000, step: 1 },
+  { type: 'number', key: 'economy.hourlyBox.kinds', label: 'Hộp x giờ: số loại lính', min: 1, max: 20, step: 1 },
 ];
 
 export function isEnvKind(kind: string): boolean {

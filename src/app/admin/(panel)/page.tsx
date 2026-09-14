@@ -40,7 +40,7 @@ export default async function Dashboard() {
           </ul>
         )}
       </section>
-      {(missing.docs.length > 0 || missing.unskilled.length > 0 || missing.settings.length > 0) && (
+      {(missing.docs.length > 0 || missing.unskilled.length > 0 || missing.unpriced.length > 0 || missing.settings.length > 0) && (
         <section className="panel p-4">
           <h2 className="mb-2 font-display text-sm">Nội dung mặc định mới chưa có trong dữ liệu</h2>
           <DefaultsMerge missing={missing} />

@@ -2,6 +2,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { assignableRoles, updateUserSchema, USERS_COLLECTION } from '@/shared/users';
 import { issuesOf, jsonError, readJson, requireCms } from '@/server/admin';
 import { adminAuth, firestore } from '@/server/firebase';
+import { deletePlayer } from '@/server/players';
 import { firebaseErrorResponse, requireManageable } from '@/server/userAdmin';
 import { getUser } from '@/server/users';
 
@@ -66,6 +67,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
         if (e?.code !== 'auth/user-not-found') throw e;
       });
     await firestore().collection(USERS_COLLECTION).doc(uid).delete();
+    await deletePlayer(uid);
     return Response.json({ ok: true });
   } catch (e) {
     return firebaseErrorResponse(e);

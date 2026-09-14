@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { Object3D } from 'three';
 import { COLLECTION_SPECS, ENUM_LABELS } from '@/shared/fields';
-import { unitSchema, weaponSchema, type UnitDef, type WeaponDef } from '@/shared/schema';
+import { CHEST_VARIANTS, unitSchema, weaponSchema, type ChestVariant, type UnitDef, type WeaponDef } from '@/shared/schema';
 import { canAccessCms } from '@/shared/users';
 import { abilityCaster } from '@/game/arena';
 import { bakeModel, type ModelTemplate } from '@/game/models/bake';
@@ -19,6 +19,7 @@ import { AssetModelTools, withCandidate, type Candidate } from './models/ModelTo
 import UnitEditor from './models/UnitEditor';
 import { api, ApiError } from './admin/api';
 import ModelViewer, { type PreviewAnim } from './ModelViewer';
+import ChestStage from './player/ChestStage';
 import SkillArena from './SkillArena';
 
 interface Props {
@@ -27,6 +28,9 @@ interface Props {
   initialAsset?: string;
   /** Ability id: show it in the practice arena. */
   initialSkill?: string;
+  /** Reward chest look to preview; `chestOpen` starts it open. */
+  initialChest?: ChestVariant;
+  chestOpen?: boolean;
   from?: string;
   modelId?: string;
   /** Show the selected unit fighting training dummies instead of the turntable. */
@@ -37,7 +41,7 @@ interface Props {
   bare: boolean;
 }
 
-type Selection = { unit?: string; asset?: string; skill?: string };
+type Selection = { unit?: string; asset?: string; skill?: string; chest?: ChestVariant };
 
 function tryBake(build: () => Object3D): ModelTemplate | null {
   try {
@@ -63,7 +67,8 @@ export default function ModelsGallery(props: Props) {
   const { bundle, error, reload } = useConfig();
   const { user } = useAuth();
   const admin = canAccessCms(user) && !props.bare;
-  const [sel, setSel] = useState<Selection>({ unit: props.initialUnit, asset: props.initialAsset, skill: props.initialSkill });
+  const [sel, setSel] = useState<Selection>({ unit: props.initialUnit, asset: props.initialAsset, skill: props.initialSkill, chest: props.initialChest });
+  const [chestOpen, setChestOpen] = useState(!!props.chestOpen);
   const [arena, setArena] = useState(!!props.arena);
   const [anim, setAnim] = useState<PreviewAnim>(props.anim);
   const [explode, setExplode] = useState(props.explode);
@@ -74,7 +79,7 @@ export default function ModelsGallery(props: Props) {
   const [candidate, setCandidate] = useState<Candidate | null>(null);
 
   const creating = sel.unit === 'new';
-  const savedUnit = bundle?.units.find((u) => u.id === (sel.unit ?? (!sel.asset && !sel.skill ? bundle.units[0]?.id : undefined))) ?? null;
+  const savedUnit = bundle?.units.find((u) => u.id === (sel.unit ?? (!sel.asset && !sel.skill && !sel.chest ? bundle.units[0]?.id : undefined))) ?? null;
   const skill = sel.skill ? bundle?.weapons.find((w) => w.id === sel.skill) : undefined;
   const assetDef = sel.asset ? bundle?.assets.find((a) => a.id === sel.asset) : undefined;
   const dirty = unitDraft !== null || Object.keys(skillDrafts).length > 0;
@@ -129,12 +134,15 @@ export default function ModelsGallery(props: Props) {
     setSkillDrafts({});
     setCandidate(null);
     setPicked(null);
+    setChestOpen(false);
     setSel(next);
-    const q = next.unit ? `unit=${next.unit}` : next.skill ? `skill=${next.skill}` : next.asset ? `asset=${next.asset}` : '';
+    const q = next.unit ? `unit=${next.unit}` : next.skill ? `skill=${next.skill}` : next.asset ? `asset=${next.asset}` : next.chest ? `chest=${next.chest}` : '';
     window.history.replaceState(null, '', q ? `/models?${q}` : '/models');
   };
 
-  const viewer = skill ? (
+  const viewer = sel.chest ? (
+    <ChestStage variant={sel.chest} mode={chestOpen ? 'open' : 'idle'} />
+  ) : skill ? (
     practice ? <SkillArena bundle={arenaBundle} caster={practice.caster} abilities={practice.abilities} /> : <p className="p-4 text-sm">Dữ liệu kỹ năng chưa hợp lệ</p>
   ) : arena && unit && !asset ? (
     fighter ? <SkillArena bundle={arenaBundle} caster={fighter} abilities={abilities} /> : <p className="p-4 text-sm">Dữ liệu lính chưa hợp lệ</p>
@@ -193,6 +201,12 @@ export default function ModelsGallery(props: Props) {
               </li>
             ))}
         </ul>
+        <h2 className="mt-3 font-display text-sm">Hộp quà</h2>
+        <ul className="mt-1 space-y-0.5 text-sm">
+          {CHEST_VARIANTS.map((v) => (
+            <li key={v}>{item(sel.chest === v, () => select({ chest: v }), ENUM_LABELS[v])}</li>
+          ))}
+        </ul>
         <h2 className="mt-3 font-display text-sm">Asset</h2>
         <ul className="mt-1 space-y-0.5 text-sm">
           {bundle.assets.map((a) => (
@@ -212,12 +226,17 @@ export default function ModelsGallery(props: Props) {
       <main className="relative min-w-0 flex-1">
         {viewer}
         <div className="panel absolute left-3 top-3 flex flex-wrap items-center gap-2 p-2 text-sm">
+          {sel.chest && (
+            <button className={`btn px-2 py-1 text-xs ${chestOpen ? 'btn-gold' : ''}`} onClick={() => setChestOpen((o) => !o)}>
+              {chestOpen ? '↺ Đóng lại' : '✨ Mở thử'}
+            </button>
+          )}
           {unit && !asset && !skill && (
             <button className={`btn px-2 py-1 text-xs ${arena ? 'btn-gold' : ''}`} onClick={() => setArena((a) => !a)}>
               ⚔️ Đấu thử
             </button>
           )}
-          {!skill && !(arena && unit && !asset) && (
+          {!skill && !sel.chest && !(arena && unit && !asset) && (
             <>
               {(['idle', 'walk', 'attack'] as const).map((a) => (
                 <button key={a} className={`btn px-2 py-1 text-xs ${anim === a ? 'btn-gold' : ''}`} onClick={() => setAnim(a)}>
@@ -270,6 +289,20 @@ export default function ModelsGallery(props: Props) {
             />
           ) : skill ? (
             <SkillPanel key={skill.id} skill={skill} draft={skillDrafts[skill.id]} setDraft={(w) => setSkillDrafts(w ? { [skill.id]: w } : {})} bundle={bundle} reload={reload} />
+          ) : sel.chest ? (
+            <div className="flex flex-col gap-2 text-sm">
+              <h2 className="font-display text-lg leading-tight">{ENUM_LABELS[sel.chest]}</h2>
+              <p>Rương của hộp quà người chơi mở (mô hình procedural theo chuẩn img2threejs: part `base`, `lid` bản lề sau, socket `glow`). Bấm ✨ Mở thử để xem hiệu ứng mở.</p>
+              <p>
+                Đang dùng cho:{' '}
+                <b>{[bundle.settings.economy.dailyBox.chest === sel.chest && 'hộp hằng ngày', bundle.settings.economy.hourlyBox.chest === sel.chest && `hộp ${bundle.settings.economy.boxHours} giờ`].filter(Boolean).join(', ') || 'chưa dùng'}</b>
+                . Đổi rương và phần thưởng trong{' '}
+                <Link href="/admin/settings" className="underline">
+                  Cài đặt
+                </Link>
+                .
+              </p>
+            </div>
           ) : assetDef ? (
             <div className="flex flex-col gap-3">
               <h2 className="font-display text-lg leading-tight">{assetDef.name}</h2>

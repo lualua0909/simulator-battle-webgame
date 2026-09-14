@@ -15,14 +15,22 @@ export interface RoomState {
   phase: 'lobby' | 'battle';
   mapId: string;
   budget: number;
+  /** Host setting: upgraded units fight with their star bonus. */
+  useStars: boolean;
   players: Partial<Record<Side, NetPlayer>>;
 }
+
+/** Star level per unit id, for each side. */
+export type ArmyStars = Record<Side, Record<string, number>>;
 
 export interface BattleStart {
   seed: number;
   mapId: string;
   budget: number;
   armies: Armies;
+  useStars: boolean;
+  /** Read by the server from each player's collection when they got ready; empty when stars are off. */
+  stars: ArmyStars;
   configVersion: string;
 }
 
@@ -39,7 +47,7 @@ export const UNAUTHORIZED = 'unauthorized';
 export interface ClientToServer {
   'room:create': (ack: (res: AckResult<{ code: string; side: Side }>) => void) => void;
   'room:join': (req: { code: string }, ack: (res: AckResult<{ code: string; side: Side }>) => void) => void;
-  'room:settings': (req: { mapId: string; budget: number }) => void;
+  'room:settings': (req: { mapId: string; budget: number; useStars: boolean }) => void;
   'room:ready': (req: { army: Placement[] }, ack: (res: AckResult) => void) => void;
   'room:unready': () => void;
   'room:leave': () => void;

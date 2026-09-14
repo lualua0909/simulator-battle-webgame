@@ -17,7 +17,7 @@ import { Rng } from '../sim/rng';
 export type Vec3 = [number, number, number];
 export { Rng };
 
-export type RigKind = 'humanoid' | 'quadruped' | 'dragon' | 'bird' | 'catapult' | 'static';
+export type RigKind = 'humanoid' | 'quadruped' | 'dragon' | 'bird' | 'catapult' | 'chest' | 'static';
 
 interface MatOptions {
   roughness?: number;

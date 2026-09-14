@@ -104,6 +104,7 @@ export function DefaultsMerge({ missing }: { missing: MissingDefaults }) {
   const router = useRouter();
   const [picked, setPicked] = useState(() => new Set(missing.docs.map((d) => `${d.collection}/${d.id}`)));
   const [skills, setSkills] = useState(true);
+  const [prices, setPrices] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const toggle = (key: string) =>
@@ -116,8 +117,8 @@ export function DefaultsMerge({ missing }: { missing: MissingDefaults }) {
   const submit = async () => {
     setBusy(true);
     try {
-      const r = await api<{ added: number; skilled: number; settings: boolean; skipped: string[] }>('/api/admin/bundle', { method: 'POST', body: JSON.stringify({ action: 'merge', docs: [...picked], skills }) });
-      setMsg(`Đã thêm ${r.added} mục, gán kỹ năng cho ${r.skilled} lính${r.settings ? ', cập nhật cài đặt' : ''}.${r.skipped.length ? ` Bỏ qua (thiếu tham chiếu): ${r.skipped.join(', ')}` : ''}`);
+      const r = await api<{ added: number; skilled: number; priced: number; settings: boolean; skipped: string[] }>('/api/admin/bundle', { method: 'POST', body: JSON.stringify({ action: 'merge', docs: [...picked], skills, prices }) });
+      setMsg(`Đã thêm ${r.added} mục, gán kỹ năng cho ${r.skilled} lính, đặt giá cho ${r.priced} lính${r.settings ? ', cập nhật cài đặt' : ''}.${r.skipped.length ? ` Bỏ qua (thiếu tham chiếu): ${r.skipped.join(', ')}` : ''}`);
       router.refresh();
     } catch (e) {
       setMsg(e instanceof ApiError ? e.message : String(e));
@@ -154,6 +155,12 @@ export function DefaultsMerge({ missing }: { missing: MissingDefaults }) {
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={skills} onChange={(e) => setSkills(e.target.checked)} />
           Gán kỹ năng mặc định cho lính chưa có kỹ năng: {missing.unskilled.map((u) => u.name).join(', ')}
+        </label>
+      )}
+      {missing.unpriced.length > 0 && (
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={prices} onChange={(e) => setPrices(e.target.checked)} />
+          Đặt giá mở khóa, giá thẻ và giá nâng sao mặc định cho {missing.unpriced.length} lính chưa có giá: {missing.unpriced.map((u) => u.name).join(', ')}
         </label>
       )}
       {missing.settings.length > 0 && <p className="text-xs opacity-70">Cài đặt còn trống sẽ được điền: {missing.settings.map((k) => SETTINGS_FIELDS.find((f) => 'key' in f && f.key === k)?.label ?? k).join(', ')}</p>}

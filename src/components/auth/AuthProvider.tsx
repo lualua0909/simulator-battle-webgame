@@ -94,7 +94,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   return (
     <Ctx.Provider value={value}>
       {children}
-      {view && <AuthModal initialView={view} onClose={() => setView(null)} />}
+      {/* Opened from the game screens, so it wears the game look. */}
+      {view && (
+        <div className="game-ui">
+          <AuthModal initialView={view} onClose={() => setView(null)} />
+        </div>
+      )}
     </Ctx.Provider>
   );
 }

@@ -182,6 +182,11 @@ const U = (u: Partial<UnitDef> & Pick<UnitDef, 'id' | 'name' | 'factionId' | 'ro
   chargeBonus: 1,
   knockbackResist: 0,
   trampleDamage: 0,
+  // Units up to 150 are free starters; the rest unlock for about 20× their army cost (1 coin = 1 VND).
+  unlockCost: u.cost <= 150 ? 0 : Math.round((u.cost * 20) / 1000) * 1000,
+  cardPrice: Math.min(500, Math.max(5, Math.round(u.cost / 50) * 5)),
+  starCards: [100, 200, 300, 400, 500],
+  starCoins: [1000, 2000, 4000, 8000, 16000],
   ...u,
 });
 
@@ -313,6 +318,12 @@ const settings: Settings = {
     pierce: { unarmored: 1.1, light: 0.9, heavy: 0.5, beast: 1, siege: 0.4 },
     fire: { unarmored: 1.2, light: 1.1, heavy: 0.9, beast: 1, siege: 1.5 },
     magic: { unarmored: 1, light: 1, heavy: 1, beast: 1.2, siege: 1 },
+  },
+  economy: {
+    boxHours: 3,
+    starBonus: 0.1,
+    dailyBox: { chest: 'golden', coins: [200, 500], cards: 40, kinds: 3 },
+    hourlyBox: { chest: 'silver', coins: [50, 150], cards: 12, kinds: 2 },
   },
 };
 

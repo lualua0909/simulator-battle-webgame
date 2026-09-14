@@ -100,7 +100,7 @@ export function useOnline(uid: string | null, handlers: OnlineHandlers) {
     join,
     ready,
     unready: () => socket?.emit('room:unready'),
-    settings: (mapId: string, budget: number) => socket?.emit('room:settings', { mapId, budget }),
+    settings: (mapId: string, budget: number, useStars: boolean) => socket?.emit('room:settings', { mapId, budget, useStars }),
     checksum: (tick: number, hash: number) => socket?.emit('battle:checksum', { tick, hash }),
     end: (outcome: BattleOutcome, tick: number) => socket?.emit('battle:end', { outcome, tick }),
   };

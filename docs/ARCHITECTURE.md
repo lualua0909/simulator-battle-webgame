@@ -9,7 +9,10 @@ Mục lục:
 3. [Giao tiếp cho tính năng người vs người (online)](#3-giao-tiếp-cho-tính-năng-người-vs-người-online)
 4. [Cơ chế phân quyền](#4-cơ-chế-phân-quyền)
 5. [Bảo mật](#5-bảo-mật)
-6. [Phụ lục: bảng API](#6-phụ-lục-bảng-api)
+6. [Tiền tệ, thẻ bài, hộp quà](#6-tiền-tệ-thẻ-bài-hộp-quà)
+7. [Phụ lục: bảng API](#7-phụ-lục-bảng-api)
+
+Kế hoạch kiếm tiền, nạp tiền và pháp lý: [MONETIZATION.md](MONETIZATION.md).
 
 ---
 
@@ -18,6 +21,7 @@ Mục lục:
 ```mermaid
 flowchart LR
   subgraph Browser["Trình duyệt"]
+    Home["/ Màn chính<br/>ví coin, hộp quà, bộ sưu tập thẻ"]
     Game["/play<br/>Game client<br/>(Three.js + sim tất định)"]
     Models["/models<br/>Xưởng mô hình (sửa lính, Claude)"]
     CMS["/admin<br/>CMS + Xưởng"]
@@ -28,19 +32,21 @@ flowchart LR
     Next["Next.js<br/>pages + route handlers /api/*"]
     IO["Socket.IO /socket.io<br/>rooms.ts"]
     Content["content.ts<br/>bản sao CMS trong RAM"]
+    Players["players.ts<br/>ví coin (transaction)"]
     Studio["studio/pipeline.ts"]
     SQLite[("SQLite data/game.db<br/>job Xưởng")]
   end
 
   subgraph Google["Firebase / Google Cloud"]
     FAuth["Firebase Auth"]
-    FS[("Firestore<br/>users, matches,<br/>units, weapons, ..., settings/global")]
+    FS[("Firestore<br/>users, players (+ledger), matches,<br/>units, weapons, ..., settings/global")]
     FCM["Firebase Cloud Messaging"]
   end
 
   Claude["Claude API<br/>hoặc Claude Code CLI"]
 
   Game -- "HTTP GET /api/config" --> Next
+  Home -- "HTTP /api/player (cookie phiên)" --> Next
   Game <-- "WebSocket (PvP, cookie phiên)" --> IO
   CMS -- "HTTP /api/admin/* (cookie phiên)" --> Next
   FBClient -- "đăng nhập" --> FAuth
@@ -48,6 +54,9 @@ flowchart LR
 
   Next --> Content
   IO --> Content
+  Next --> Players
+  IO -- "đọc sao, lính đã mở khóa" --> Players
+  Players -- "transaction + ledger (Admin SDK)" --> FS
   IO -- "verifySessionCookie" --> FAuth
   IO -- "lưu kết quả trận" --> FS
   Content <-- "onSnapshot + ghi (Admin SDK)" --> FS
@@ -64,6 +73,7 @@ flowchart LR
 - **Một tiến trình Node** chạy cả Next.js và Socket.IO trên cùng cổng. Không có microservice, không có server-to-server giữa các node game. Muốn chạy nhiều instance cần thêm adapter (Redis) cho Socket.IO và sticky session — hiện **chưa có**.
 - **Giao tiếp server-to-server** thực tế chỉ có: Node ↔ Firebase (Auth, Firestore, FCM qua Admin SDK) và Node ↔ Anthropic (Claude API) hoặc tiến trình con `claude` CLI.
 - **Nội dung CMS** là nguồn chuẩn cho cả game, bot và kiểm tra đội hình online. Server giữ bản sao RAM qua snapshot listener; sửa trên CMS hay Firebase Console đều áp dụng từ trận sau.
+- **Ví coin** (coin, thẻ, sao, lính đã mở khóa, giờ mở hộp) nằm ở Firestore `players/{uid}`, chỉ server đọc/ghi, mỗi thay đổi là một transaction kèm dòng sổ giao dịch (mục 6).
 
 ---
 
@@ -84,7 +94,8 @@ mindmap
         Bắt buộc đăng nhập
         Tạo phòng mã 5 ký tự
         Vào phòng bằng mã
-        Chủ phòng chọn bản đồ và ngân sách
+        Chủ phòng chọn bản đồ, ngân sách, có tính sao hay không
+        Server kiểm tra lính đã mở khóa
         Sẵn sàng / hủy sẵn sàng
         Server kiểm tra đội hình
         Hai máy chạy cùng seed
@@ -101,9 +112,18 @@ mindmap
         Tạm dừng, tốc độ 0.25x đến 4x
         Ragdoll Rapier, particle, đạn
         Cinematic mở màn và kết thúc
+    Màn chính /
+      Thanh coin, tên, avatar DiceBear
+      Hộp quà hằng ngày
+      Hộp x giờ sau hộp hằng ngày
+      Rương 3D nhún nhảy, mở có ánh sáng
+      Bộ sưu tập thẻ kiểu Clash Royale
+      Mở khóa lính, mua thẻ, nâng sao bằng coin
     Xem mô hình /models
       Tách rời bộ phận
       Chọn từng part
+      Xem thử 6 kiểu rương
+      Admin chỉnh giá mở khóa, giá thẻ, thẻ và coin mỗi sao
     Tài khoản
       Email mật khẩu
       Google
@@ -127,6 +147,8 @@ mindmap
         Tạo, sửa, khóa, xóa
         Đổi vai trò
         Gửi thông báo đẩy
+        Xem ví, sổ giao dịch, cộng trừ coin
+      Cài đặt hộp quà và sao
       Xưởng img2threejs
         Ảnh mẫu và mô tả
         Claude viết sculpt spec
@@ -151,6 +173,10 @@ Bảng tính năng theo module code:
 | CMS | CRUD collection, settings, bundle | [src/app/api/admin/](../src/app/api/admin/) |
 | CMS | Quản lý user, FCM | [users routes](../src/app/api/admin/users/), [userAdmin.ts](../src/server/userAdmin.ts) |
 | Xưởng | Pipeline Claude, gate, xuất file | [studio/](../src/server/studio/), [sculpt/](../src/game/sculpt/) |
+| Kinh tế | Luật thuần: hộp quà, nâng sao, mở khóa, mua thẻ, cộng/trừ coin | [economy.ts](../src/shared/economy.ts) |
+| Kinh tế | Ví Firestore trong transaction + sổ giao dịch, API người chơi / admin | [players.ts](../src/server/players.ts), [api/player](../src/app/api/player/route.ts), [wallet route](../src/app/api/admin/users/[uid]/wallet/route.ts) |
+| Kinh tế | HUD coin, menu hộp quà, màn mở hộp, bộ sưu tập thẻ | [src/components/player/](../src/components/player/) |
+| Kinh tế | Rương 3D procedural (6 kiểu) | [chest.ts](../src/game/models/chest.ts), [ChestStage.tsx](../src/components/player/ChestStage.tsx) |
 
 ---
 
@@ -191,8 +217,8 @@ Client → Server:
 | --- | --- | --- | --- |
 | `room:create` | — | `{ ok, code, side }` | CMS có ít nhất 1 map |
 | `room:join` | `{ code }` | `{ ok, code, side }` | phòng tồn tại; `uid` đã có chỗ trong phòng thì lấy lại chỗ đó, không thì vào `red` nếu còn trống |
-| `room:settings` | `{ mapId, budget }` | — | chỉ `blue` (chủ phòng), phase `lobby`, map tồn tại, budget 100–1.000.000 |
-| `room:ready` | `{ army: Placement[] }` | `{ ok }` / `{ ok:false, error }` | phiên vẫn hợp lệ (kiểm tra lại với Firebase), phase `lobby`, `armySchema` (≤ 500), `validateArmy` pass, không rỗng |
+| `room:settings` | `{ mapId, budget, useStars }` | — | chỉ `blue` (chủ phòng), phase `lobby`, map tồn tại, budget 100–1.000.000, `useStars` boolean |
+| `room:ready` | `{ army: Placement[] }` | `{ ok }` / `{ ok:false, error }` | phiên vẫn hợp lệ (kiểm tra lại với Firebase), phase `lobby`, `armySchema` (≤ 500), `validateArmy` pass, không rỗng, **mọi lính đã mở khóa** theo ví Firestore của người đó (server lưu luôn sao của các lính trong đội hình) |
 | `room:unready` | — | — | phase `lobby` |
 | `battle:checksum` | `{ tick, hash }` | — | đang có trận, bên này chưa báo kết thúc, `tick` là bội số dương của 30 và ≤ tick tối đa, mỗi tick chỉ nhận lần đầu |
 | `battle:end` | `{ outcome: 'win' \| 'lose' \| 'draw', tick }` | — | đang có trận, bên này chưa báo; payload sai thì hủy kết quả |
@@ -202,8 +228,8 @@ Server → Client:
 
 | Sự kiện | Payload | Khi nào |
 | --- | --- | --- |
-| `room:state` | `{ code, phase, mapId, budget, players: { name, ready, connected, units, cost } }` | mọi thay đổi phòng (gửi cả phòng) |
-| `battle:start` | `{ seed, mapId, budget, armies: { blue, red }, configVersion }` | cả hai `ready` và cùng đang kết nối |
+| `room:state` | `{ code, phase, mapId, budget, useStars, players: { name, ready, connected, units, cost } }` | mọi thay đổi phòng (gửi cả phòng) |
+| `battle:start` | `{ seed, mapId, budget, armies: { blue, red }, useStars, stars: { blue, red }, configVersion }` | cả hai `ready` và cùng đang kết nối; `stars` lấy từ ví lúc sẵn sàng, rỗng khi chủ phòng tắt sao |
 | `battle:desync` | `{ tick }` | hash hai bên khác nhau tại cùng tick (lần đầu) |
 | `battle:result` | `{ ok: true, winner }` / `{ ok: false, error }` | kết quả đã lưu, hoặc bị hủy kèm lý do |
 
@@ -351,6 +377,7 @@ Tài liệu `matches/{autoId}` lưu:
 | Trường | Ý nghĩa |
 | --- | --- |
 | `room`, `seed`, `mapId`, `budget`, `configVersion` | tham số trận do **server** giữ, không lấy từ client lúc kết thúc |
+| `useStars`, `stars.blue/red` | có tính sao không và sao của từng loại lính mỗi bên (server đọc từ ví) |
 | `players.blue/red` | `{ uid, name }` |
 | `armies.blue/red` | đội hình đã được server kiểm tra, đủ để chạy lại trận |
 | `winner` | `blue` / `red` / `draw` |
@@ -389,6 +416,7 @@ flowchart TD
 | Bỏ gói thiếu ack | **một gói `room:join` không có callback làm sập cả tiến trình Node** (lỗi đã xác nhận trước khi sửa: `TypeError: ack is not a function`) |
 | zod + phase/side/chủ phòng | payload sai kiểu, gửi sự kiện sai thời điểm, người không phải chủ phòng đổi map |
 | `validateArmy` trên server | đội hình vượt ngân sách, ngoài vùng, lính không tồn tại |
+| Kiểm tra ví ở `room:ready` | dùng lính chưa mở khóa, tự khai sao (sao chỉ lấy từ Firestore, không nhận từ client) |
 | Seed do server sinh, đội hình do server gửi | client tự chọn seed hoặc đổi đội hình sau khi đối thủ sẵn sàng |
 | Checksum đối chiếu, tick hợp lệ, chỉ nhận lần đầu | client sửa đổi làm lệch trận, gửi checksum rác để làm phình bộ nhớ |
 | Đồng thuận hai bên khi lưu kết quả | một client gian lận tự khai thắng |
@@ -407,8 +435,8 @@ Lưu ở Firestore `users/{uid}.role` ([src/shared/users.ts](../src/shared/users
 | --- | --- | --- |
 | `0` | Root | toàn quyền CMS, quản lý mọi user khác (kể cả root/admin khác), cấp mọi vai trò |
 | `1` | Admin | toàn quyền nội dung CMS + Xưởng; chỉ quản lý user role `2`; chỉ cấp role `2` |
-| `2` | Người dùng | chơi mọi chế độ kể cả online (kết quả lưu theo `uid`), đăng ký FCM token; không vào `/admin` |
-| — | Khách (chưa đăng nhập) | chơi với máy, 2 người 1 máy, xem `/models`, đọc `/api/config`; **không** đấu online |
+| `2` | Người dùng | chơi mọi chế độ kể cả online (kết quả lưu theo `uid`), đăng ký FCM token, có ví coin (hộp quà, mở khóa, mua thẻ, nâng sao); không vào `/admin` |
+| — | Khách (chưa đăng nhập) | chơi với máy, 2 người 1 máy **chỉ với lính miễn phí** (`unlockCost = 0`), xem `/models`, đọc `/api/config`; **không** đấu online, không có ví |
 
 Quy tắc (hàm thuần, dùng chung):
 
@@ -466,11 +494,12 @@ flowchart TD
   RA -- "role không nằm trong assignableRoles" --> E403c["403 vượt quyền"]
   RA -- "ok" --> UW["cập nhật Auth + Firestore<br/>revokeRefreshTokens nếu khóa / đổi mật khẩu / hạ quyền"]
 
-  T -- "/api/auth/fcm" --> CU["currentUser() bất kỳ user đăng nhập"]
+  T -- "/api/auth/fcm, /api/player POST" --> CU["currentUser() bất kỳ user đăng nhập"]
+  T -- "/api/admin/users/{uid}/wallet POST" --> M
   T -- "Socket.IO /socket.io" --> SIO["Origin check + verifySessionCookie<br/>user bị khóa bị từ chối (xem 3.7)"]
   T -- "/api/config" --> PUB["công khai, không xác thực"]
 
-  FSR["Firestore rules (client SDK)"] --> FR["users/{uid}: chỉ đọc hồ sơ của chính mình<br/>ghi: cấm<br/>nội dung CMS, matches: không có rule, mặc định cấm"]
+  FSR["Firestore rules (client SDK)"] --> FR["users/{uid}: chỉ đọc hồ sơ của chính mình<br/>ghi: cấm<br/>players/** (ví, ledger): cấm cả chủ ví<br/>nội dung CMS, matches: không có rule, mặc định cấm"]
 ```
 
 Ma trận quyền theo endpoint:
@@ -481,6 +510,9 @@ Ma trận quyền theo endpoint:
 | Socket.IO `/socket.io` (PvP) | ✗ | ✓ | ✓ | ✓ |
 | `GET/POST/DELETE /api/auth/session` | ✓ | ✓ | ✓ | ✓ |
 | `POST /api/auth/fcm` | ✗ | ✓ | ✓ | ✓ |
+| `GET /api/player` | ✓ (trả `player: null`) | ✓ ví của mình | ✓ | ✓ |
+| `POST /api/player` (mở hộp, mở khóa, nâng sao, mua thẻ) | ✗ | ✓ ví của mình | ✓ | ✓ |
+| `GET /api/fonts/clash` | ✓ | ✓ | ✓ | ✓ |
 | Trang `/admin/*` | ✗ | ✗ | ✓ | ✓ |
 | `/api/admin/{collection}[/{id}]`, `settings`, `bundle` | ✗ | ✗ | ✓ | ✓ |
 | `/api/admin/studio/**` (gọi Claude, tốn chi phí) | ✗ | ✗ | ✓ | ✓ |
@@ -488,6 +520,8 @@ Ma trận quyền theo endpoint:
 | `POST /api/admin/users` | ✗ | ✗ | chỉ tạo role 2 | mọi role |
 | `PATCH/DELETE /api/admin/users/{uid}` | ✗ | ✗ | chỉ target role 2, không phải mình | mọi target trừ mình |
 | `POST /api/admin/users/{uid}/notify` | ✗ | ✗ | ✓ (mọi user) | ✓ |
+| `GET /api/admin/users/{uid}/wallet` | ✗ | ✗ | ✓ (mọi user) | ✓ |
+| `POST /api/admin/users/{uid}/wallet` (cộng/trừ coin) | ✗ | ✗ | chỉ target role 2, không phải mình | mọi target trừ mình |
 
 ---
 
@@ -528,6 +562,15 @@ Ma trận quyền theo endpoint:
 - Đội hình đối thủ không lộ trong lobby; chỉ chủ phòng đổi map/ngân sách và mọi thay đổi reset sẵn sàng.
 - `configVersion` (hash SHA-1 của nội dung) giúp phát hiện hai máy dùng dữ liệu CMS khác nhau.
 
+**Ví coin** — chi tiết ở [mục 6](#6-tiền-tệ-thẻ-bài-hộp-quà)
+
+- Chỉ server đọc/ghi `players/**` (Admin SDK); rules cấm client kể cả chủ ví; game đọc ví qua `/api/player`.
+- Mỗi thay đổi là một **Firestore transaction**: đọc lại ví, áp luật thuần, ghi ví + dòng ledger cùng lúc. Hai request đồng thời không tiêu trùng coin và không mở một hộp hai lần.
+- Client chỉ gửi ý định (`open-box`, `unlock`, `upgrade`, `buy-cards` + `unitId`, `count` 1–1000). Giá, phần thưởng (`crypto.randomInt`), giờ mở hộp (đồng hồ server, ngày theo giờ Việt Nam) đều tính ở server.
+- Số coin nguyên, không âm; dữ liệu ví sai schema bị từ chối (không reset về 0).
+- Admin cộng/trừ coin theo luật `canManage` (không tự cộng cho mình, admin chỉ với user role 2), bắt buộc ghi lý do, ledger lưu `by` = uid admin.
+- Sao và lính đã mở khóa trong đấu online lấy từ ví trên server.
+
 **Xưởng img2threejs (AI)**
 
 - Claude **chỉ trả JSON sculpt spec**, không trả code. Spec được parse bằng schema và dựng bởi generator tin cậy trong [src/game/sculpt](../src/game/sculpt/); không có `eval`/`new Function` nào chạy nội dung AI.
@@ -566,22 +609,97 @@ Xếp theo mức độ ưu tiên khuyến nghị. Đây là nhận định từ 
 | 8 | Thấp | **Lộ `e.message` của lỗi không xác định** | `firebaseErrorResponse` và stream Xưởng trả thông điệp lỗi gốc cho client (chỉ root/admin thấy). | Log chi tiết ở server, trả thông báo chung ở production. |
 | 9 | Vận hành | **Trạng thái phòng chỉ trong RAM, một instance** | Restart/deploy làm mất mọi phòng và trận đang chờ xác nhận; không scale ngang được. Map "một kết nối mỗi uid" cũng chỉ đúng trong một instance. | Redis adapter + sticky session + khóa phân tán nếu cần nhiều instance. |
 | 10 | Vận hành | **Engine CLI dùng login `claude` của máy chủ** | Tài khoản Claude của người vận hành gắn với server; ai chiếm được quyền admin CMS là dùng được quota đó. | Ưu tiên `ANTHROPIC_API_KEY` riêng có giới hạn chi tiêu ở production. |
+| 11 | Trung bình | **Chưa rate limit `/api/player`** | Mỗi request là một transaction Firestore (tốn phí đọc/ghi); spam request không làm sai số dư nhưng tăng chi phí. | Rate limit theo uid/IP ở reverse proxy hoặc middleware. |
+| 12 | Trung bình | **Admin là người cộng coin** | Chưa có cổng thanh toán: admin bị lộ tài khoản có thể cộng coin cho user khác (vẫn để lại dấu vết ledger). | Cổng thanh toán có webhook ký (MONETIZATION.md), báo cáo ledger `admin`, giới hạn số coin mỗi lần cộng. |
+| 13 | Thấp | **Đấu với máy tính sao trên client** | Chế độ đấu máy không có phần thưởng, client sửa được sao của mình. | Không cần xử lý tới khi đấu máy có thưởng; khi đó chạy lại trận trên server. |
+| 14 | Pháp lý | **Chưa đủ điều kiện thu tiền thật** | Chưa có giấy phép G1, chưa xác thực số điện thoại, chưa giới hạn giờ chơi người dưới 18 tuổi. | Xem [MONETIZATION.md mục 5](MONETIZATION.md#5-pháp-lý-tại-việt-nam). |
 
 ### 5.4 Checklist triển khai production
 
 - [ ] `NODE_ENV=production` (bật cookie `Secure`), chạy sau HTTPS.
 - [ ] `FIREBASE_SERVICE_ACCOUNT` đặt qua secret manager, không commit `.env`.
-- [ ] Triển khai [firestore.rules](../firestore.rules) lên Firebase (không mở `matches` cho client).
+- [ ] Triển khai [firestore.rules](../firestore.rules) lên Firebase (không mở `matches`, `players` cho client).
 - [ ] Bật provider Email/Password + Google; cân nhắc bắt buộc xác minh email.
 - [ ] Sau khi có root: xóa email khỏi `FIREBASE_ROOT_EMAILS` (rủi ro 6).
 - [ ] Reverse proxy: **giữ nguyên `Host` hoặc gửi `X-Forwarded-Host`** (không thì Origin check chặn mọi kết nối online), hỗ trợ WebSocket upgrade, rate limit, security header, giới hạn kích thước body.
 - [ ] `ANTHROPIC_API_KEY` riêng, đặt giới hạn chi tiêu.
-- [ ] Sao lưu Firestore định kỳ (hoặc tải bundle JSON từ CMS) và file SQLite `data/game.db`.
+- [ ] Sao lưu Firestore định kỳ, **đặc biệt `players` (ví coin)** — bundle JSON của CMS không chứa ví; và file SQLite `data/game.db`.
+- [ ] Đặt giá cho lính trên Firestore đang có dữ liệu: Tổng quan CMS → *Nội dung mặc định mới* → *Đặt giá…* (hoặc sửa từng lính ở `/models`, tab Thẻ & sao).
 - [ ] Chạy một instance (hoặc thêm Redis adapter trước khi scale).
 
 ---
 
-## 6. Phụ lục: bảng API
+## 6. Tiền tệ, thẻ bài, hộp quà
+
+### 6.1 Dữ liệu
+
+| Nơi | Trường | Ý nghĩa |
+| --- | --- | --- |
+| `units/{id}` (CMS, sửa ở `/models` tab 🃏 Thẻ & sao) | `unlockCost` | coin để mở khóa; `0` = miễn phí cho mọi người, kể cả khách |
+| | `cardPrice` | giá 1 thẻ; `0` = không bán |
+| | `starCards[5]`, `starCoins[5]` | thẻ và coin **dùng hết** để lên sao 1…5 (mặc định 100/200/300/400/500 thẻ, 1.000/2.000/4.000/8.000/16.000 coin) |
+| `settings/global.economy` (CMS Cài đặt) | `boxHours` | x của hộp x giờ (mặc định 3) |
+| | `starBonus` | máu và sát thương tăng mỗi sao (mặc định 0,1 = +10%) |
+| | `dailyBox`, `hourlyBox` | kiểu rương, coin `[min, max]`, tổng số thẻ, số loại lính |
+| `players/{uid}` (chỉ server) | `coins` | số coin (1 coin = 1 VNĐ), nguyên, không âm |
+| | `cards`, `stars`, `unlocked` | thẻ chưa dùng theo lính, sao 0–5 theo lính, lính đã mua |
+| | `dailyDay`, `lastBoxAt` | ngày (giờ Việt Nam) mở hộp hằng ngày gần nhất, thời điểm mở hộp gần nhất |
+| `players/{uid}/ledger/{autoId}` | `type`, `coins`, `balance`, `cards`, `unitId`, `star`, `note`, `by`, `at` | sổ giao dịch chỉ ghi thêm: `daily-box`, `hourly-box`, `unlock`, `upgrade`, `buy-cards`, `admin` |
+
+Firestore đang có dữ liệu cũ đọc lính với `unlockCost = 0`, `cardPrice = 0` (mọi lính miễn phí, không bán thẻ) và `economy` mặc định. Không tự migrate: panel *Nội dung mặc định mới* trên Tổng quan có tùy chọn đặt giá mặc định cho các lính mặc định chưa có giá.
+
+### 6.2 Luật
+
+Luật thuần ở [economy.ts](../src/shared/economy.ts), có test ([economy.test.ts](../src/shared/economy.test.ts)):
+
+- **Hộp hằng ngày:** mỗi ngày theo giờ Việt Nam (UTC+7) một hộp, sang ngày mới lúc 0h.
+- **Hộp x giờ:** chỉ xuất hiện khi hôm nay đã mở hộp hằng ngày; mở được khi đã qua `boxHours` giờ kể từ hộp mở gần nhất (hằng ngày hoặc x giờ). Không cộng dồn lượt. Ngày mới phải mở hộp hằng ngày trước.
+- **Phần thưởng:** coin đều trong `[min, max]`; `cards` thẻ chia cho `kinds` loại lính khác nhau, lính rẻ dễ ra hơn (trọng số 1/√giá). Thẻ của lính chưa mở khóa vẫn được cộng.
+- **Mở khóa:** trả `unlockCost`. **Mua thẻ:** lính đã mở khóa, `cardPrice > 0`. **Nâng sao:** lính đã mở khóa, dùng hết `starCards[sao]` thẻ và `starCoins[sao]` coin, tối đa 5 sao.
+- **Sao trong trận:** máu, sát thương giẫm đạp, sát thương và sát thương cháy của mọi đòn/kỹ năng × `1 + starBonus × sao` ([world.ts](../src/game/sim/world.ts), chỉ `+ - * /` nên online không lệch). Đấu với máy: sao của người chơi cho phe Xanh, bot không có sao. 2 người 1 máy: không tính sao. Online: chủ phòng bật/tắt (mặc định bật).
+
+### 6.3 Luồng mở hộp
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as Trình duyệt (HomeMenu)
+  participant S as /api/player
+  participant FS as Firestore
+
+  U->>S: GET /api/player
+  S->>FS: players/{uid}
+  S-->>U: { player, boxes: { daily, hourly }, now }
+  Note over U: đếm ngược theo giờ server (now), rương nhún nhảy khi mở được
+  U->>S: POST { action: "open-box", kind: "daily" }
+  Note over U: rương rung trong lúc chờ
+  S->>S: currentUser() từ cookie phiên
+  S->>FS: runTransaction: đọc players/{uid}
+  S->>S: openBox(): kiểm ngày/giờ, crypto.randomInt → coin + thẻ
+  S->>FS: ghi players/{uid} + ledger (cùng transaction)
+  S-->>U: { player, boxes, reward, now }
+  Note over U: nắp bật, ánh sáng, thẻ bài bay ra
+```
+
+Mở hộp lần hai trong ngày, nâng sao thiếu thẻ, mua thiếu coin… trả `409` kèm thông báo; không ghi gì.
+
+### 6.4 Giao diện
+
+| Chỗ | Nội dung |
+| --- | --- |
+| Góc trên phải `/` và `/play` (trừ lúc đang đánh) | avatar (ảnh tài khoản hoặc DiceBear `clay` theo uid), tên, thanh coin; bấm avatar: CMS (admin), đăng xuất |
+| Góc dưới trái `/` | hộp quà hằng ngày, hộp x giờ (sau khi mở hộp hằng ngày), bộ sưu tập thẻ |
+| Màn mở hộp | [ChestStage](../src/components/player/ChestStage.tsx): rương idle nhún nhảy + lắc lư, rung khi chờ server, nắp bật theo bản lề, quầng sáng, cột sáng, tia sáng xoay, hạt lấp lánh; sau đó coin và thẻ bài bật ra |
+| Bộ sưu tập thẻ | thẻ kiểu Clash Royale (khung xanh sọc, giọt chi phí, tấm gỗ tên, sao, thanh thẻ `có/cần`), khóa + giá; chi tiết: chỉ số trước/sau khi lên sao, mở khóa / nâng sao / mua 10–50 thẻ (bấm hai lần để xác nhận trừ coin) |
+| Bảng lính khi xếp quân | lính chưa mở khóa mờ + ổ khóa, không đặt được, "Ngẫu nhiên" chỉ dùng lính đã có; hiện số sao khi sao được tính |
+| `/models` | tab 🃏 Thẻ & sao cho từng lính (có thẻ xem trước); mục Hộp quà xem 6 kiểu rương và *Mở thử* |
+| CMS `/admin/users/{uid}` | ví, lính đã mua, sao, sổ giao dịch 50 dòng gần nhất, cộng/trừ coin có lý do |
+
+Font: mọi màn game (không gồm `/admin` và `/models`) dùng lớp `.game-ui`: font Clash từ `data/Clash_Regular.otf.ttf` (phục vụ qua `/api/fonts/clash`, thay file là có hiệu lực, thiếu file thì dùng font dự phòng), chữ màu `#2D3232`, cỡ tối thiểu 16px (`text-xs`/`text-sm` = 16px trong `.game-ui`). File Clash hiện thiếu phần lớn chữ tiếng Việt có dấu chồng (ơ ư ạ ả ấ ầ…), các chữ đó lấy từ Paytone One cho tới khi có bản Clash tiếng Việt.
+
+---
+
+## 7. Phụ lục: bảng API
 
 | Method | Đường dẫn | Quyền | Mô tả |
 | --- | --- | --- | --- |
@@ -590,15 +708,20 @@ Xếp theo mức độ ưu tiên khuyến nghị. Đây là nhận định từ 
 | POST | `/api/auth/session` | công khai (cần idToken hợp lệ) | đổi idToken lấy cookie phiên, tạo/cập nhật hồ sơ |
 | DELETE | `/api/auth/session` | công khai | xóa cookie phiên |
 | POST | `/api/auth/fcm` | user đăng nhập | lưu FCM token của thiết bị |
+| GET | `/api/player` | công khai (`player: null` khi chưa đăng nhập) | ví của mình + trạng thái hộp quà + giờ server |
+| POST | `/api/player` | user đăng nhập | `{action:"open-box", kind}` / `{action:"unlock"\|"upgrade", unitId}` / `{action:"buy-cards", unitId, count}`; trả ví mới (+ `reward` khi mở hộp) |
+| GET | `/api/fonts/clash` | công khai | file font `data/Clash_Regular.otf.ttf` (404 khi thiếu) |
 | GET / POST | `/api/admin/{collection}` | root/admin | liệt kê / tạo tài liệu |
 | GET / PUT / DELETE | `/api/admin/{collection}/{id}` | root/admin | đọc / sửa / xóa (chặn khi còn phụ thuộc) |
 | GET / PUT | `/api/admin/settings` | root/admin | cài đặt game |
-| GET / PUT / POST | `/api/admin/bundle` | root/admin | tải bundle JSON / nhập thay toàn bộ / `{action:"reset"}` / `{action:"merge", docs, skills}` thêm nội dung mặc định còn thiếu (không sửa mục đang có) |
+| GET / PUT / POST | `/api/admin/bundle` | root/admin | tải bundle JSON / nhập thay toàn bộ / `{action:"reset"}` / `{action:"merge", docs, skills, prices}` thêm nội dung mặc định còn thiếu, gán kỹ năng / giá mặc định cho lính mặc định chưa có (không sửa mục khác) |
 | GET / POST | `/api/admin/studio` | root/admin | trạng thái engine + danh sách job / tạo job |
 | GET / DELETE | `/api/admin/studio/{id}` | root/admin | chi tiết job / xóa job (không khi đang chạy) |
 | POST | `/api/admin/studio/{id}/run` | root/admin | chạy bước `spec` / `review` (stream NDJSON) hoặc `stop` |
 | POST | `/api/admin/studio/codegen` | root/admin | sinh file TypeScript từ sculpt spec (version hoặc asset đã áp dụng) |
 | GET / POST | `/api/admin/users` | root/admin | danh sách / tạo user (giới hạn role cấp được) |
-| GET / PATCH / DELETE | `/api/admin/users/{uid}` | root/admin + `canManage` cho PATCH/DELETE | xem / sửa / xóa user |
+| GET / PATCH / DELETE | `/api/admin/users/{uid}` | root/admin + `canManage` cho PATCH/DELETE | xem / sửa / xóa user (xóa cả ví `players/{uid}` và ledger) |
 | POST | `/api/admin/users/{uid}/notify` | root/admin | gửi push FCM tới mọi thiết bị của user |
+| GET | `/api/admin/users/{uid}/wallet` | root/admin | ví + trạng thái hộp + 50 dòng ledger gần nhất |
+| POST | `/api/admin/users/{uid}/wallet` | root/admin + `canManage` | `{ delta, note }` cộng/trừ coin (không âm), ghi ledger `admin` |
 | WS | `/socket.io` | user đăng nhập, cùng origin | PvP online, xem mục 3 |

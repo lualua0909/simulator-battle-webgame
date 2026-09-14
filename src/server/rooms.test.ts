@@ -6,6 +6,7 @@ import { after, before, test } from 'node:test';
 import { Server } from 'socket.io';
 import { io as connect, type Socket } from 'socket.io-client';
 import { Terrain } from '@/game/sim/terrain';
+import { emptyPlayer, type PlayerState } from '@/shared/economy';
 import type { AckResult, BattleStart, ClientToServer, ServerToClient } from '@/shared/net';
 import { SEED } from '@/shared/seed';
 import { ROLE, type AppUser } from '@/shared/users';
@@ -16,6 +17,10 @@ type Client = Socket<ServerToClient, ClientToServer>;
 
 const user = (uid: string): AppUser => ({ uid, email: `${uid}@test.dev`, displayName: uid, photoURL: null, role: ROLE.user, providers: [], disabled: false, fcmTokens: [], createdAt: null, updatedAt: null, lastLoginAt: null });
 const USERS: Record<string, AppUser> = { 'cookie-alice': user('alice'), 'cookie-bob': user('bob'), 'cookie-carol': user('carol') };
+const WALLETS: Record<string, PlayerState> = {
+  alice: { ...emptyPlayer(), stars: { clubber: 3, archer: 2 } },
+  carol: { ...emptyPlayer(), unlocked: ['knight'] },
+};
 const saved: Array<{ battle: BattleRecord; winner: string; tick: number }> = [];
 
 let io: RoomServer;
@@ -28,6 +33,7 @@ before(async () => {
   attachRooms(io, {
     authenticate: async (cookie) => (cookie ? USERS[cookie] ?? null : null),
     saveMatch: async (battle, winner, tick) => void saved.push({ battle, winner, tick }),
+    loadPlayer: async (uid) => WALLETS[uid] ?? emptyPlayer(),
   });
   await new Promise<void>((resolve) => http.listen(0, resolve));
   url = `http://localhost:${(http.address() as AddressInfo).port}`;
@@ -50,9 +56,9 @@ const connected = (c: Client) => new Promise<void>((resolve, reject) => (c.once(
 const once = <E extends keyof ServerToClient>(c: Client, event: E) => new Promise<Parameters<ServerToClient[E]>[0]>((resolve) => c.once(event, ((arg: never) => resolve(arg)) as never));
 const create = (c: Client) => new Promise<AckResult<{ code: string; side: string }>>((resolve) => c.emit('room:create', resolve));
 const join = (c: Client, code: string) => new Promise<AckResult<{ code: string; side: string }>>((resolve) => c.emit('room:join', { code }, resolve));
-const ready = (c: Client, side: 'blue' | 'red') => {
+const ready = (c: Client, side: 'blue' | 'red', unitId = SEED.units[0].id) => {
   const zone = new Terrain(SEED.maps[0], SEED.assets).zones[side];
-  const army = [{ unitId: SEED.units[0].id, x: (zone.x0 + zone.x1) / 2, z: (zone.z0 + zone.z1) / 2 }];
+  const army = [{ unitId, x: (zone.x0 + zone.x1) / 2, z: (zone.z0 + zone.z1) / 2 }];
   return new Promise<AckResult>((resolve) => c.emit('room:ready', { army }, resolve));
 };
 
@@ -141,7 +147,44 @@ test('win + lose from both players is saved with the server-side battle data', a
   assert.equal(match.battle.seed, start.seed);
   assert.deepEqual(match.battle.players, { blue: { uid: 'alice', name: 'alice' }, red: { uid: 'bob', name: 'bob' } });
   assert.deepEqual(match.battle.armies, start.armies);
+  assert.deepEqual(match.battle.stars, start.stars);
   close(alice, bob);
+});
+
+test('star levels come from the wallets of the army units while the host keeps stars on', async () => {
+  const { alice, bob, start } = await startBattle();
+  assert.equal(start.useStars, true);
+  assert.deepEqual(start.stars, { blue: { clubber: 3 }, red: {} });
+  close(alice, bob);
+
+  const host = open('cookie-alice');
+  const guest = open('cookie-bob');
+  await Promise.all([connected(host), connected(guest)]);
+  const room = await create(host);
+  assert.ok(room.ok);
+  await join(guest, room.code);
+  const off = new Promise<void>((resolve) => host.on('room:state', (s) => s.useStars === false && resolve()));
+  host.emit('room:settings', { mapId: SEED.maps[0].id, budget: SEED.maps[0].budget, useStars: false });
+  await off;
+  const started = once(guest, 'battle:start');
+  await ready(host, 'blue');
+  await ready(guest, 'red');
+  const plain = await started;
+  assert.equal(plain.useStars, false);
+  assert.deepEqual(plain.stars, { blue: {}, red: {} });
+  close(host, guest);
+});
+
+test('a unit missing from the player collection cannot be readied', async () => {
+  const bob = open('cookie-bob');
+  const carol = open('cookie-carol');
+  await Promise.all([connected(bob), connected(carol)]);
+  const room = await create(carol);
+  assert.ok(room.ok);
+  await join(bob, room.code);
+  assert.deepEqual(await ready(bob, 'red', 'knight'), { ok: false, error: 'Chưa mở khóa lính Hiệp sĩ' });
+  assert.deepEqual(await ready(carol, 'blue', 'knight'), { ok: true });
+  close(bob, carol);
 });
 
 test('both claiming victory voids the result and saves nothing', async () => {

@@ -5,20 +5,24 @@
 // abilities first (the unit references them), then the unit.
 import { useCallback, useEffect, useState } from 'react';
 import { unitPower } from '@/game/bot/generate';
+import { unitThumbnails } from '@/game/render/thumbnails';
+import { formatCoins } from '@/shared/economy';
 import { COLLECTION_SPECS, ENUM_LABELS } from '@/shared/fields';
-import type { ConfigBundle, UnitDef, WeaponDef } from '@/shared/schema';
+import { STAR_MAX, type ConfigBundle, type UnitDef, type WeaponDef } from '@/shared/schema';
 import { api, ApiError, detailsToErrors } from '../admin/api';
 import DocForm from '../admin/DocForm';
+import UnitCard from '../player/UnitCard';
 import AbilityForm from './AbilityForm';
 import ModelTab, { type Candidate } from './ModelTools';
 
 type Doc = Record<string, unknown>;
-type Tab = 'stats' | 'skills' | 'price' | 'model';
+type Tab = 'stats' | 'skills' | 'price' | 'cards' | 'model';
 
 const TABS: Array<[Tab, string]> = [
   ['stats', '📊 Thông số'],
   ['skills', '⚡ Kỹ năng'],
   ['price', '💰 Giá'],
+  ['cards', '🃏 Thẻ & sao'],
   ['model', '🧱 Mô hình'],
 ];
 
@@ -149,6 +153,7 @@ export default function UnitEditor(props: Props) {
       {tab === 'stats' && <DocForm fields={statFields} doc={draft as unknown as Doc} onChange={change} bundle={bundle} errors={errors} isNew={isNew} compact />}
       {tab === 'skills' && <SkillsTab bundle={bundle} draft={draft} setDraft={setDraft} skillDrafts={skillDrafts} setSkillDrafts={setSkillDrafts} errors={errors} />}
       {tab === 'price' && <PriceTab bundle={bundle} draft={draft} setDraft={setDraft} skillDrafts={skillDrafts} errors={errors} />}
+      {tab === 'cards' && <CardsTab bundle={bundle} draft={draft} setDraft={setDraft} errors={errors} />}
       {tab === 'model' && <ModelTab bundle={bundle} reload={reload} unit={draft} setUnit={setDraft} errors={errors} candidate={props.candidate} setCandidate={props.setCandidate} />}
     </div>
   );
@@ -303,6 +308,80 @@ function PriceTab({ bundle, draft, setDraft, skillDrafts, errors }: Pick<Props, 
         </tbody>
       </table>
       <p className="text-xs opacity-60">Hiệu quả = √(DPS × máu hiệu dụng) / giá, tính cả kỹ năng, tốc độ đánh và bảng khắc chế giáp. Bot dùng giá để chọn đội hình.</p>
+    </div>
+  );
+}
+
+/** Player collection of this unit: unlock price, card shop price, and the cards + coins of each star. */
+function CardsTab({ bundle, draft, setDraft, errors }: Pick<Props, 'bundle' | 'draft' | 'setDraft'> & { errors: Record<string, string> }) {
+  const [thumb, setThumb] = useState<string>();
+  useEffect(() => {
+    let alive = true;
+    void unitThumbnails(bundle).then((t) => alive && setThumb(t[draft.id]));
+    return () => {
+      alive = false;
+    };
+  }, [bundle, draft.id]);
+  const num = (v: string) => (v === '' ? ('' as unknown as number) : Number(v));
+  const setStep = (key: 'starCards' | 'starCoins', i: number, v: string) => setDraft({ ...draft, [key]: draft[key].map((x, j) => (j === i ? num(v) : x)) });
+  const total = (list: number[]) => list.reduce((a, b) => a + (Number(b) || 0), 0);
+  const bonus = bundle.settings.economy.starBonus;
+  const error = (key: string) => errors[key] && <span className="text-xs font-bold text-red-team">{errors[key]}</span>;
+
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      <div className="flex items-start gap-3">
+        <div className="game-ui shrink-0">
+          <UnitCard unit={draft} thumb={thumb} faction={bundle.factions.find((f) => f.id === draft.factionId)} star={2} progress={{ have: 42, need: draft.starCards[2] ?? null }} width={118} />
+        </div>
+        <p className="text-xs opacity-70">
+          Người chơi nhận thẻ từ hộp quà hằng ngày / hộp x giờ hoặc mua bằng coin (1 coin = 1 VNĐ). Mỗi lần nâng sao dùng hết số thẻ và coin của bậc đó. Mỗi sao cộng {Math.round(bonus * 100)}% máu và sát thương (chỉnh trong Cài đặt). Ảnh bên cạnh là thẻ mẫu ở 2 sao.
+        </p>
+      </div>
+      <label className="flex flex-col gap-1">
+        <span className="font-bold">Giá mở khóa (coin)</span>
+        <input className="field" type="number" min={0} step={1000} value={String(draft.unlockCost ?? '')} onChange={(e) => setDraft({ ...draft, unlockCost: num(e.target.value) })} />
+        <span className="text-xs opacity-60">0 = miễn phí: ai cũng dùng được, kể cả khách chưa đăng nhập</span>
+        {error('unlockCost')}
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="font-bold">Giá 1 thẻ trong bộ sưu tập (coin)</span>
+        <input className="field" type="number" min={0} step={5} value={String(draft.cardPrice ?? '')} onChange={(e) => setDraft({ ...draft, cardPrice: num(e.target.value) })} />
+        <span className="text-xs opacity-60">0 = không bán, chỉ nhận từ hộp quà</span>
+        {error('cardPrice')}
+      </label>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left opacity-60">
+            <th>Lên</th>
+            <th>Thẻ cần</th>
+            <th>Coin</th>
+            <th className="text-right">Máu, sát thương</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: STAR_MAX }, (_, i) => (
+            <tr key={i} className="border-t border-ink/10">
+              <td className="font-bold">{'★'.repeat(i + 1)}</td>
+              <td className="py-0.5 pr-1">
+                <input className="field" type="number" min={1} step={10} value={String(draft.starCards[i] ?? '')} onChange={(e) => setStep('starCards', i, e.target.value)} />
+                {error(`starCards.${i}`)}
+              </td>
+              <td className="py-0.5 pr-1">
+                <input className="field" type="number" min={0} step={500} value={String(draft.starCoins[i] ?? '')} onChange={(e) => setStep('starCoins', i, e.target.value)} />
+                {error(`starCoins.${i}`)}
+              </td>
+              <td className="text-right">+{Math.round(bonus * (i + 1) * 100)}%</td>
+            </tr>
+          ))}
+          <tr className="border-t-2 border-ink/20 font-bold">
+            <td>Tổng</td>
+            <td>{formatCoins(total(draft.starCards))} thẻ</td>
+            <td>{formatCoins(total(draft.starCoins))}</td>
+            <td />
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

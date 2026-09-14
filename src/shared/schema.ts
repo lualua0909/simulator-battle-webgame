@@ -18,6 +18,10 @@ export const PARTICLE_SHAPES = ['cube', 'tetra', 'sphere'] as const;
 export const PARTICLE_DIRECTIONS = ['up', 'sphere', 'hemisphere', 'forward'] as const;
 export const BOT_STRATEGIES = ['balanced', 'rush', 'ranged', 'tank', 'swarm', 'elite', 'counter'] as const;
 export const FORMATIONS = ['line', 'wedge', 'flanks', 'blob', 'scatter'] as const;
+/** Treasure chest looks of the reward boxes (src/game/models/chest.ts). */
+export const CHEST_VARIANTS = ['wooden', 'silver', 'golden', 'giant', 'magical', 'super-magical'] as const;
+/** Highest star level of an upgraded unit. */
+export const STAR_MAX = 5;
 
 export type DamageType = (typeof DAMAGE_TYPES)[number];
 export type ArmorClass = (typeof ARMOR_CLASSES)[number];
@@ -71,6 +75,21 @@ export const unitSchema = z.object({
   chargeBonus: z.number().min(1).max(5).default(1),
   knockbackResist: z.number().min(0).max(1).default(0),
   trampleDamage: z.number().min(0).max(2000).default(0),
+  // ---- player collection (coins: 1 coin = 1 VND)
+  /** Coins to unlock the unit; 0 = every player has it, guests included. */
+  unlockCost: z.number().int().min(0).max(100_000_000).default(0),
+  /** Shop price of one card; 0 = not sold. */
+  cardPrice: z.number().int().min(0).max(1_000_000).default(0),
+  /** Cards used up to reach star 1…5. */
+  starCards: z
+    .array(z.number().int().min(1).max(100_000))
+    .length(STAR_MAX)
+    .default(() => [100, 200, 300, 400, 500]),
+  /** Coins paid to reach star 1…5. */
+  starCoins: z
+    .array(z.number().int().min(0).max(100_000_000))
+    .length(STAR_MAX)
+    .default(() => [1000, 2000, 4000, 8000, 16000]),
 });
 
 // ---------------------------------------------------------------- weapons
@@ -378,6 +397,24 @@ export const botSchema = z.object({
 
 const armorRow = z.object(Object.fromEntries(ARMOR_CLASSES.map((a) => [a, z.number().min(0).max(10)])) as Record<ArmorClass, z.ZodNumber>);
 
+const boxRewardSchema = z.object({
+  chest: z.enum(CHEST_VARIANTS),
+  /** Coins in the box, drawn uniformly from [min, max]. */
+  coins: z.tuple([z.number().int().min(0).max(1_000_000), z.number().int().min(0).max(1_000_000)]).refine(([lo, hi]) => lo <= hi, 'min phải ≤ max'),
+  /** Cards in the box, shared between `kinds` random units. */
+  cards: z.number().int().min(0).max(10_000),
+  kinds: z.number().int().min(1).max(20),
+});
+
+export const economySchema = z.object({
+  /** The x-hour box: once today's daily box is open, one more box every this many hours. */
+  boxHours: z.number().min(0.1).max(168).default(3),
+  /** Extra HP and damage per star (0.1 = +10 %). */
+  starBonus: z.number().min(0).max(1).default(0.1),
+  dailyBox: boxRewardSchema.default(() => ({ chest: 'golden' as const, coins: [200, 500] as [number, number], cards: 40, kinds: 3 })),
+  hourlyBox: boxRewardSchema.default(() => ({ chest: 'silver' as const, coins: [50, 150] as [number, number], cards: 12, kinds: 2 })),
+});
+
 export const settingsSchema = z.object({
   maxUnitsPerSide: z.number().int().min(1).max(500).default(150),
   battleTimeLimit: z.number().min(30).max(1800).default(300),
@@ -393,6 +430,8 @@ export const settingsSchema = z.object({
   /** Flames on burning units. */
   burnParticleId: refOrNull,
   damageMatrix: z.object(Object.fromEntries(DAMAGE_TYPES.map((d) => [d, armorRow])) as Record<DamageType, typeof armorRow>),
+  /** Reward boxes and star upgrades. */
+  economy: economySchema.default(() => economySchema.parse({})),
 });
 
 // ---------------------------------------------------------------- bundle
@@ -406,6 +445,9 @@ export type AssetDef = z.infer<typeof assetSchema>;
 export type MapDef = z.infer<typeof mapSchema>;
 export type BotDef = z.infer<typeof botSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
+export type Economy = Settings['economy'];
+export type BoxConfig = Economy['dailyBox'];
+export type ChestVariant = (typeof CHEST_VARIANTS)[number];
 
 export const COLLECTIONS = ['factions', 'units', 'weapons', 'projectiles', 'particles', 'assets', 'maps', 'bots'] as const;
 export type CollectionName = (typeof COLLECTIONS)[number];

@@ -2,7 +2,7 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { Armies } from '@/game/sim/army';
 import type { Side } from '@/game/sim/terrain';
-import type { BattleOutcome } from '@/shared/net';
+import type { ArmyStars, BattleOutcome } from '@/shared/net';
 import { firestore } from './firebase';
 
 export const MATCHES_COLLECTION = 'matches';
@@ -22,6 +22,8 @@ export interface BattleRecord {
   budget: number;
   configVersion: string;
   armies: Armies;
+  useStars: boolean;
+  stars: ArmyStars;
   players: Record<Side, MatchPlayer>;
   startedAt: number;
   /** Last tick the simulation can reach (settings.battleTimeLimit). */
@@ -65,6 +67,8 @@ export async function saveMatch(b: BattleRecord, winner: Side | 'draw', tick: nu
       configVersion: b.configVersion,
       players: b.players,
       armies: b.armies,
+      useStars: b.useStars,
+      stars: b.stars,
       winner,
       endTick: tick,
       startedAt: Timestamp.fromMillis(b.startedAt),

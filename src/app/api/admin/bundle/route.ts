@@ -49,11 +49,11 @@ async function putAdded<K extends CollectionName>(content: ContentBundle, collec
   if (doc) await putDoc(collection, doc);
 }
 
-const mergeSchema = z.object({ action: z.literal('merge'), docs: z.array(z.string().max(120)).max(2000), skills: z.boolean() });
+const mergeSchema = z.object({ action: z.literal('merge'), docs: z.array(z.string().max(120)).max(2000), skills: z.boolean(), prices: z.boolean().default(false) });
 
 /**
  * { action: "reset" } restores the built-in default content.
- * { action: "merge", docs, skills } adds picked default documents the database lacks, keeping everything else.
+ * { action: "merge", docs, skills, prices } adds picked default documents the database lacks, keeping everything else.
  */
 export async function POST(req: Request) {
   const denied = await guard();
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   if (!merge.success) return jsonError(400, 'Hành động không hỗ trợ');
   const r = mergeDefaults(await getContent(), SEED, merge.data);
   for (const { collection, id } of r.added) await putAdded(r.content, collection, id);
-  for (const id of r.skilled) await putDoc('units', r.content.units.find((u) => u.id === id)!);
+  for (const id of new Set([...r.skilled, ...r.priced])) await putDoc('units', r.content.units.find((u) => u.id === id)!);
   if (r.settings) await putSettings(r.content.settings);
-  return Response.json({ ok: true, added: r.added.length, skilled: r.skilled.length, settings: r.settings, skipped: r.skipped });
+  return Response.json({ ok: true, added: r.added.length, skilled: r.skilled.length, priced: r.priced.length, settings: r.settings, skipped: r.skipped });
 }

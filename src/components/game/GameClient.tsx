@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isUnlocked } from '@/shared/economy';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import { useAuth } from '@/components/auth/AuthProvider';
-import type { BattleStart } from '@/shared/net';
+import PlayerHud from '@/components/player/PlayerHud';
+import { usePlayer } from '@/components/player/PlayerProvider';
+import type { ArmyStars, BattleStart } from '@/shared/net';
 import { generateBotArmy } from '@/game/bot/generate';
 import { useOnline } from '@/game/net/client';
 import { BattleEngine, type BattleStats, type CinematicKind, type PointerInfo } from '@/game/render/engine';
@@ -88,6 +91,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   // ------------------------------------------------------------------ online
   const { user, loading: authLoading, openAuth } = useAuth();
+  const { player } = usePlayer();
   const onStartRef = useRef<(s: BattleStart) => void>(() => {});
   const net = useOnline(mode === 'online' ? user?.uid ?? null : null, {
     onStart: (s) => onStartRef.current(s),
@@ -159,6 +163,14 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   }, [engine, armies, phase, mapVersion]);
 
   const units = useMemo(() => new Map((bundle?.units ?? []).map((u) => [u.id, u])), [bundle]);
+  /** Units this player may field: free ones, plus the ones unlocked with coins. */
+  const owned = useMemo(() => (bundle?.units ?? []).filter((u) => isUnlocked(u, player)), [bundle, player]);
+
+  // Keep the selection on a unit the player owns (the wallet loads after the content).
+  useEffect(() => {
+    if (!selected || owned.some((u) => u.id === selected)) return;
+    setSelected([...owned].sort((a, b) => a.cost - b.cost)[0]?.id ?? null);
+  }, [owned, selected]);
   const maxUnits = bundle?.settings.maxUnitsPerSide ?? 150;
   const mySide: Side = mode === 'online' ? net.seat?.side ?? 'blue' : side;
   const myArmy = armies[mySide];
@@ -170,7 +182,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     (x: number, z: number): boolean => {
       const t = engine?.terrain;
       const u = selected ? units.get(selected) : undefined;
-      if (!t || !u || !bundle) return false;
+      if (!t || !u || !bundle || !isUnlocked(u, player)) return false;
       const army = armiesRef.current[mySide];
       if (!t.inZone(mySide, x, z) || army.length >= maxUnits) return false;
       if (armyCost(bundle, army) + u.cost > budget) return false;
@@ -181,7 +193,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       }
       return true;
     },
-    [engine, selected, units, bundle, mySide, maxUnits, budget],
+    [engine, selected, units, bundle, mySide, maxUnits, budget, player],
   );
 
   const place = useCallback(
@@ -297,13 +309,13 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   );
 
   const startBattle = useCallback(
-    (a: Armies, seed = randomSeed()) => {
+    (a: Armies, seed = randomSeed(), stars?: Partial<ArmyStars>) => {
       if (!engine) return;
       setArmies(a);
       setResult(null);
       setPaused(false);
       setDesync(false);
-      engine.startBattle(a, seed);
+      engine.startBattle(a, seed, stars);
       engine.playBattleIntro(mode === 'online' ? mySide : 'blue');
       setPhase('battle');
     },
@@ -330,7 +342,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       engine.loadMap(s.mapId);
       setMapVersion((v) => v + 1);
     }
-    startBattle(s.armies, s.seed);
+    startBattle(s.armies, s.seed, s.stars);
   };
 
   const enterDeploy = () => {
@@ -343,12 +355,15 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     setPhase('deploy');
   };
 
+  /** Against the AI the player's upgraded units fight with their stars (local 2-player: none). */
+  const aiStars = useMemo<Partial<ArmyStars>>(() => ({ blue: player?.stars ?? {} }), [player]);
+
   const primaryAction = async () => {
     if (!bundle) return;
     if (myArmy.length === 0) return flash('Hãy đặt ít nhất 1 lính');
     if (mode === 'ai') {
       const red = bot?.reactive ? botArmy(armiesRef.current.blue) : armiesRef.current.red;
-      startBattle({ blue: armiesRef.current.blue, red });
+      startBattle({ blue: armiesRef.current.blue, red }, randomSeed(), aiStars);
     } else if (mode === 'local') {
       if (side === 'blue') setPhase('handoff');
       else startBattle(armiesRef.current);
@@ -366,7 +381,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   const fillRandom = () => {
     if (!bundle || !engine?.terrain) return;
-    const army = generateBotArmy({ bot: { ...RANDOM_FILL, maxUnits: maxUnits }, content: bundle, terrain: engine.terrain, side: mySide, budget, seed: randomSeed() });
+    const army = generateBotArmy({ bot: { ...RANDOM_FILL, maxUnits: maxUnits }, content: { ...bundle, units: owned }, terrain: engine.terrain, side: mySide, budget, seed: randomSeed() });
     snapshot();
     setArmies({ ...armiesRef.current, [mySide]: army });
   };
@@ -413,11 +428,17 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   // ------------------------------------------------------------------ render
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#cfe3f2] select-none">
+    <div className="game-ui relative h-screen w-screen overflow-hidden bg-[#cfe3f2] select-none">
       <div ref={hostRef} className="absolute inset-0" />
       {!bundle && <div className="absolute inset-0 flex items-center justify-center font-display text-2xl">Đang tải…</div>}
 
       <div className="pointer-events-none absolute inset-0 flex flex-col p-3">
+        {(phase === 'setup' || phase === 'lobby') && (
+          <div className="absolute right-3 top-3 z-10">
+            <PlayerHud />
+          </div>
+        )}
+
         {bundle && phase === 'setup' && mode !== 'online' && (
           <div className="my-auto">
             <SetupPanel bundle={bundle} mode={mode} mapId={mapId} setMapId={setMapId} budget={budget} setBudget={setBudget} botId={botId} setBotId={setBotId} blind={blind} setBlind={setBlind} onStart={enterDeploy} />
@@ -502,6 +523,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 </button>
               </div>
               <div className="ml-auto flex flex-col items-end gap-2">
+                <PlayerHud />
                 <button className={`btn pointer-events-auto text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
                   {mode === 'ai' ? '⚔ Bắt đầu!' : mode === 'local' ? (side === 'blue' ? 'Xong → Người chơi 2' : '⚔ Bắt đầu!') : locked ? 'Hủy sẵn sàng' : '✔ Sẵn sàng'}
                 </button>
@@ -514,11 +536,24 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
               </div>
             </div>
             <div className="mt-auto flex items-end gap-2">
-              <div className="pointer-events-none hidden max-w-56 text-[11px] font-bold leading-tight text-ink/80 drop-shadow lg:block">
+              <div className="pointer-events-none hidden max-w-60 text-xs leading-tight text-ink/80 drop-shadow lg:block">
                 Chuột trái: đặt · Shift+kéo: rải · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE
               </div>
               <div className="flex-1">
-                <UnitPalette bundle={bundle} thumbs={thumbs} selected={selected} onSelect={(id) => (setSelected(id), setTool('place'))} budgetLeft={budget - spent} />
+                <UnitPalette
+                  bundle={bundle}
+                  thumbs={thumbs}
+                  selected={selected}
+                  onSelect={(id) => {
+                    const u = units.get(id);
+                    if (u && !isUnlocked(u, player)) return flash(user ? `Chưa mở khóa ${u.name}: mở trong Bộ sưu tập thẻ ở màn hình chính` : `${u.name} cần đăng nhập và mở khóa`);
+                    setSelected(id);
+                    setTool('place');
+                  }}
+                  budgetLeft={budget - spent}
+                  player={player}
+                  stars={mode === 'ai' || (mode === 'online' && net.room?.useStars) ? player?.stars : undefined}
+                />
               </div>
             </div>
           </>
@@ -543,7 +578,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         <ResultModal
           result={result}
           mySide={resultSide}
-          onRematch={mode === 'online' ? backToDeploy : () => startBattle(armiesRef.current)}
+          onRematch={mode === 'online' ? backToDeploy : () => startBattle(armiesRef.current, randomSeed(), mode === 'ai' ? aiStars : undefined)}
           rematchLabel={mode === 'online' ? 'Trận mới' : 'Đấu lại'}
           onEdit={backToDeploy}
         />

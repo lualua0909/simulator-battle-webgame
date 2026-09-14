@@ -86,7 +86,7 @@ export function SetupPanel(props: {
                   <span className="text-amber-600">{'★'.repeat(b.difficulty)}</span>
                 </div>
                 <div className="text-xs opacity-75">{b.description}</div>
-                <div className="mt-1 flex gap-1 text-[10px] font-bold uppercase">
+                <div className="mt-1 flex gap-1 text-xs uppercase">
                   <span className="rounded bg-ink/10 px-1">×{b.budgetMultiplier} tiền</span>
                   {b.reactive && <span className="rounded bg-red-team/15 px-1 text-red-team">xem quân bạn</span>}
                 </div>
@@ -169,7 +169,7 @@ export function OnlineLobby(props: {
   );
 }
 
-export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: Side; onSettings(mapId: string, budget: number): void }) {
+export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: Side; onSettings(mapId: string, budget: number, useStars: boolean): void }) {
   const { room, mySide, bundle } = props;
   const host = mySide === 'blue';
   const link = typeof window !== 'undefined' ? `${window.location.origin}/play?mode=online&room=${room.code}` : '';
@@ -202,16 +202,20 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
         );
       })}
       <div className="flex items-center gap-2">
-        <select className="field" disabled={!host} value={room.mapId} onChange={(e) => props.onSettings(e.target.value, bundle.maps.find((m) => m.id === e.target.value)?.budget ?? room.budget)}>
+        <select className="field" disabled={!host} value={room.mapId} onChange={(e) => props.onSettings(e.target.value, bundle.maps.find((m) => m.id === e.target.value)?.budget ?? room.budget, room.useStars)}>
           {bundle.maps.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
             </option>
           ))}
         </select>
-        <input className="field w-24" type="number" step={100} disabled={!host} value={room.budget} onChange={(e) => props.onSettings(room.mapId, Math.max(100, Number(e.target.value) || 100))} />
+        <input className="field w-24" type="number" step={100} disabled={!host} value={room.budget} onChange={(e) => props.onSettings(room.mapId, Math.max(100, Number(e.target.value) || 100), room.useStars)} />
       </div>
-      {!host && <p className="text-xs opacity-60">Chủ phòng (Xanh) chọn bản đồ và ngân sách.</p>}
+      <label className="flex items-center gap-2" title="Lính đã nâng sao được cộng máu và sát thương theo sao của từng người">
+        <input type="checkbox" disabled={!host} checked={room.useStars} onChange={(e) => props.onSettings(room.mapId, room.budget, e.target.checked)} />
+        ⭐ Tính sao nâng cấp của lính
+      </label>
+      {!host && <p className="text-xs opacity-60">Chủ phòng (Xanh) chọn bản đồ, ngân sách và có tính sao hay không.</p>}
     </div>
   );
 }
@@ -244,7 +248,7 @@ export function BattleHud(props: { stats: BattleStats; total: Record<Side, numbe
           {props.stopLabel}
         </button>
       </div>
-      <div className="pointer-events-none absolute bottom-3 left-3 hidden max-w-56 text-[11px] font-bold leading-tight text-ink/80 drop-shadow lg:block">
+      <div className="pointer-events-none absolute bottom-3 left-3 hidden max-w-60 text-xs leading-tight text-ink/80 drop-shadow lg:block">
         Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE
       </div>
     </>

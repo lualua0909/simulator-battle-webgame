@@ -10,6 +10,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // players/{uid} (coins, cards, stars, box timers) and its ledger: server only, even for the owner.
+    // Every change runs in a server transaction; the game reads the wallet through /api/player.
+    match /players/{path=**} {
+      allow read, write: if false;
+    }
+
     // Everything else (units, weapons, … CMS content, settings/global, matches): server only.
     match /{document=**} {
       allow read, write: if false;

@@ -1,6 +1,7 @@
 // Battle engine: owns the Three.js scene, steps the deterministic sim at a fixed rate,
 // interpolates visuals, and turns sim events into particles, ragdolls and stuck arrows.
 import * as THREE from 'three';
+import type { ArmyStars } from '@/shared/net';
 import type { ConfigBundle, MapDef, ParticleDef, ProjectileDef, WeaponDef } from '@/shared/schema';
 import { getUnitTemplate } from '../models';
 import type { Armies } from '../sim/army';
@@ -260,10 +261,10 @@ export class BattleEngine {
     this.clearVictory();
   }
 
-  startBattle(armies: Armies, seed: number): void {
+  startBattle(armies: Armies, seed: number, stars?: Partial<ArmyStars>): void {
     if (!this.terrain || !this.map) return;
     this.resetRagdolls();
-    this.sim = new BattleSim(this.bundle, this.map, this.terrain, armies, seed);
+    this.sim = new BattleSim(this.bundle, this.map, this.terrain, armies, seed, stars);
     this.units.build(this.sim);
     this.projectiles.clear();
     this.particles.clear();

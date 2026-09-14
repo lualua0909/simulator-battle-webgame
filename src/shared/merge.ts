@@ -1,6 +1,6 @@
 // Brings built-in default content that a live database lacks (e.g. skills and units added by an
 // update) into it, without changing or deleting the documents the admins already have.
-import { COLLECTIONS, type CollectionName, type ContentBundle } from './schema';
+import { COLLECTIONS, type CollectionName, type ContentBundle, type UnitDef } from './schema';
 import { findRefIssues } from './validate';
 
 export interface MissingDefaults {
@@ -8,6 +8,8 @@ export interface MissingDefaults {
   docs: Array<{ collection: CollectionName; id: string; name: string }>;
   /** Default units in the database that have no skills while the default version has some. */
   unskilled: Array<{ id: string; name: string; skillIds: string[] }>;
+  /** Default units in the database without shop prices (from before the player collection) while the default version has them. */
+  unpriced: Array<{ id: string; name: string }>;
   /** Settings references that are empty but set by default. */
   settings: string[];
 }
@@ -17,6 +19,8 @@ export interface MergePick {
   docs: string[];
   /** Give default skills to `unskilled` units. */
   skills: boolean;
+  /** Give default unlock / card / star prices to `unpriced` units. */
+  prices: boolean;
 }
 
 export interface MergeResult {
@@ -25,10 +29,13 @@ export interface MergeResult {
   /** Picked documents left out because a reference would not resolve (e.g. a deleted faction). */
   skipped: string[];
   skilled: string[];
+  priced: string[];
   settings: boolean;
 }
 
 const SETTINGS_REFS = ['burnParticleId'] as const;
+
+const unpriced = (unit: UnitDef) => unit.unlockCost === 0 && unit.cardPrice === 0;
 
 export function missingDefaults(current: ContentBundle, defaults: ContentBundle): MissingDefaults {
   const docs: MissingDefaults['docs'] = [];
@@ -41,8 +48,12 @@ export function missingDefaults(current: ContentBundle, defaults: ContentBundle)
     const def = defaults.units.find((d) => d.id === u.id);
     if (u.skillIds.length === 0 && def && def.skillIds.length > 0) unskilled.push({ id: u.id, name: u.name, skillIds: def.skillIds });
   }
+  const priced = current.units.filter((u) => {
+    const def = defaults.units.find((d) => d.id === u.id);
+    return unpriced(u) && def && !unpriced(def);
+  });
   const settings = SETTINGS_REFS.filter((k) => !current.settings[k] && defaults.settings[k]);
-  return { docs, unskilled, settings };
+  return { docs, unskilled, unpriced: priced.map((u) => ({ id: u.id, name: u.name })), settings };
 }
 
 export function mergeDefaults(current: ContentBundle, defaults: ContentBundle, pick: MergePick): MergeResult {
@@ -83,6 +94,18 @@ export function mergeDefaults(current: ContentBundle, defaults: ContentBundle, p
       }),
     );
   }
+  const priced: string[] = [];
+  if (pick.prices) {
+    set(
+      'units',
+      content.units.map((u) => {
+        const def = defaults.units.find((d) => d.id === u.id);
+        if (!unpriced(u) || !def || unpriced(def) || added.some((a) => a.collection === 'units' && a.id === u.id)) return u;
+        priced.push(u.id);
+        return { ...u, unlockCost: def.unlockCost, cardPrice: def.cardPrice, starCards: def.starCards, starCoins: def.starCoins };
+      }),
+    );
+  }
   let settings = false;
   const particles = new Set(content.particles.map((p) => p.id));
   for (const key of SETTINGS_REFS) {
@@ -92,5 +115,5 @@ export function mergeDefaults(current: ContentBundle, defaults: ContentBundle, p
       settings = true;
     }
   }
-  return { content, added, skipped, skilled, settings };
+  return { content, added, skipped, skilled, priced, settings };
 }

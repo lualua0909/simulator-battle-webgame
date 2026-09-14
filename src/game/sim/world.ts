@@ -4,6 +4,7 @@
 // only + - * / Math.sqrt Math.floor Math.round on doubles, the seeded Rng, fixed
 // iteration order (spawn order), no Math.random / trig / Date. Cosmetics (ragdolls,
 // particles, animation) live in the renderer and never feed back into this file.
+import { starScale } from '@/shared/economy';
 import type { ContentBundle, MapDef, ProjectileDef, UnitDef, WeaponDef } from '@/shared/schema';
 import type { Armies, Side } from './army';
 import { Rng, clamp, dcos, fnv1a } from './rng';
@@ -238,6 +239,8 @@ export class BattleSim {
     readonly terrain: Terrain,
     armies: Armies,
     seed: number,
+    /** Star level per unit id for each side: HP and damage grow by settings.economy.starBonus per star. */
+    stars: Partial<Record<Side, Readonly<Record<string, number>>>> = {},
   ) {
     this.rng = new Rng(seed);
     this.timeLimitTicks = Math.round(content.settings.battleTimeLimit * SIM_HZ);
@@ -245,17 +248,22 @@ export class BattleSim {
     const weapons = new Map(content.weapons.map((w) => [w.id, w]));
     const projectiles = new Map(content.projectiles.map((p) => [p.id, p]));
     const projectileOf = (w: WeaponDef) => (w.projectileId ? projectiles.get(w.projectileId) ?? null : null);
+    const bonus = content.settings.economy.starBonus;
+    const powered = <T extends object>(def: T, scale: number, patch: (d: T) => Partial<T>): T => (scale === 1 ? def : { ...def, ...patch(def) });
     for (const side of ['blue', 'red'] as const) {
       for (const p of armies[side]) {
-        const def = units.get(p.unitId);
-        const weapon = def && weapons.get(def.weaponId);
-        if (!def || !weapon) continue;
+        const base = units.get(p.unitId);
+        const weapon = base && weapons.get(base.weaponId);
+        if (!base || !weapon) continue;
+        const scale = starScale(stars[side]?.[base.id] ?? 0, bonus);
+        const def = powered(base, scale, (u) => ({ hp: u.hp * scale, trampleDamage: u.trampleDamage * scale }));
+        const strong = (w: WeaponDef) => powered(w, scale, (x) => ({ damage: x.damage * scale, burnDps: x.burnDps * scale }));
         const id = this.units.length;
         // Stagger first attacks so a line does not swing in perfect unison.
-        const abilities = [new SimAbility(weapon, projectileOf(weapon), false, def.attackSpeed, (id % 7) * 0.05)];
+        const abilities = [new SimAbility(strong(weapon), projectileOf(weapon), false, def.attackSpeed, (id % 7) * 0.05)];
         for (const skillId of def.skillIds) {
           const skill = weapons.get(skillId);
-          if (skill) abilities.push(new SimAbility(skill, projectileOf(skill), true, def.castSpeed, skill.initialCooldown / def.castSpeed + (id % 5) * 0.1));
+          if (skill) abilities.push(new SimAbility(strong(skill), projectileOf(skill), true, def.castSpeed, skill.initialCooldown / def.castSpeed + (id % 5) * 0.1));
         }
         this.units.push(new SimUnit(id, side, def, abilities, p.x, p.z, terrain.height(p.x, p.z)));
       }

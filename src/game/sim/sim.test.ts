@@ -163,6 +163,30 @@ test('battles with every skill stay deterministic', () => {
   assert.deepEqual(run(), run());
 });
 
+test('stars raise HP and damage of one side only, deterministically', () => {
+  const { terrain, armies } = botArmies('dong-co', 3);
+  const blueIds = new Set(armies.blue.map((p) => p.unitId));
+  const stars = { blue: Object.fromEntries([...blueIds].map((id) => [id, 3])) };
+  const base = new BattleSim(SEED, terrain.map, terrain, armies, 9);
+  const starred = new BattleSim(SEED, terrain.map, terrain, armies, 9, stars);
+  const scale = 1 + SEED.settings.economy.starBonus * 3;
+  starred.units.forEach((u, i) => {
+    const plain = base.units[i];
+    assert.equal(u.hp, u.side === 'blue' ? plain.hp * scale : plain.hp);
+    assert.equal(u.weapon.damage, u.side === 'blue' ? plain.weapon.damage * scale : plain.weapon.damage);
+  });
+  const sums = (sim: BattleSim) => {
+    const out: number[] = [];
+    for (let i = 1; i <= 30 * 30; i++) {
+      sim.step();
+      if (i % 30 === 0) out.push(sim.checksum());
+    }
+    return out;
+  };
+  assert.deepEqual(sums(new BattleSim(SEED, terrain.map, terrain, armies, 9, stars)), sums(new BattleSim(SEED, terrain.map, terrain, armies, 9, stars)));
+  assert.notDeepEqual(sums(starred), sums(base));
+});
+
 test('different seeds diverge', () => {
   const { terrain, armies } = botArmies('dong-co', 3);
   const s1 = new BattleSim(SEED, terrain.map, terrain, armies, 1);

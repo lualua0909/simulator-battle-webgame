@@ -5,6 +5,7 @@
 //
 // Hardening: only signed-in, enabled users from this site's origin connect; one live
 // connection per account; per-socket event rate limit; malformed packets are dropped.
+// Unit unlocks and star levels come from each player's Firestore wallet, never from the client.
 import { randomInt } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Server, Socket } from 'socket.io';
@@ -12,11 +13,13 @@ import { z } from 'zod';
 import { armyCost, armySchema, validateArmy, type Placement } from '@/game/sim/army';
 import { SIM_HZ } from '@/game/sim/world';
 import { Terrain, type Side } from '@/game/sim/terrain';
+import { isUnlocked, type PlayerState } from '@/shared/economy';
 import { UNAUTHORIZED, type ClientToServer, type RoomState, type ServerToClient } from '@/shared/net';
 import { idSchema } from '@/shared/schema';
 import type { AppUser } from '@/shared/users';
 import { getBundle } from './content';
 import { CHECKSUM_EVERY, judgeMatch, saveMatch, type BattleRecord } from './matches';
+import { getPlayer } from './players';
 import { SESSION_COOKIE, userFromSessionCookie } from './users';
 
 interface Player {
@@ -25,6 +28,8 @@ interface Player {
   name: string;
   ready: boolean;
   army: Placement[];
+  /** Star levels of the army's units, read from the wallet when the player got ready. */
+  stars: Record<string, number>;
 }
 
 interface Room {
@@ -32,6 +37,8 @@ interface Room {
   phase: 'lobby' | 'battle';
   mapId: string;
   budget: number;
+  /** Host setting: upgraded units fight with their star bonus. */
+  useStars: boolean;
   players: Partial<Record<Side, Player>>;
   /** Current battle until it is saved or voided (the phase returns to lobby at the first report). */
   battle: BattleRecord | null;
@@ -49,6 +56,8 @@ type Sock = Socket<ClientToServer, ServerToClient, Record<string, never>, Socket
 export interface RoomDeps {
   authenticate(cookie: string | undefined): Promise<AppUser | null>;
   saveMatch(battle: BattleRecord, winner: Side | 'draw', tick: number): Promise<void>;
+  /** The player's wallet: unlocked units and star levels. */
+  loadPlayer(uid: string): Promise<PlayerState>;
 }
 
 const rooms = new Map<string, Room>();
@@ -105,10 +114,10 @@ async function publicState(room: Room): Promise<RoomState> {
     const p = room.players[side];
     if (p) players[side] = { name: p.name, ready: p.ready, connected: p.socketId !== null, units: p.army.length, cost: armyCost(bundle, p.army) };
   }
-  return { code: room.code, phase: room.phase, mapId: room.mapId, budget: room.budget, players };
+  return { code: room.code, phase: room.phase, mapId: room.mapId, budget: room.budget, useStars: room.useStars, players };
 }
 
-export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: userFromSessionCookie, saveMatch }): void {
+export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: userFromSessionCookie, saveMatch, loadPlayer: getPlayer }): void {
   /** Live socket per uid: a new connection replaces the old one. */
   const online = new Map<string, Sock>();
 
@@ -194,7 +203,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       const map = bundle.maps[0];
       if (!map) return ack({ ok: false, error: 'Chưa có bản đồ nào trong CMS' });
       const code = newCode();
-      room = { code, phase: 'lobby', mapId: map.id, budget: map.budget, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [] } }, battle: null, cleanup: null };
+      room = { code, phase: 'lobby', mapId: map.id, budget: map.budget, useStars: true, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [], stars: {} } }, battle: null, cleanup: null };
       side = 'blue';
       rooms.set(code, room);
       void socket.join(code);
@@ -212,7 +221,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       if (!seat) return ack({ ok: false, error: 'Phòng đã đủ 2 người' });
       if (room !== target || side !== seat) leave();
       const existing = target.players[seat];
-      target.players[seat] = { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: existing?.army ?? [] };
+      target.players[seat] = { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: existing?.army ?? [], stars: existing?.stars ?? {} };
       if (target.cleanup) {
         clearTimeout(target.cleanup);
         target.cleanup = null;
@@ -228,11 +237,12 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     socket.on('room:settings', async (req) => {
       const bundle = await getBundle();
       if (!room || side !== 'blue' || room.phase !== 'lobby') return;
-      const parsed = z.object({ mapId: idSchema, budget: z.number().int().min(100).max(1_000_000) }).safeParse(req);
+      const parsed = z.object({ mapId: idSchema, budget: z.number().int().min(100).max(1_000_000), useStars: z.boolean() }).safeParse(req);
       if (!parsed.success) return;
       if (!bundle.maps.some((m) => m.id === parsed.data.mapId)) return;
       room.mapId = parsed.data.mapId;
       room.budget = parsed.data.budget;
+      room.useStars = parsed.data.useStars;
       for (const p of Object.values(room.players)) if (p) p.ready = false;
       void broadcast(room);
     });
@@ -243,8 +253,9 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
         ack({ ok: false, error: 'Phiên đăng nhập đã hết hạn hoặc tài khoản bị khóa' });
         return void socket.disconnect(true);
       }
-      const bundle = await getBundle();
+      const [bundle, wallet] = await Promise.all([getBundle(), deps.loadPlayer(user.uid).catch(() => null)]);
       if (!room || !side || room.phase !== 'lobby') return ack({ ok: false, error: 'Không ở trong phòng chờ' });
+      if (!wallet) return ack({ ok: false, error: 'Không tải được bộ sưu tập lính, thử lại sau' });
       const army = armySchema.safeParse(req?.army);
       if (!army.success) return ack({ ok: false, error: 'Dữ liệu đội hình không hợp lệ' });
       const map = bundle.maps.find((m) => m.id === room!.mapId);
@@ -252,10 +263,14 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       if (army.data.length === 0) return ack({ ok: false, error: 'Chưa đặt lính nào' });
       const check = validateArmy(bundle, new Terrain(map, bundle.assets), side, army.data, room.budget);
       if (!check.ok) return ack({ ok: false, error: check.error });
+      const armyUnits = new Set(army.data.map((p) => p.unitId));
+      const locked = bundle.units.find((u) => armyUnits.has(u.id) && !isUnlocked(u, wallet));
+      if (locked) return ack({ ok: false, error: `Chưa mở khóa lính ${locked.name}` });
       // Readying for a new battle without confirming the last one abandons it.
       if (room.battle && !room.battle.reports[side]) voidBattle(room, `${room.players[side]!.name} bỏ dở trận, kết quả bị hủy`);
       const me = room.players[side]!;
       me.army = army.data;
+      me.stars = Object.fromEntries([...armyUnits].flatMap((id) => (wallet.stars[id] ? [[id, wallet.stars[id]]] : [])));
       me.ready = true;
       ack({ ok: true });
       const { blue, red } = room.players;
@@ -266,6 +281,8 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
           mapId: room.mapId,
           budget: room.budget,
           armies: { blue: blue.army, red: red.army },
+          useStars: room.useStars,
+          stars: room.useStars ? { blue: blue.stars, red: red.stars } : { blue: {}, red: {} },
           configVersion: bundle.version,
         };
         room.battle = {

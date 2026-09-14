@@ -1,0 +1,109 @@
+// Player wallets on Firestore: `players/{uid}` (coins, cards, stars, unlocks, box timers) plus the
+// append-only `players/{uid}/ledger`. Only this server writes them (Admin SDK; client rules deny).
+// Every change is one transaction: re-read the wallet, apply the pure rule from shared/economy.ts,
+// write the wallet and its ledger line together — two concurrent requests cannot spend the same
+// coins or open the same box twice. Prices, rewards and time come from the server, never the client.
+import { randomInt } from 'node:crypto';
+import { FieldValue, Timestamp, type DocumentData } from 'firebase-admin/firestore';
+import {
+  adjustCoins,
+  boxStatus,
+  buyCards,
+  EconomyError,
+  emptyPlayer,
+  LEDGER_COLLECTION,
+  openBox,
+  PLAYERS_COLLECTION,
+  playerStateSchema,
+  unlockUnit,
+  upgradeUnit,
+  type BoxReward,
+  type BoxStatus,
+  type Change,
+  type LedgerEntry,
+  type PlayerAction,
+  type PlayerState,
+} from '@/shared/economy';
+import type { ContentBundle } from '@/shared/schema';
+import { getContent, getSettings } from './content';
+import { firestore } from './firebase';
+
+const players = () => firestore().collection(PLAYERS_COLLECTION);
+const random = () => randomInt(0, 2 ** 32) / 2 ** 32;
+
+export interface PlayerView {
+  player: PlayerState;
+  boxes: BoxStatus;
+}
+
+export type LedgerLine = LedgerEntry & { id: string; at: number | null };
+
+function parse(data: DocumentData | undefined): PlayerState {
+  if (!data) return emptyPlayer();
+  const parsed = playerStateSchema.safeParse(data);
+  if (parsed.success) return parsed.data;
+  console.error('Ví người chơi không hợp lệ:', parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
+  throw new EconomyError('Dữ liệu ví không hợp lệ, hãy liên hệ quản trị viên');
+}
+
+export async function getPlayer(uid: string): Promise<PlayerState> {
+  return parse((await players().doc(uid).get()).data());
+}
+
+export async function getPlayerView(uid: string): Promise<PlayerView> {
+  const [player, settings] = await Promise.all([getPlayer(uid), getSettings()]);
+  return { player, boxes: boxStatus(player, settings.economy, Date.now()) };
+}
+
+/** Runs one change in a transaction; the rule may throw EconomyError (nothing is written then). */
+async function change(uid: string, rule: (player: PlayerState, content: ContentBundle, now: number) => Change): Promise<PlayerView & { reward?: BoxReward }> {
+  const content = await getContent();
+  const now = Date.now();
+  const ref = players().doc(uid);
+  const result = await firestore().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const out = rule(parse(snap.data()), content, now);
+    tx.set(ref, { ...out.state, createdAt: snap.get('createdAt') ?? FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    // Firestore refuses undefined fields.
+    tx.create(ref.collection(LEDGER_COLLECTION).doc(), { ...JSON.parse(JSON.stringify(out.entry)), at: FieldValue.serverTimestamp() });
+    return out;
+  });
+  return { player: result.state, boxes: boxStatus(result.state, content.settings.economy, now), reward: result.reward };
+}
+
+function unitOf(content: ContentBundle, unitId: string) {
+  const unit = content.units.find((u) => u.id === unitId);
+  if (!unit) throw new EconomyError('Lính không tồn tại');
+  return unit;
+}
+
+export function runPlayerAction(uid: string, action: PlayerAction): Promise<PlayerView & { reward?: BoxReward }> {
+  switch (action.action) {
+    case 'open-box':
+      return change(uid, (p, c, now) => openBox(p, action.kind, c.units, c.settings.economy, now, random));
+    case 'unlock':
+      return change(uid, (p, c) => unlockUnit(p, unitOf(c, action.unitId)));
+    case 'upgrade':
+      return change(uid, (p, c) => upgradeUnit(p, unitOf(c, action.unitId)));
+    case 'buy-cards':
+      return change(uid, (p, c) => buyCards(p, unitOf(c, action.unitId), action.count));
+  }
+}
+
+/** Admin top-up or correction, recorded with the admin's uid and note. */
+export function adjustPlayerCoins(uid: string, delta: number, note: string, by: string): Promise<PlayerView> {
+  return change(uid, (p) => adjustCoins(p, delta, note, by));
+}
+
+export async function listLedger(uid: string, limit = 50): Promise<LedgerLine[]> {
+  const snap = await players().doc(uid).collection(LEDGER_COLLECTION).orderBy('at', 'desc').limit(limit).get();
+  return snap.docs.map((d) => {
+    const { at, ...entry } = d.data();
+    return { ...(entry as LedgerEntry), id: d.id, at: at instanceof Timestamp ? at.toMillis() : null };
+  });
+}
+
+/** Removes the wallet and its ledger (account deletion). */
+export async function deletePlayer(uid: string): Promise<void> {
+  await firestore().recursiveDelete(players().doc(uid));
+}
