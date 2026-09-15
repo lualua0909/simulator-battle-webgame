@@ -83,7 +83,6 @@ export function createHumanoidModel(p: HumanoidParams): THREE.Group {
       break;
     case 'robe':
       hips.add(mesh('robe-skirt', cyl(0.27 * b, 0.38 * b, 0.55, 8), p.armorColor, [0, -0.2, 0]));
-      torso.add(detail(mesh('robe-sash', new THREE.TorusGeometry(0.275 * b, 0.035, 4, 10), shade(p.armorColor, 0.7), [0, 0.1, 0], [Math.PI / 2, 0, 0])));
       break;
     case 'loincloth':
       hips.add(mesh('loin-front', box(0.22 * b, 0.28, 0.03), p.armorColor, [0, -0.1, 0.19 * b]));
@@ -94,10 +93,6 @@ export function createHumanoidModel(p: HumanoidParams): THREE.Group {
       torso.add(mesh('fur-mantle', jitter(new THREE.TorusGeometry(0.25 * b, 0.11, 5, 10), 0.05, 3), p.armorColor, [0, 0.66, 0], [Math.PI / 2, 0, 0]));
       break;
   }
-  if (p.armor !== 'robe' && p.armor !== 'loincloth') {
-    torso.add(detail(mesh('belt', new THREE.TorusGeometry(0.29 * b, 0.032, 4, 10), '#3a2a1c', [0, 0.1, 0], [Math.PI / 2, 0, 0])));
-  }
-
   // ---- cape
   if (p.cape) {
     const cape = part('cape', [0, 0.7, -0.2 * b]);

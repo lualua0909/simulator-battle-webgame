@@ -1,0 +1,7 @@
+[{"id":"snout-and-grin","score":0.72,"notes":"thick round head, blunt snout, wide gape with blunt teeth; lower jaw still smaller than reference"},
+ {"id":"obese-body","score":0.8,"notes":"obese pear body, continuous neck; body upright where reference leans ~30 deg forward"},
+ {"id":"lolling-tongue","score":0.7,"notes":"big broad tongue hanging out"},
+ {"id":"small-wings","score":0.55,"notes":"leading bone + two-scallop membrane; still thinner/less arched than reference"},
+ {"id":"eyes-ears","score":0.65,"notes":"big round eyes, lids read slightly grumpy; ears rounded brown flaps"},
+ {"id":"limbs-tail","score":0.65,"notes":"chubby arms with brown fingertips; feet small from this view; tail with 2 spikes"},
+ {"id":"palette","score":0.8,"notes":"lime green, brown accents; reference has reddish-brown dusting on hands/feet"}]

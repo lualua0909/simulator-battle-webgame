@@ -255,6 +255,8 @@ export const elephantParamsSchema = z.object({
 });
 
 export const dragonParamsSchema = z.object({
+  /** western = long fire dragon; baby = chubby upright baby dragon (same rig). */
+  type: z.enum(['western', 'baby']).default('western'),
   body: hex.default('#b32a22'),
   belly: hex.default('#e8b04a'),
   wing: hex.default('#7a1c18'),
@@ -353,6 +355,14 @@ export const assetSculptSchema = z.object({
   spec: sculptSpecSchema,
 });
 
+/** An admin-uploaded .glb/.gltf that replaces the procedural preset outright (static rig only: no named parts to animate). */
+export const assetGlbSchema = z.object({
+  url: z.string(),
+  fileName: z.string().max(200),
+  uploadedAt: z.number(),
+});
+export type AssetGlb = z.infer<typeof assetGlbSchema>;
+
 export const assetSchema = z
   .object({
     id: idSchema,
@@ -362,6 +372,7 @@ export const assetSchema = z
     seed: z.number().int().min(0).max(1_000_000).default(1),
     params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
     sculpt: assetSculptSchema.nullable().default(null),
+    glb: assetGlbSchema.nullable().default(null),
   })
   .superRefine((asset, ctx) => {
     const result = ASSET_PARAM_SCHEMAS[asset.kind].safeParse(asset.params);
@@ -375,6 +386,12 @@ export const assetSchema = z
     }
     for (const issue of asset.sculpt ? checkSculptSpec(asset.sculpt.spec) : []) {
       if (issue.level === 'fail') ctx.addIssue({ code: 'custom', message: issue.message, path: ['sculpt', 'spec'] });
+    }
+    if (asset.glb && RIG_OF_KIND[asset.kind] !== 'static') {
+      ctx.addIssue({ code: 'custom', message: `upload glb chỉ dùng cho asset tĩnh (rig "static"); asset loại ${asset.kind} cần rig ${RIG_OF_KIND[asset.kind]} để hoạt hình`, path: ['glb'] });
+    }
+    if (asset.glb && asset.sculpt) {
+      ctx.addIssue({ code: 'custom', message: 'chỉ chọn một: model img2threejs hoặc glb upload', path: ['glb'] });
     }
   });
 

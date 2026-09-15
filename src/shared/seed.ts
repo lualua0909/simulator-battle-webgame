@@ -149,6 +149,7 @@ const weapons: WeaponDef[] = [
   W({ id: 'fireball-staff', name: 'Trượng cầu lửa', attack: 'projectile', damage: 80, damageType: 'fire', range: 30, cooldown: 3.5, windup: 0.9, knockback: 10, knockUp: 5, splashRadius: 4, projectileId: 'fireball', projectileSpeed: 16, spread: 0.6, fireParticleId: 'magic' }),
   W({ id: 'giant-club', name: 'Chùy khổng lồ', attack: 'melee', damage: 160, damageType: 'blunt', range: 2.8, cooldown: 2, windup: 0.7, knockback: 28, knockUp: 10, cleaveArc: 120, maxTargets: 5, hitParticleId: 'hit-dust' }),
   W({ id: 'dragon-breath', name: 'Hơi thở rồng', attack: 'breath', damage: 14, damageType: 'fire', range: 13, cooldown: 0.2, windup: 0, knockback: 1, cleaveArc: 40, maxTargets: 12, fireParticleId: 'fire' }),
+  W({ id: 'baby-dragon-breath', name: 'Hơi thở rồng con', attack: 'breath', damage: 7, damageType: 'fire', range: 8, cooldown: 0.25, windup: 0, knockback: 1, cleaveArc: 35, maxTargets: 6, fireParticleId: 'fire' }),
   W({ id: 'musket', name: 'Súng hỏa mai', attack: 'projectile', damage: 60, damageType: 'pierce', range: 34, cooldown: 3.4, windup: 0.55, knockback: 6, knockUp: 1.5, projectileId: 'bullet', projectileSpeed: 110, spread: 0.5, hitParticleId: 'hit-chunk', fireParticleId: 'muzzle-flash', areaParticleId: 'gun-smoke', castStyle: 'gun' }),
   W({ id: 'zap', name: 'Tia sét', attack: 'chain', damage: 28, damageType: 'magic', range: 14, cooldown: 1.6, windup: 0.35, knockback: 2, chainCount: 2, chainRange: 5, chainFalloff: 0.7, stunDuration: 0.25, hitParticleId: 'lightning-spark', vfxColor: '#8fd3ff', castStyle: 'palm' }),
   W({ id: 'katana', name: 'Kiếm katana', attack: 'melee', damage: 45, damageType: 'slash', range: 1.3, cooldown: 0.75, windup: 0.2, knockback: 3, hitParticleId: 'spark' }),
@@ -230,11 +231,12 @@ const units: UnitDef[] = [
   U({ id: 'hoplite', name: 'Giáo binh', factionId: 'phuong-dong', role: 'melee', cost: 150, hp: 180, speed: 3.3, armorClass: 'light', blockChance: 0.5, weaponId: 'hoplite-spear', modelId: 'm-hoplite' }),
   U({ id: 'monk', name: 'Võ tăng', factionId: 'phuong-dong', role: 'melee', cost: 250, hp: 220, speed: 5.5, weaponId: 'monk-staff', modelId: 'm-monk', description: 'Nhanh, đánh liên hoàn.' }),
   U({ id: 'fire-archer', name: 'Hỏa tiễn thủ', factionId: 'phuong-dong', role: 'ranged', cost: 400, hp: 80, speed: 3.5, skillIds: ['mua-hoa-tien'], weaponId: 'fire-bow', modelId: 'm-fire-archer' }),
-  U({ id: 'war-elephant', name: 'Chiến tượng', factionId: 'phuong-dong', role: 'ranged', cost: 2000, hp: 3000, speed: 3.2, mass: 40, radius: 2, height: 4, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 50, skillIds: ['mua-ten'], weaponId: 'elephant-bow', modelId: 'm-war-elephant', riderModelId: 'm-archer-east' }),
+  U({ id: 'war-elephant', name: 'Chiến tượng', factionId: 'phuong-dong', role: 'ranged', cost: 2000, hp: 3000, speed: 3.2, mass: 40, radius: 2, height: 4, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 50, skillIds: ['mua-ten'], weaponId: 'elephant-bow', modelId: 'm-war-elephant' }),
   U({ id: 'eagle', name: 'Đại bàng', factionId: 'huyen-thoai', role: 'melee', cost: 300, hp: 150, speed: 8, mass: 0.8, radius: 0.8, height: 1.2, armorClass: 'beast', flying: true, altitude: 7, weaponId: 'talons', modelId: 'm-eagle', description: 'Bay, bổ nhào xuống cào.' }),
   U({ id: 'wizard', name: 'Pháp sư', factionId: 'huyen-thoai', role: 'ranged', cost: 700, hp: 120, speed: 3.4, skillIds: ['thien-thach'], weaponId: 'fireball-staff', modelId: 'm-wizard' }),
   U({ id: 'giant', name: 'Người khổng lồ', factionId: 'huyen-thoai', role: 'melee', cost: 1600, hp: 3000, speed: 3.4, mass: 25, radius: 1.3, height: 4.6, armorClass: 'beast', knockbackResist: 0.7, trampleDamage: 20, skillIds: ['nem-tang-da', 'dam-dat'], weaponId: 'giant-club', modelId: 'm-giant', description: 'Một gậy bay cả hàng.' }),
   U({ id: 'dragon', name: 'Rồng lửa', factionId: 'huyen-thoai', role: 'ranged', cost: 5000, hp: 6000, speed: 5, mass: 50, radius: 3, height: 3, armorClass: 'beast', flying: true, altitude: 9, knockbackResist: 0.95, skillIds: ['mua-thien-thach'], weaponId: 'dragon-breath', modelId: 'm-dragon', description: 'Phun lửa từ trên cao.' }),
+  U({ id: 'baby-dragon', name: 'Rồng Xanh', factionId: 'huyen-thoai', role: 'ranged', cost: 1200, hp: 1400, speed: 5.5, mass: 8, radius: 1.4, height: 2.4, armorClass: 'beast', flying: true, altitude: 6, knockbackResist: 0.6, weaponId: 'baby-dragon-breath', modelId: 'm-baby-dragon', description: 'Rồng con mập ú, bay thấp phun lửa thiêu cả nhóm.' }),
   U({ id: 'musketeer', name: 'Lính hỏa mai', factionId: 'trung-co', role: 'ranged', cost: 260, hp: 80, speed: 3.3, skillIds: ['loat-dan'], weaponId: 'musket', modelId: 'm-musketeer', description: 'Đạn bay thẳng, xuyên giáp nhẹ; thỉnh thoảng xả loạt đạn liên thanh.' }),
   U({ id: 'wind-shaman', name: 'Pháp sư gió', factionId: 'bo-lac', role: 'support', cost: 650, hp: 150, speed: 3.4, skillIds: ['loc-xoay'], weaponId: 'heal-staff', modelId: 'm-wind-shaman', description: 'Hồi máu đồng đội, gọi lốc xoáy hút bổng quân địch.' }),
   U({ id: 'pyromancer', name: 'Hỏa thuật sư', factionId: 'phuong-dong', role: 'ranged', cost: 800, hp: 170, speed: 3.5, skillIds: ['phun-lua', 'loc-lua'], weaponId: 'fireball-staff', modelId: 'm-pyromancer', description: 'Phun lửa từ tay, triệu hồi lốc lửa thiêu cháy.' }),
@@ -252,7 +254,7 @@ const units: UnitDef[] = [
   S({ id: 'nha-chinh', name: 'Nhà chính', structure: 'core', siegeSide: 'defense', cost: 50, hp: 6000, radius: 3.2, height: 9, weaponId: 'keep-arrows', modelId: 'm-keep', unlockCost: 0, description: 'Bắt buộc có 1. Bị phá là phe thủ thua.' }),
 ];
 
-const A = (a: Omit<AssetDef, 'scale' | 'seed' | 'sculpt'> & Partial<Pick<AssetDef, 'scale' | 'seed'>>): AssetDef => ({ scale: 1, seed: 1, sculpt: null, ...a });
+const A = (a: Omit<AssetDef, 'scale' | 'seed' | 'sculpt' | 'glb'> & Partial<Pick<AssetDef, 'scale' | 'seed'>>): AssetDef => ({ scale: 1, seed: 1, sculpt: null, glb: null, ...a });
 
 const assets: AssetDef[] = [
   A({ id: 'm-clubber', name: 'Chiến binh gậy', kind: 'humanoid', params: { skin: '#e2a878', shirt: '#8a5a2b', pants: '#6b4424', armor: 'loincloth', armorColor: '#a8743c', hair: 'short', hairColor: '#2a1a10', weapon: 'club' } }),
@@ -274,9 +276,10 @@ const assets: AssetDef[] = [
   A({ id: 'm-giant', name: 'Người khổng lồ', kind: 'humanoid', scale: 2.5, params: { bulk: 1.4, skin: '#c9a27a', shirt: '#7a6a4a', pants: '#5a4a32', armor: 'loincloth', armorColor: '#6b4424', hair: 'none', beard: 'short', hairColor: '#4a3020', weapon: 'bigclub' } }),
   A({ id: 'm-warhorse', name: 'Chiến mã', kind: 'horse', params: { coat: '#6b4226', mane: '#1e140c', barding: true, bardingColor: '#2f5fb3' } }),
   A({ id: 'm-mammoth', name: 'Voi ma mút', kind: 'elephant', scale: 1.15, params: { skin: '#8c9591', fur: true, tusks: true, tuskColor: '#f1ead8', howdah: false } }),
-  A({ id: 'm-war-elephant', name: 'Chiến tượng', kind: 'elephant', params: { skin: '#8d8f96', tusks: true, howdah: true, blanket: '#d23c3c' } }),
+  A({ id: 'm-war-elephant', name: 'Chiến tượng', kind: 'elephant', params: { skin: '#8d8f96', tusks: true, howdah: false, blanket: '#d23c3c' } }),
   A({ id: 'm-eagle', name: 'Đại bàng', kind: 'bird', scale: 1.4, params: {} }),
   A({ id: 'm-dragon', name: 'Rồng lửa', kind: 'dragon', params: {} }),
+  A({ id: 'm-baby-dragon', name: 'Rồng Xanh', kind: 'dragon', params: { type: 'baby', body: '#8cc540', belly: '#a4d257', wing: '#a0583a', horn: '#9b5a3c', eye: '#7a4a20' } }),
   A({ id: 'm-catapult', name: 'Máy bắn đá', kind: 'catapult', params: {} }),
   A({ id: 'm-musketeer', name: 'Lính hỏa mai', kind: 'humanoid', params: { shirt: '#2f5fb3', pants: '#e8e0cc', boots: '#1e1a16', armor: 'vest', armorColor: '#8a1f24', head: 'cap', headColor: '#1e2a44', hair: 'long', hairColor: '#d8d0c0', weapon: 'musket', woodColor: '#6b4424', metalColor: '#8a8f96' } }),
   A({ id: 'm-wind-shaman', name: 'Pháp sư gió', kind: 'humanoid', params: { skin: '#d99a6c', shirt: '#6a8a7a', pants: '#5a4a32', armor: 'fur', armorColor: '#d8d0b8', head: 'headband', headColor: '#4fb3a8', hair: 'long', hairColor: '#e8e8e8', beard: 'short', brows: 'worried', weapon: 'staff', orbColor: '#c8fff0', woodColor: '#9a7a4a' } }),
@@ -290,8 +293,8 @@ const assets: AssetDef[] = [
   A({ id: 'm-bow-tower', name: 'Tháp cung', kind: 'structure', params: { type: 'bow-tower', roof: '#2f5f9a' } }),
   A({ id: 'm-gun-tower', name: 'Tháp súng', kind: 'structure', params: { type: 'gun-tower', roof: '#4a4f58' } }),
   A({ id: 'm-tesla', name: 'Trụ phóng điện', kind: 'structure', params: { type: 'tesla', accent: '#7fe0ff' } }),
-  A({ id: 'm-barracks', name: 'Nhà lính', kind: 'structure', params: { type: 'barracks' } }),
-  A({ id: 'm-keep', name: 'Nhà chính', kind: 'structure', params: { type: 'keep', roof: '#b3262e' } }),
+  A({ id: 'm-barracks', name: 'Nhà lính', kind: 'structure', scale: 3.3, params: { type: 'barracks', roof: '#6b4a2e', accent: '#8a2a2a' } }),
+  A({ id: 'm-keep', name: 'Nhà chính', kind: 'structure', scale: 4.2, params: { type: 'keep', roof: '#b3262e' } }),
   A({ id: 'tree-pine', name: 'Cây thông', kind: 'tree', params: { type: 'pine', leaf: '#2f6a3a', leaf2: '#3f7f42', height: 7 } }),
   A({ id: 'tree-oak', name: 'Cây sồi', kind: 'tree', params: { type: 'oak', leaf: '#3f8a3a', leaf2: '#5fa845', height: 6 } }),
   A({ id: 'tree-snow', name: 'Thông phủ tuyết', kind: 'tree', seed: 4, params: { type: 'pine', trunk: '#5a4636', leaf: '#e6eef3', leaf2: '#3f6a4a', height: 7 } }),

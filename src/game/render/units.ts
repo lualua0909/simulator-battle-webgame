@@ -11,6 +11,7 @@ import { attackStyleFor, Poser, type AttackStyle } from './animate';
 import type { Ragdoll, RagdollWorld } from './ragdoll';
 
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
+const smoothMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
 const STRIKE_TIME = 0.45;
 const EMIT_SOCKETS = ['mouth', 'muzzle', 'staff.tip', 'hand.R', 'rider.muzzle', 'rider.staff.tip', 'rider.hand.R'];
 const RAGDOLL_SECONDS = 6;
@@ -146,7 +147,7 @@ export class UnitRenderer {
     if (old) for (const m of old.meshes) if (m) this.group.remove(m);
     const meshes = template.parts.map((p, k) => {
       if (!p.geometry) return null;
-      const m = new THREE.InstancedMesh(p.geometry, material, capacity);
+      const m = new THREE.InstancedMesh(p.geometry, template.smooth ? smoothMaterial : material, capacity);
       const prev = old?.meshes[k];
       if (prev) {
         (m.instanceMatrix.array as Float32Array).set(prev.instanceMatrix.array as Float32Array);

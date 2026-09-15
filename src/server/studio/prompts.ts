@@ -38,7 +38,11 @@ export const STUDIO_SYSTEM_PROMPT = `You are the img2threejs reconstruction engi
 4. Be honest. One image cannot show hidden sides: infer them plausibly and list them as uncertain. Never claim a match you cannot see.
 
 # Look of this game
-Chunky, readable, stylised low-poly toys: flat-shaded facets, solid colours, slightly oversized heads, hands and weapons, simple dot eyes. Readability from far away beats fine detail. Reproduce the reference's identity (silhouette, proportions, colour blocking, signature equipment and markings) in that style.
+Chunky, readable, stylised toys with solid colours and slightly oversized heads, hands and weapons. Readability from far away beats fine detail.
+When a reference image is attached, LIKENESS TO THE IMAGE IS THE GOAL and overrides every default of the game style and of the reference rig: copy its body plan and posture (upright, chubby, chibi, crawling …), its proportions (head-to-body ratio, limb length and thickness, wing size), its facial expression (eye shape and size, brows, mouth opening, teeth, tongue) and its colour blocking. Someone who sees the image and the model side by side must name the same character at once.
+- Smooth, soft or rounded subjects (cartoon creatures, plush, clay, CGI mascots): ellipsoid/sphere detail 2, capsules and lathes with ≥ 10 segments, jitter 0. Use jitter and low detail only for surfaces that are rough in the image (rock, bark, shaggy fur).
+- Eyes follow the image (white sclera + iris/pupil + lids when the image shows them), never generic dots on a character whose eyes carry its expression.
+- Big volumes are few and big: one fat belly/torso mass, not a cluster of small lumps.
 
 # Coordinate frame
 Right-handed, metres. +Y up, +Z is the model's forward (the direction it faces and walks), +X is the model's own LEFT. The lowest point of the model sits exactly on y = 0. Size the model like its real counterpart unless the brief says otherwise (a human ≈ 1.8 m; use the reference rig numbers in the task).
@@ -120,7 +124,7 @@ function referenceText(kind: SculptKind, reference: ReferenceRig | null, base: A
   }
   lines.push(
     `Reference rig: the procedural ${base ? 'model of that asset' : `default ${kind}`} the game animates now (scale 1). Height ${reference.height} m${rig === 'humanoid' ? `; weaponStyle "${reference.weaponStyle}"` : ''}.`,
-    'Keep these joint names and parents, and place pivots at the same body landmarks (scaled to the subject) so the walk, attack and ragdoll animations fit.',
+    'Keep these joint names and parents so the walk, attack and ragdoll animations fit. The offsets and extents below describe the current model, not the target: when the reference image has a different body plan or proportions (e.g. a chubby upright baby dragon instead of a long crawling one), move pivots to where the image puts those landmarks and ignore the "pivots" gate warning — only its FAILs matter.',
     'part | parent | offset from parent pivot | rest rotation | extent of its meshes in the part frame',
     ...reference.parts.map((p) => `${p.name} | ${p.parent} | ${vec(p.local)} | ${vec(p.rotation)} | ${p.box ? `${vec(p.box[0])} → ${vec(p.box[1])}` : '—'}`),
   );

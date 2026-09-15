@@ -41,8 +41,6 @@ export function createCatapultModel(p: CatapultParams): THREE.Group {
   if (p.fire) {
     ammo.add(mesh('ammo-pot', faceColors(jitter(ball(0.24, 1), 0.05, 9), '#5a3a22', '#3a2414', 9), '#5a3a22'));
     ammo.add(detail(mesh('ammo-flame', cone(0.16, 0.42, 6), '#ff8a1f', [0, 0.3, 0], [0, 0, 0], { emissive: 1.6 })));
-    base.add(detail(metal('brazier', cyl(0.22, 0.14, 0.3, 7), p.metal, [0.35, 0.95, -1.05])));
-    base.add(detail(mesh('brazier-fire', cone(0.18, 0.4, 6), '#ffb13d', [0.35, 1.28, -1.05], [0, 0, 0], { emissive: 1.8 })));
   } else ammo.add(mesh('ammo-stone', faceColors(jitter(ball(0.24, 1), 0.08, 7), '#8d8a84', '#6a675f', 7), '#8d8a84'));
   arm.add(ammo);
   return root;

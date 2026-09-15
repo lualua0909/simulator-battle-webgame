@@ -6,9 +6,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createAssetModel, createUnitModel } from '@/game/models';
 import { COLLECTION_SPECS } from '@/shared/fields';
-import type { AssetDef, ConfigBundle, UnitDef } from '@/shared/schema';
+import { RIG_OF_KIND, type AssetDef, type ConfigBundle, type UnitDef } from '@/shared/schema';
 import type { StudioJobDetail, StudioVersion } from '@/shared/studio';
-import { api } from '../admin/api';
+import { api, ApiError } from '../admin/api';
 import DocForm from '../admin/DocForm';
 import { VerdictDot, type RunState } from '../admin/studio/common';
 import { EXPORT_FORMATS, exportModel, type ExportFormat, type ExportSource } from '../admin/studio/exporters';
@@ -145,8 +145,96 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
         <span className="w-full text-xs opacity-60">{users.length ? `Dùng bởi: ${users.map((u) => u.name).join(', ')}` : 'Chưa lính nào dùng'}</span>
       </div>
       {status && status.text !== 'Đã hủy' && <p className={`text-xs font-bold ${status.ok ? 'text-green-700' : 'text-red-team'}`}>{status.text}</p>}
+      <ScalePanel asset={asset} act={act} saving={saving} />
+      {RIG_OF_KIND[asset.kind] === 'static' && <GlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
       <DownloadPanel key={sources.map((s) => s.label).join('|')} sources={sources} />
       <ClaudePanel bundle={bundle} asset={asset} context={context} users={users} setCandidate={setCandidate} act={act} saving={saving} onNewAsset={onNewAsset} />
+    </div>
+  );
+}
+
+/** Display scale of the 3D model (independent of the underlying procedural/sculpt/glb source). */
+function ScalePanel({ asset, act, saving }: { asset: AssetDef; act: (fn: () => Promise<unknown>, ok: string) => Promise<void>; saving: boolean }) {
+  const [scale, setScale] = useState(asset.scale);
+  useEffect(() => setScale(asset.scale), [asset.id, asset.scale]);
+  const dirty = scale !== asset.scale;
+
+  const save = () =>
+    act(async () => {
+      const doc = await api<AssetDef>(`/api/admin/assets/${asset.id}`);
+      await api(`/api/admin/assets/${asset.id}`, { method: 'PUT', body: JSON.stringify({ ...doc, scale }) });
+    }, `Đã lưu tỉ lệ ${scale.toFixed(2)}× ✓`);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
+      <b>📏 Kích cỡ hiển thị</b>
+      <input type="range" min={0.1} max={10} step={0.05} value={scale} className="flex-1" onChange={(e) => setScale(Number(e.target.value))} />
+      <input type="number" min={0.1} max={10} step={0.05} value={scale} className="field w-16 py-0.5 text-xs" onChange={(e) => setScale(Number(e.target.value) || asset.scale)} />
+      <span className="opacity-70">×</span>
+      <button className="btn px-2 py-0.5 text-xs" disabled={saving || !dirty} onClick={() => void save()}>
+        Lưu tỉ lệ
+      </button>
+    </div>
+  );
+}
+
+/** Upload a real .glb/.gltf to replace this (static-rig) asset's procedural model outright. */
+function GlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef; users: UnitDef[]; act: (fn: () => Promise<unknown>, ok: string) => Promise<void>; saving: boolean }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const upload = (file: File) =>
+    act(async () => {
+      if (!/\.(glb|gltf)$/i.test(file.name)) throw new Error('Chỉ nhận .glb hoặc .gltf');
+      const notes = users.length ? `Đổi model cho: ${users.map((u) => u.name).join(', ')}.` : 'Chưa lính nào dùng asset này.';
+      if (!confirm(`Thay model của asset "${asset.name}" bằng file "${file.name}"?\n\n${notes}\n\nModel cũ (nếu là glb upload trước đó) sẽ bị xóa để tiết kiệm bộ nhớ.`)) throw new Error('Đã hủy');
+      const form = new FormData();
+      form.set('file', file);
+      const res = await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'POST', body: form, cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new ApiError(res.status, (data as { error?: string })?.error ?? res.statusText, (data as { details?: unknown })?.details);
+    }, 'Đã thay model bằng file upload ✓');
+
+  const remove = () =>
+    act(async () => {
+      if (!confirm(`Xóa model upload của "${asset.name}" và hoàn tác về procedural?`)) throw new Error('Đã hủy');
+      const res = await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'DELETE', cache: 'no-store' });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? res.statusText);
+    }, 'Đã xóa model upload ✓');
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
+      <b>📦 Upload model (.glb/.gltf)</b>
+      {asset.glb && (
+        <span className="opacity-70">
+          đang dùng: <b>{asset.glb.fileName}</b>
+        </span>
+      )}
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (!file) return;
+          setBusy(true);
+          try {
+            await upload(file);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+      <button className="btn px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => fileInput.current?.click()}>
+        {busy ? 'Đang tải lên…' : asset.glb ? 'Thay file khác' : 'Chọn file…'}
+      </button>
+      {asset.glb && (
+        <button className="btn ml-auto px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => void remove()}>
+          Hoàn tác về procedural
+        </button>
+      )}
     </div>
   );
 }

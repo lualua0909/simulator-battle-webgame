@@ -17,6 +17,8 @@ interface Look {
   crowns: THREE.InstancedMesh;
   rubble: THREE.InstancedMesh;
   cracks: THREE.InstancedMesh;
+  /** A real uploaded mesh already has its own coping/top edge — the procedural WALL_CELL-square crown and crack decals were sized for the old cube and would float mismatched over it. */
+  hasGlb: boolean;
 }
 
 export class WallRenderer {
@@ -24,6 +26,8 @@ export class WallRenderer {
   private looks = new Map<string, Look>();
   private cells: WallCell[] = [];
   private readonly shudder = new Map<number, number>();
+  /** Yaw (0 or 90°) so an elongated wall-run mesh lines up with its neighbours instead of the old random per-tier spin. */
+  private readonly orient = new Map<number, number>();
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
   private readonly p = new THREE.Vector3();
@@ -45,6 +49,12 @@ export class WallRenderer {
     this.clear();
     const tierHeight = this.bundle.settings.siege.tierHeight;
     this.cells = [...sim.walls.values()].filter((c) => c.kind === 'wall');
+    this.orient.clear();
+    const present = new Set(this.cells.map((c) => `${c.ix},${c.iz}`));
+    for (const c of this.cells) {
+      const alongX = present.has(`${c.ix + 1},${c.iz}`) || present.has(`${c.ix - 1},${c.iz}`);
+      this.orient.set(c.unit.id, alongX ? 0 : Math.PI / 2);
+    }
     const counts = new Map<string, { blocks: number; cells: number }>();
     for (const c of this.cells) {
       const n = counts.get(c.unit.def.modelId) ?? { blocks: 0, cells: 0 };
@@ -66,7 +76,7 @@ export class WallRenderer {
         return mesh;
       };
       const blocks = Array.from({ length: VARIANTS }, (_, v) => {
-        const mesh = inst(wallBlockGeometry(params, tierHeight, (asset?.seed ?? 1) * 10 + v), n.blocks);
+        const mesh = inst(wallBlockGeometry(params, tierHeight, (asset?.seed ?? 1) * 10 + v, asset?.glb?.url), n.blocks);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, n.blocks) * 3).fill(1), 3);
         return mesh;
       });
@@ -76,6 +86,7 @@ export class WallRenderer {
         crowns: inst(wallCrownGeometry(params, 3), n.cells),
         rubble: inst(wallRubbleGeometry(params, 5), n.cells),
         cracks: inst(wallCrackGeometry(tierHeight, 7), n.cells, crackMaterial),
+        hasGlb: Boolean(asset?.glb),
       });
     }
   }
@@ -117,7 +128,7 @@ export class WallRenderer {
       for (let t = -1; t < cell.tiers; t++) {
         const top = t === cell.tiers - 1;
         const v = (((cell.ix * 3 + cell.iz * 5 + t) % VARIANTS) + VARIANTS) % VARIANTS;
-        const turn = ((cell.ix + cell.iz + t) % 4) * (Math.PI / 2);
+        const turn = this.orient.get(u.id) ?? 0;
         this.q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, turn);
         const k = top ? jx : jx * 0.4;
         this.m.compose(this.p.set(x + k, u.y + t * tierHeight, z + (top ? jz : jz * 0.4)), this.q, this.s.set(1, 1, 1));
@@ -125,15 +136,17 @@ export class WallRenderer {
         look.blocks[v].setMatrixAt(slot, this.m);
         const wear = top ? Math.max(0, Math.min(1, topHp)) : t < 0 ? 0.85 : 1;
         look.blocks[v].setColorAt(slot, this.c.setScalar(0.62 + 0.38 * wear));
-        if (top && wear < 0.7) {
+        if (!look.hasGlb && top && wear < 0.7) {
           const grow = 0.55 + (0.7 - wear) * 0.65;
           this.m.compose(this.p.set(x + jx, u.y + t * tierHeight, z + jz), this.q, this.s.set(1, grow, 1));
           look.cracks.setMatrixAt(n.cracks++, this.m);
         }
       }
-      this.q.identity();
-      this.m.compose(this.p.set(x + jx, u.y + cell.tiers * tierHeight, z + jz), this.q, this.s.set(1, 1, 1));
-      look.crowns.setMatrixAt(n.crowns++, this.m);
+      if (!look.hasGlb) {
+        this.q.identity();
+        this.m.compose(this.p.set(x + jx, u.y + cell.tiers * tierHeight, z + jz), this.q, this.s.set(1, 1, 1));
+        look.crowns.setMatrixAt(n.crowns++, this.m);
+      }
     }
     for (const [look, n] of used) {
       look.blocks.forEach((b, v) => {

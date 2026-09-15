@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme inline {
-  --font-display: var(--font-bungee), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-paytone), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-paytone), ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme {
@@ -84,7 +84,7 @@ body {
   --text-xs--line-height: 1.25;
   --text-sm: 1rem;
   --text-sm--line-height: 1.3;
-  font-family: 'Clash', var(--font-clash-vi), ui-sans-serif, system-ui, sans-serif;
+  font-family: 'Clash', var(--font-paytone), ui-sans-serif, system-ui, sans-serif;
   font-size: 1rem;
   color: var(--color-ink);
   font-synthesis: none;

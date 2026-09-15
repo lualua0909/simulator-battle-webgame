@@ -28,6 +28,7 @@ async function render(bundle: ConfigBundle): Promise<Record<string, string>> {
   scene.add(sun);
   const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 200);
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
+  const smoothMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
   const assets = new Map(bundle.assets.map((a) => [a.id, a]));
   const weapons = new Map(bundle.weapons.map((w) => [w.id, w]));
   const out: Record<string, string> = {};
@@ -41,7 +42,7 @@ async function render(bundle: ConfigBundle): Promise<Record<string, string>> {
     const group = new THREE.Group();
     template.parts.forEach((p, i) => {
       if (!p.geometry) return;
-      const m = new THREE.Mesh(p.geometry, material);
+      const m = new THREE.Mesh(p.geometry, template.smooth ? smoothMaterial : material);
       m.matrixAutoUpdate = false;
       m.matrix.copy(poses[i]);
       group.add(m);
@@ -59,6 +60,7 @@ async function render(bundle: ConfigBundle): Promise<Record<string, string>> {
     await new Promise((r) => setTimeout(r, 0));
   }
   material.dispose();
+  smoothMaterial.dispose();
   renderer.dispose();
   renderer.forceContextLoss();
   return out;

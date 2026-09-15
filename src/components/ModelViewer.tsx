@@ -22,6 +22,7 @@ interface Props {
 }
 
 const partMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
+const smoothPartMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
 
 export default function ModelViewer({ template, weapon, anim = 'idle', yaw, explode = false, onPick, className }: Props) {
   const host = useRef<HTMLDivElement>(null);
@@ -65,7 +66,7 @@ export default function ModelViewer({ template, weapon, anim = 'idle', yaw, expl
 
     const camera = new THREE.PerspectiveCamera(35, 1, 0.05, radius * 40);
     const meshes: THREE.Mesh[] = template.parts.map((p) => {
-      const m = new THREE.Mesh(p.geometry ?? new THREE.BufferGeometry(), partMaterial);
+      const m = new THREE.Mesh(p.geometry ?? new THREE.BufferGeometry(), template.smooth ? smoothPartMaterial : partMaterial);
       m.visible = !!p.geometry;
       m.matrixAutoUpdate = false;
       m.castShadow = true;

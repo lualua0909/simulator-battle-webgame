@@ -10,6 +10,7 @@ import { createElephantModel } from './elephant';
 import { createBushModel, createRockModel, createTreeModel } from './environment';
 import { createHorseModel } from './horse';
 import { createHumanoidModel, HIP_Y } from './humanoid';
+import { getCustomGlbGroup } from './glbStatic';
 import { createStructureModel } from './structures';
 
 export type { ModelTemplate } from './bake';
@@ -23,6 +24,13 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
     root.scale.setScalar(asset.scale);
     root.userData.assetId = asset.id;
     return root;
+  }
+  // An admin-uploaded glb/gltf replaces the procedural preset (static-rig kinds only; see assetSchema).
+  const uploaded = asset.glb ? getCustomGlbGroup(asset.glb.url) : undefined;
+  if (uploaded) {
+    uploaded.scale.setScalar(asset.scale);
+    uploaded.userData.assetId = asset.id;
+    return uploaded;
   }
   switch (asset.kind) {
     case 'humanoid':

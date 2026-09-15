@@ -9,7 +9,8 @@ import os from 'node:os';
 import { z } from 'zod';
 import type { EngineName, EngineStatus } from '@/shared/studio';
 
-export const STUDIO_MODEL = 'claude-opus-5';
+export const STUDIO_MODEL = 'claude-sonnet-5';
+const STUDIO_EFFORT = 'medium';
 
 export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
 export type LlmBlock = { type: 'text'; text: string } | { type: 'image'; mediaType: ImageMediaType; data: string };
@@ -82,12 +83,8 @@ async function callApi(call: LlmCall): Promise<LlmResult> {
       {
         model: STUDIO_MODEL,
         max_tokens: 64000,
-        // Server-side fallback: a request declined by Opus 5's safety classifiers is re-run on
-        // Anthropic's recommended fallback model instead of failing.
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
         thinking: { type: 'adaptive', display: 'summarized' },
-        output_config: { effort: 'high', ...(structured ? { format: { type: 'json_schema', schema: format.schema } } : {}) },
+        output_config: { effort: STUDIO_EFFORT, ...(structured ? { format: { type: 'json_schema', schema: format.schema } } : {}) },
         system: [
           {
             type: 'text',
@@ -160,7 +157,7 @@ function callCli(call: LlmCall): Promise<LlmResult> {
     '--model',
     STUDIO_MODEL,
     '--effort',
-    'high',
+    STUDIO_EFFORT,
     '--input-format',
     'stream-json',
     '--output-format',

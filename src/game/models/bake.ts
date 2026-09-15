@@ -37,6 +37,8 @@ export interface ModelTemplate {
   segments: SegmentTemplate[];
   sockets: Record<string, { part: number; matrix: THREE.Matrix4 }>;
   bounds: THREE.Box3;
+  /** Smooth-shaded model (root `userData.smooth`): draw with a material that keeps baked normals. */
+  smooth: boolean;
 }
 
 const DETACHABLE = new Set(['weapon', 'offhand']);
@@ -98,7 +100,7 @@ export function bakeModel(root: THREE.Object3D): ModelTemplate {
     part.box = part.geometry.boundingBox!.clone();
     bounds.union(part.box.clone().applyMatrix4(part.rest));
   });
-  return { parts, segments, sockets, bounds };
+  return { parts, segments, sockets, bounds, smooth: root.userData.smooth === true };
 }
 
 const tmpColor = new THREE.Color();
@@ -125,18 +127,35 @@ function bakeMesh(mesh: THREE.Mesh, partRest: THREE.Matrix4): THREE.BufferGeomet
   }
   let positions: Float32Array = position.array as Float32Array;
   let cols: Float32Array = colors;
+  // Smooth meshes keep their authored normals; everything else gets face normals (flat look).
+  const srcNormal = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
+  let normals: Float32Array;
+  if (material.flatShading === false && srcNormal) {
+    normals = new Float32Array(srcNormal.array as Float32Array);
+  } else {
+    const flat = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    flat.computeVertexNormals();
+    normals = flat.getAttribute('normal').array as Float32Array;
+  }
   if (toPart.determinant() < 0) {
     positions = flip(positions);
     cols = flip(cols);
+    normals = flip(normals);
   }
   if (material.side === THREE.DoubleSide) {
     positions = concat(positions, flip(positions));
     cols = concat(cols, flip(cols));
+    normals = concat(normals, negate(flip(normals)));
   }
   const out = new THREE.BufferGeometry();
   out.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
   out.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cols), 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
   return out;
+}
+
+function negate(a: Float32Array): Float32Array {
+  return a.map((v) => -v);
 }
 
 /** Reverse triangle winding of a non-indexed xyz stream. */
@@ -162,16 +181,18 @@ function merge(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
   for (const g of list) n += g.getAttribute('position').count;
   const pos = new Float32Array(n * 3);
   const col = new Float32Array(n * 3);
+  const nor = new Float32Array(n * 3);
   let o = 0;
   for (const g of list) {
     pos.set(g.getAttribute('position').array as Float32Array, o);
     col.set(g.getAttribute('color').array as Float32Array, o);
+    nor.set(g.getAttribute('normal').array as Float32Array, o);
     o += g.getAttribute('position').count * 3;
   }
   const out = new THREE.BufferGeometry();
   out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   out.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  out.computeVertexNormals();
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   return out;
 }
 

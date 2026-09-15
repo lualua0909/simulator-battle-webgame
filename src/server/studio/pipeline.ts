@@ -134,7 +134,10 @@ async function settle(job: StudioJob, f: JobFacts, first: Candidate, signal: Abo
       throw new Error(`Spec vẫn không hợp lệ sau ${MAX_REPAIRS} lần sửa: ${problems.slice(0, 3).join('; ')}`);
     }
     emit({ t: 'status', text: `Gate chặn ${problems.length} lỗi — Claude sửa spec (lần ${attempt + 1}/${MAX_REPAIRS})…` });
-    const reply = (await ask(job.id, [{ type: 'text', text: repairRequest(f, candidate.raw, problems) }], repairReplySchema, signal, emit)) as { spec?: unknown; notes?: unknown };
+    // The reference goes with repairs too, so fixing a gate never drifts away from the likeness.
+    const image = job.hasImage ? getImage(job.id) : null;
+    const content: LlmBlock[] = [...(image ? [imageBlock(image)] : []), { type: 'text', text: repairRequest(f, candidate.raw, problems) }];
+    const reply = (await ask(job.id, content, repairReplySchema, signal, emit)) as { spec?: unknown; notes?: unknown };
     candidate = { raw: reply.spec, source: 'repair', assessment: null, feedback: candidate.feedback, notes: typeof reply.notes === 'string' ? reply.notes : null };
   }
 }

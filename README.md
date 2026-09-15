@@ -130,7 +130,7 @@ Chọn asset ở danh sách bên trái để dùng tab Mô hình cho cây/đá/b
 
 Claude dựng model mới dựa trên asset gốc, **góp ý/mô tả (tuỳ chọn) + ảnh mẫu (tuỳ chọn)**.
 
-**Engine.** Có `ANTHROPIC_API_KEY` thì server gọi Claude API (`claude-opus-5`, streaming, structured output, bật server-side fallback khi bị từ chối). Không có key thì dùng Claude Code CLI (`claude -p --safe-mode`, không tool) với login sẵn trên máy chủ. Cách này chỉ chạy trên máy đã đăng nhập `claude`.
+**Engine.** Có `ANTHROPIC_API_KEY` thì server gọi Claude API (`claude-sonnet-5`, effort medium, streaming, structured output). Không có key thì dùng Claude Code CLI (`claude -p --safe-mode`, không tool) với login sẵn trên máy chủ. Cách này chỉ chạy trên máy đã đăng nhập `claude`.
 
 **Pipeline** (theo thứ tự của img2threejs):
 

@@ -161,8 +161,8 @@ export function referenceRig(kind: SculptKind, base?: AssetDef | null): Referenc
   if (kind === 'prop') return null;
   const asset: AssetDef =
     base && base.kind === kind
-      ? { ...base, scale: 1, sculpt: null }
-      : { id: 'reference', name: 'reference', kind, scale: 1, seed: 1, params: DEFAULT_PARAMS[kind] ?? {}, sculpt: null };
+      ? { ...base, scale: 1, sculpt: null, glb: null }
+      : { id: 'reference', name: 'reference', kind, scale: 1, seed: 1, params: DEFAULT_PARAMS[kind] ?? {}, sculpt: null, glb: null };
   const t = bakeModel(createAssetModel(asset));
   const pos = new THREE.Vector3();
   const quat = new THREE.Quaternion();

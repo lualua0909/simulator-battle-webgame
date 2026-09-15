@@ -35,6 +35,7 @@ const dummyAsset: AssetDef = {
   scale: 1,
   seed: 1,
   sculpt: null,
+  glb: null,
   params: { skin: '#d9b779', shirt: '#b8914f', pants: '#8a6a3a', boots: '#6b4f2a', armor: 'none', head: 'strawhat', headColor: '#e0c170', hair: 'none', brows: 'worried' },
 };
 

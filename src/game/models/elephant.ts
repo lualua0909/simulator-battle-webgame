@@ -37,10 +37,10 @@ export function createElephantModel(p: ElephantParams, seed = 1): THREE.Group {
   if (p.fur) {
     body.add(mesh('shoulder-hump', skin(ell(0.64, 0.8, 1.05), 2), p.skin, [0, 0.3, 0.36]));
   } else {
-    body.add(mesh('withers', ell(0.78, 0.34, 0.8), p.skin, [0, 0.43, 0.3]));
+    body.add(mesh('withers', ell(0.84, 0.4, 0.98), p.skin, [0, 0.42, 0.32]));
   }
 
-  const head = part('head', [0, 0.18, 1.42]);
+  const head = part('head', [0, 0.18, 1.3]);
   body.add(head);
   head.add(mesh('head', skin(ell(0.66, 0.74, 0.62), 3), p.skin, [0, 0.18, 0.22]));
   if (p.fur) {
@@ -52,11 +52,11 @@ export function createElephantModel(p: ElephantParams, seed = 1): THREE.Group {
     const side = s > 0 ? 'L' : 'R';
     head.add(detail(mesh(`eye-white-${side}`, ell(0.04, 0.15, 0.15), '#eef0ea', [0.52 * s, 0.3, 0.52], [0, 0.55 * s, 0])));
     head.add(detail(mesh(`eye-pupil-${side}`, ball(0.07, 0), '#1a1c1c', [0.56 * s, 0.3, 0.56])));
-    const ear = part(`ear${side}`, [0.52 * s, 0.2, 0.0]);
+    const ear = part(`ear${side}`, [0.46 * s, 0.2, 0.0]);
     if (p.fur) {
       ear.add(mesh(`ear-${side}`, skin(ell(0.07, 0.28, 0.24), 5 + s), dark, [0.06 * s, -0.04, -0.12], [0, 0.35 * s, 0]));
     } else {
-      ear.add(mesh(`ear-${side}`, ell(0.07, 0.62, 0.55), shade(p.skin, 0.9), [0.1 * s, -0.12, -0.28], [0, 0.35 * s, 0]));
+      ear.add(mesh(`ear-${side}`, ell(0.11, 0.62, 0.55), shade(p.skin, 0.9), [0.08 * s, -0.12, -0.26], [0, 0.35 * s, 0]));
     }
     head.add(ear);
   }
@@ -76,7 +76,7 @@ export function createElephantModel(p: ElephantParams, seed = 1): THREE.Group {
     // mammoth: ~270° spiral whose tip curls back up toward the eye; elephant: short hook
     const [arc, cy, cz, r0, r1, ky, bow, pinch, thick] = p.fur
       ? [4.3, -0.62, 1.5, 1.0, 0.62, 1.25, 0.26, 0.12, 0.15]
-      : [2.6, -0.42, 1.15, 0.72, 0.58, 1, 0.12, 0, 0.1];
+      : [2.9, -0.42, 1.15, 0.85, 0.62, 1, 0.14, 0, 0.13];
     const radii = Array.from({ length: TUSK_STATIONS }, (_, i) => thick * (1 - 0.88 * (i / (TUSK_STATIONS - 1)) ** 1.7));
     for (const s of [1, -1]) {
       head.add(mesh(`tusk-${s > 0 ? 'L' : 'R'}`, sweep(tuskPath(s, arc, cy, cz, r0, r1, ky, bow, pinch), radii, 8), p.tuskColor));
