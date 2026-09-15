@@ -3,6 +3,7 @@ import type { DecodedIdToken } from 'firebase-admin/auth';
 import { FieldValue, Timestamp, type DocumentSnapshot } from 'firebase-admin/firestore';
 import { ROLE, USERS_COLLECTION, type AppUser, type Role } from '@/shared/users';
 import { adminAuth, firestore } from './firebase';
+import { recordActiveUser } from './metrics';
 
 export const SESSION_COOKIE = 'sb_session';
 /** Firebase caps session cookies at 14 days. */
@@ -27,6 +28,7 @@ export function toAppUser(snap: DocumentSnapshot): AppUser | null {
     createdAt: millis(d.createdAt),
     updatedAt: millis(d.updatedAt),
     lastLoginAt: millis(d.lastLoginAt),
+    lastActiveAt: millis(d.lastActiveAt),
   };
 }
 
@@ -70,6 +72,11 @@ export async function syncUserOnLogin(token: DecodedIdToken, displayName?: strin
   return (await getUser(token.uid))!;
 }
 
+/** Records a client ping with the server's clock. */
+export async function touchLastActive(uid: string): Promise<void> {
+  await users().doc(uid).update({ lastActiveAt: FieldValue.serverTimestamp() });
+}
+
 export async function addFcmToken(uid: string, token: string): Promise<void> {
   await users().doc(uid).update({ fcmTokens: FieldValue.arrayUnion(token), updatedAt: FieldValue.serverTimestamp() });
 }
@@ -92,7 +99,9 @@ export async function userFromSessionCookie(cookie: string | undefined): Promise
   try {
     const decoded = await adminAuth().verifySessionCookie(cookie, true);
     const user = await getUser(decoded.uid);
-    return user && !user.disabled ? user : null;
+    if (!user || user.disabled) return null;
+    recordActiveUser(user.uid);
+    return user;
   } catch {
     return null;
   }

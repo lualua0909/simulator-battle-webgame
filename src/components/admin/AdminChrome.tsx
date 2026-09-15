@@ -24,6 +24,7 @@ export function AdminNav() {
   return (
     <nav className="flex flex-col gap-0.5">
       {item('/admin', '🏠 Tổng quan', true)}
+      {item('/admin/monitoring', '📈 Giám sát máy chủ')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Nội dung game</div>
       {item('/models', '🪖 Nhân vật & mô hình')}
       {COLLECTIONS.filter((c) => c !== 'units').map((c) => item(`/admin/c/${c}`, `${COLLECTION_SPECS[c].icon} ${COLLECTION_SPECS[c].label}`))}

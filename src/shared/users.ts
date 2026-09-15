@@ -21,7 +21,18 @@ export type AppUser = {
   createdAt: number | null;
   updatedAt: number | null;
   lastLoginAt: number | null;
+  /** Last client ping (see /api/auth/ping). */
+  lastActiveAt: number | null;
 };
+
+/** Signed-in clients ping the server this often. */
+export const PING_INTERVAL_MS = 5 * 60_000;
+/** A user is online while the server clock is within this long of their last ping. */
+export const ONLINE_WINDOW_MS = 5 * 60_000;
+
+export function isOnline(user: Pick<AppUser, 'lastActiveAt'>, serverNow: number): boolean {
+  return user.lastActiveAt !== null && serverNow - user.lastActiveAt <= ONLINE_WINDOW_MS;
+}
 
 export function canAccessCms(user: Pick<AppUser, 'role' | 'disabled'> | null): boolean {
   return Boolean(user && !user.disabled && user.role <= ROLE.admin);

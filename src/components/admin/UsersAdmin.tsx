@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { formatCoins, type BoxStatus, type LedgerEntry, type LedgerType, type PlayerState } from '@/shared/economy';
-import { assignableRoles, canManage, ROLE, ROLE_LABELS, type AppUser, type Role } from '@/shared/users';
+import { assignableRoles, canManage, isOnline, ROLE, ROLE_LABELS, type AppUser, type Role } from '@/shared/users';
 import { api, ApiError, detailsToErrors } from './api';
 
 const fmt = (ms: number | null) => (ms ? new Date(ms).toLocaleString('vi-VN') : '—');
@@ -16,13 +16,13 @@ function RoleBadge({ role }: { role: Role }) {
 
 export function UserList() {
   const router = useRouter();
-  const [data, setData] = useState<{ me: AppUser; users: AppUser[] } | null>(null);
+  const [data, setData] = useState<{ me: AppUser; users: AppUser[]; now: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [role, setRole] = useState<'' | Role>('');
 
   useEffect(() => {
-    api<{ me: AppUser; users: AppUser[] }>('/api/admin/users')
+    api<{ me: AppUser; users: AppUser[]; now: number }>('/api/admin/users')
       .then(setData)
       .catch((e: Error) => setError(e.message));
   }, []);
@@ -60,6 +60,7 @@ export function UserList() {
               <th className="px-2 py-1">Đăng nhập bằng</th>
               <th className="px-2 py-1">FCM</th>
               <th className="px-2 py-1">Trạng thái</th>
+              <th className="px-2 py-1">Online</th>
               <th className="px-2 py-1">Đăng nhập gần nhất</th>
             </tr>
           </thead>
@@ -77,12 +78,15 @@ export function UserList() {
                 <td className="px-2 py-1 text-xs">{u.providers.join(', ') || '—'}</td>
                 <td className="px-2 py-1">{u.fcmTokens.length}</td>
                 <td className="px-2 py-1">{u.disabled ? <span className="font-bold text-red-team">Khoá</span> : 'Hoạt động'}</td>
+                <td className="px-2 py-1 text-xs" title={`Hoạt động gần nhất: ${fmt(u.lastActiveAt)}`}>
+                  {isOnline(u, data!.now) ? <span className="font-bold text-green-700">● Online</span> : <span className="opacity-60">○ Offline</span>}
+                </td>
                 <td className="px-2 py-1 text-xs">{fmt(u.lastLoginAt)}</td>
               </tr>
             ))}
             {data && shown.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-2 py-4 text-center opacity-60">
+                <td colSpan={8} className="px-2 py-4 text-center opacity-60">
                   Không có người dùng
                 </td>
               </tr>

@@ -15,7 +15,7 @@ import { allowSocketRequest, attachRooms, MAX_PACKET_BYTES, type RoomServer } fr
 
 type Client = Socket<ServerToClient, ClientToServer>;
 
-const user = (uid: string): AppUser => ({ uid, email: `${uid}@test.dev`, displayName: uid, photoURL: null, role: ROLE.user, providers: [], disabled: false, fcmTokens: [], createdAt: null, updatedAt: null, lastLoginAt: null });
+const user = (uid: string): AppUser => ({ uid, email: `${uid}@test.dev`, displayName: uid, photoURL: null, role: ROLE.user, providers: [], disabled: false, fcmTokens: [], createdAt: null, updatedAt: null, lastLoginAt: null, lastActiveAt: null });
 const USERS: Record<string, AppUser> = { 'cookie-alice': user('alice'), 'cookie-bob': user('bob'), 'cookie-carol': user('carol') };
 const WALLETS: Record<string, PlayerState> = {
   alice: { ...emptyPlayer(), stars: { clubber: 3, archer: 2 } },

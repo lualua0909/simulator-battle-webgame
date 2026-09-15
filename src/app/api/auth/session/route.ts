@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { jsonError, readJson } from '@/server/admin';
 import { adminAuth } from '@/server/firebase';
+import { recordActiveUser, recordLogin } from '@/server/metrics';
 import { currentUser, SESSION_COOKIE, SESSION_MAX_AGE, syncUserOnLogin } from '@/server/users';
 
 export const dynamic = 'force-dynamic';
@@ -29,6 +30,8 @@ export async function POST(req: Request) {
   const user = await syncUserOnLogin(decoded, parsed.data.displayName);
   if (user.disabled) return jsonError(403, 'Tài khoản đã bị khoá');
   const cookie = await adminAuth().createSessionCookie(parsed.data.idToken, { expiresIn: SESSION_MAX_AGE * 1000 });
+  recordLogin();
+  recordActiveUser(user.uid);
   const jar = await cookies();
   jar.set(SESSION_COOKIE, cookie, {
     httpOnly: true,

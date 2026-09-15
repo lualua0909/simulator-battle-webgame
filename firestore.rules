@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // All writes go through the server (Admin SDK bypasses these rules); the web client
-    // never uses the Firestore SDK — the game reads /api/config, the CMS uses /api/admin.
+    // only reads chat/world with the Firestore SDK — the game reads /api/config, the CMS uses /api/admin.
 
     // users/{uid}: profile created by /api/auth/session. Owner may read only their own doc.
     match /users/{uid} {
@@ -14,6 +14,12 @@ service cloud.firestore {
     // Every change runs in a server transaction; the game reads the wallet through /api/player.
     match /players/{path=**} {
       allow read, write: if false;
+    }
+
+    // chat/world: world chat log, read live by every client (guests included). Posts go through /api/chat.
+    match /chat/world {
+      allow read: if true;
+      allow write: if false;
     }
 
     // Everything else (units, weapons, … CMS content, settings/global, matches): server only.

@@ -3,7 +3,7 @@
 import { signOut as fbSignOut, type User } from 'firebase/auth';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { firebaseAuth, getFcmToken } from '@/lib/firebase';
-import type { AppUser } from '@/shared/users';
+import { PING_INTERVAL_MS, type AppUser } from '@/shared/users';
 import AuthModal, { type AuthView } from './AuthModal';
 
 type AuthCtx = {
@@ -70,6 +70,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       alive = false;
     };
   }, []);
+
+  // Presence: the server stamps lastActiveAt on every ping; the CMS shows the user online for 5 minutes after it.
+  const uid = user?.uid;
+  useEffect(() => {
+    if (!uid) return;
+    const ping = () => void fetch('/api/auth/ping', { method: 'POST' }).catch(() => undefined);
+    ping();
+    const timer = setInterval(ping, PING_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [uid]);
 
   const completeSignIn = useCallback(async (fbUser: User, displayName?: string) => {
     let u: AppUser;

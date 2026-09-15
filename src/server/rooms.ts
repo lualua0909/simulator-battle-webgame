@@ -19,6 +19,7 @@ import { idSchema } from '@/shared/schema';
 import type { AppUser } from '@/shared/users';
 import { getBundle } from './content';
 import { CHECKSUM_EVERY, judgeMatch, saveMatch, type BattleRecord } from './matches';
+import { recordBattleResult, recordBattleStart, recordBattleVoid, recordSaveFailed, registerRooms } from './metrics';
 import { getPlayer } from './players';
 import { SESSION_COOKIE, userFromSessionCookie } from './users';
 
@@ -128,9 +129,21 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     io.to(room.code).emit('room:state', state);
   };
 
-  const voidBattle = (room: Room, error: string) => {
+  registerRooms(() => {
+    const all = [...rooms.values()];
+    return {
+      sockets: online.size,
+      rooms: all.length,
+      lobbies: all.filter((r) => !r.battle).length,
+      battles: all.flatMap((r) => (r.battle ? [{ code: r.code, blue: r.battle.players.blue.name, red: r.battle.players.red.name, mapId: r.battle.mapId, siege: r.battle.defense !== null, startedAt: r.battle.startedAt }] : [])),
+    };
+  });
+
+  /** `kind` groups the void in monitoring (the error shown to players can contain names). */
+  const voidBattle = (room: Room, error: string, kind: string) => {
     if (!room.battle) return;
     room.battle = null;
+    recordBattleVoid(kind);
     io.to(room.code).emit('battle:result', { ok: false, error });
   };
 
@@ -138,11 +151,16 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     const battle = room.battle!;
     room.battle = null;
     const verdict = judgeMatch(battle);
-    if (!verdict.ok) return void io.to(room.code).emit('battle:result', verdict);
+    if (!verdict.ok) {
+      recordBattleVoid(verdict.error);
+      return void io.to(room.code).emit('battle:result', verdict);
+    }
     try {
       await deps.saveMatch(battle, verdict.winner, verdict.tick);
+      recordBattleResult(verdict.winner);
       io.to(room.code).emit('battle:result', { ok: true, winner: verdict.winner });
     } catch (e) {
+      recordSaveFailed();
       console.error(`Không lưu được kết quả trận phòng ${room.code}:`, e instanceof Error ? e.message : e);
       io.to(room.code).emit('battle:result', { ok: false, error: 'Máy chủ không lưu được kết quả trận' });
     }
@@ -187,7 +205,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
         p.socketId = null;
         p.ready = false;
       }
-      if (r.battle && !r.battle.reports[side]) voidBattle(r, `${p?.name ?? 'Một người chơi'} rời trận, kết quả bị hủy`);
+      if (r.battle && !r.battle.reports[side]) voidBattle(r, `${p?.name ?? 'Một người chơi'} rời trận, kết quả bị hủy`, 'Người chơi rời trận');
       void socket.leave(r.code);
       if (!r.players.blue?.socketId && !r.players.red?.socketId) {
         r.cleanup ??= setTimeout(() => rooms.delete(r.code), 60_000);
@@ -270,7 +288,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       const locked = bundle.units.find((u) => armyUnits.has(u.id) && !isUnlocked(u, wallet));
       if (locked) return ack({ ok: false, error: `Chưa mở khóa lính ${locked.name}` });
       // Readying for a new battle without confirming the last one abandons it.
-      if (room.battle && !room.battle.reports[side]) voidBattle(room, `${room.players[side]!.name} bỏ dở trận, kết quả bị hủy`);
+      if (room.battle && !room.battle.reports[side]) voidBattle(room, `${room.players[side]!.name} bỏ dở trận, kết quả bị hủy`, 'Người chơi bỏ dở trận');
       const me = room.players[side]!;
       me.army = army.data;
       me.stars = Object.fromEntries([...armyUnits].flatMap((id) => (wallet.stars[id] ? [[id, wallet.stars[id]]] : [])));
@@ -300,6 +318,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
           verified: new Set(),
           desync: false,
         };
+        recordBattleStart();
         io.to(room.code).emit('battle:start', start);
       }
       void broadcast(room);
@@ -336,7 +355,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       const battle = room?.battle;
       if (!room || !side || !battle || battle.reports[side]) return;
       const parsed = z.object({ outcome: z.enum(['win', 'lose', 'draw']), tick: z.number().int().min(1).max(battle.maxTick) }).safeParse(req);
-      if (!parsed.success) return voidBattle(room, 'Báo cáo kết quả không hợp lệ, kết quả bị hủy');
+      if (!parsed.success) return voidBattle(room, 'Báo cáo kết quả không hợp lệ, kết quả bị hủy', 'Báo cáo kết quả không hợp lệ');
       battle.reports[side] = parsed.data;
       if (room.phase === 'battle') {
         room.phase = 'lobby';

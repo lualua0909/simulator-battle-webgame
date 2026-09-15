@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import WorldChat from '@/components/chat/WorldChat';
 import HomeMenu from '@/components/player/HomeMenu';
 import PlayerHud from '@/components/player/PlayerHud';
 
@@ -43,6 +44,7 @@ export default function Home() {
       <div className="relative z-10 flex justify-center px-3 pb-3 sm:absolute sm:bottom-3 sm:left-3 sm:justify-start sm:p-0">
         <HomeMenu />
       </div>
+      <WorldChat />
     </main>
   );
 }

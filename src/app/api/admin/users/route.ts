@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const actor = await requireCms();
   if (actor instanceof Response) return actor;
-  return Response.json({ me: actor, users: await listUsers() });
+  return Response.json({ me: actor, users: await listUsers(), now: Date.now() });
 }
 
 export async function POST(req: Request) {
@@ -43,6 +43,7 @@ export async function POST(req: Request) {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         lastLoginAt: null,
+        lastActiveAt: null,
       });
     return Response.json(await getUser(record.uid), { status: 201 });
   } catch (e) {

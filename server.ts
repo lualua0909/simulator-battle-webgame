@@ -3,12 +3,17 @@ import { createServer } from 'node:http';
 import next from 'next';
 import { Server } from 'socket.io';
 import { getBundle } from './src/server/content';
+import { recordHttp } from './src/server/metrics';
 import { allowSocketRequest, attachRooms, MAX_PACKET_BYTES, type RoomServer } from './src/server/rooms';
 
 const port = Number(process.env.PORT || 3000);
 const dev = process.env.NODE_ENV !== 'production';
 
 const httpServer = createServer((req, res) => {
+  if (req.url?.startsWith('/api/')) {
+    const path = req.url.split('?')[0];
+    res.on('finish', () => recordHttp(req.method ?? 'GET', path, res.statusCode));
+  }
   void handle(req, res);
 });
 const app = next({ dev, port, httpServer });
