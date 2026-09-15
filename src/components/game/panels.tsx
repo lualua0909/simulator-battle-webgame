@@ -262,7 +262,20 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
   );
 }
 
-export function BattleHud(props: { stats: BattleStats; total: Record<Side, number>; speed: number; paused: boolean; onSpeed(s: number): void; onPause(): void; onStop(): void; stopLabel: string; timeLimit: number; defense: Side | null }) {
+export function BattleHud(props: {
+  stats: BattleStats;
+  total: Record<Side, number>;
+  speed: number;
+  paused: boolean;
+  muted: boolean;
+  onMute(): void;
+  onSpeed(s: number): void;
+  onPause(): void;
+  onStop(): void;
+  stopLabel: string;
+  timeLimit: number;
+  defense: Side | null;
+}) {
   const { stats, total } = props;
   const left = Math.max(0, props.timeLimit - stats.time);
   const mm = Math.floor(left / 60);
@@ -280,6 +293,9 @@ export function BattleHud(props: { stats: BattleStats; total: Record<Side, numbe
         <TeamBar side="red" alive={stats.red} total={total.red} />
       </div>
       <div className="panel pointer-events-auto absolute bottom-3 right-3 flex items-center gap-1 p-2">
+        <button className={`btn px-3 py-1 ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title="Bật/tắt âm thanh">
+          {props.muted ? '🔇' : '🔊'}
+        </button>
         <button className={`btn px-3 py-1 ${props.paused ? 'btn-gold' : ''}`} onClick={props.onPause} title="Space">
           {props.paused ? '▶' : '❚❚'}
         </button>

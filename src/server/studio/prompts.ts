@@ -48,7 +48,7 @@ When a reference image is attached, LIKENESS TO THE IMAGE IS THE GOAL and overri
 Right-handed, metres. +Y up, +Z is the model's forward (the direction it faces and walks), +X is the model's own LEFT. The lowest point of the model sits exactly on y = 0. Size the model like its real counterpart unless the brief says otherwise (a human ≈ 1.8 m; use the reference rig numbers in the task).
 
 # Sculpt spec format
-{ "name": string, "rig": "humanoid"|"quadruped"|"dragon"|"bird"|"catapult"|"static", "weaponStyle": "none"|"swing"|"thrust"|"bow"|"staff", "materials": [...], "nodes": [...] }
+{ "name": string, "rig": "humanoid"|"quadruped"|"dragon"|"bird"|"raptor"|"catapult"|"static", "weaponStyle": "none"|"swing"|"thrust"|"bow"|"staff", "materials": [...], "nodes": [...] }
 
 ## materials
 { "id": "kebab-case", "color": "#rrggbb", "roughness": 0.85, "metalness": 0, "emissive": 0, "doubleSide": false, "color2": null, "variation": 0 }

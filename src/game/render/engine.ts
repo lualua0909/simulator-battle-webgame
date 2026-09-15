@@ -3,7 +3,10 @@
 import * as THREE from 'three';
 import type { ArmyStars } from '@/shared/net';
 import type { ConfigBundle, MapDef, ParticleDef, ProjectileDef, WeaponDef } from '@/shared/schema';
+import { SKINNED_GLB_KINDS } from '@/shared/schema';
+import { AudioEngine } from '../audio/AudioEngine';
 import { getUnitTemplate } from '../models';
+import { cloneSkinned } from '../models/glbSkinned';
 import type { Armies } from '../sim/army';
 import { Terrain, WALL_CELL, type Side } from '../sim/terrain';
 import { BattleSim, SIM_DT, type BattleResult, type SimEvent } from '../sim/world';
@@ -97,6 +100,7 @@ export class BattleEngine {
   private readonly particles = new ParticleSystem();
   private readonly effects: EffectRenderer;
   private readonly effectHost: EffectHost;
+  private readonly audio: AudioEngine;
   /** Camera shake energy (0..1), decays every frame. */
   private shakeAmount = 0;
   /** Interpolation factor of the last rendered sim frame. */
@@ -112,7 +116,7 @@ export class BattleEngine {
   private readonly sun = new THREE.DirectionalLight('#fff1d8', 2.6);
   private readonly hemi = new THREE.HemisphereLight('#dcecff', '#5a4a30', 1.25);
   private readonly sky: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
-  private ghost: { group: THREE.Group; side: Side; valid: (x: number, z: number) => boolean; mats: THREE.MeshStandardMaterial[]; grid: boolean } | null = null;
+  private ghost: { group: THREE.Group; side: Side; valid: (x: number, z: number) => boolean; mats: THREE.MeshStandardMaterial[]; grid: boolean; isWall: boolean } | null = null;
   private readonly timer = new THREE.Timer();
   private time = 0;
   private statsTimer = 0;
@@ -156,6 +160,7 @@ export class BattleEngine {
     this.walls = new WallRenderer(bundle);
     this.projectiles = new ProjectileRenderer(bundle);
     this.effects = new EffectRenderer(bundle);
+    this.audio = new AudioEngine(bundle);
     this.effectHost = {
       particles: this.particles,
       emitPoint: (id, out) => this.units.emitPoint(id, out),
@@ -225,6 +230,7 @@ export class BattleEngine {
 
     this.rts.setTerrain(terrain);
     this.effects.setTerrain(terrain);
+    this.audio.setTerrain(terrain);
     this.debris.setTerrain(terrain);
     this.sim = null;
     this.mode = 'deploy';
@@ -417,27 +423,41 @@ export class BattleEngine {
     }
     const def = unitId ? this.bundle.units.find((u) => u.id === unitId) : undefined;
     if (!def) return;
-    const template = getUnitTemplate(def, new Map(this.bundle.assets.map((a) => [a.id, a])));
-    const poses = template.parts.map(() => new THREE.Matrix4());
-    new Poser(template, attackStyleFor(template, this.weapons.get(def.weaponId))).compute(
-      { time: 0, speed: 0, phase: 0, attack: -1, airborne: false, stunned: false, leanX: 0, leanZ: 0, seed: 0, refSpeed: 1 },
-      poses,
-    );
     const ok = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.55, depthWrite: false });
     const bad = new THREE.MeshStandardMaterial({ color: '#ff3030', flatShading: true, transparent: true, opacity: 0.5, depthWrite: false });
     const group = new THREE.Group();
     group.userData.unitId = unitId;
-    template.parts.forEach((p, i) => {
-      if (!p.geometry) return;
-      const m = new THREE.Mesh(p.geometry, ok);
-      m.matrixAutoUpdate = false;
-      m.matrix.copy(poses[i]);
-      group.add(m);
-    });
+    // A skinned unit ghosts from its uploaded file — the same source the battle renders.
+    const skinAsset = this.bundle.assets.find((a) => a.id === def.modelId);
+    const skinUrl = skinAsset?.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(skinAsset.kind) ? skinAsset.glb.url : null;
+    const skin = skinUrl ? cloneSkinned(skinUrl, skinAsset?.glb?.tint, skinAsset?.glb?.hide) : null;
+    if (skin) {
+      skin.group.scale.setScalar(skinAsset!.scale);
+      skin.group.traverse((o) => {
+        if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).material = ok;
+      });
+      skin.actions.get('idle')?.play();
+      skin.mixer.update(0.5);
+      group.add(skin.group);
+    } else {
+      const template = getUnitTemplate(def, new Map(this.bundle.assets.map((a) => [a.id, a])));
+      const poses = template.parts.map(() => new THREE.Matrix4());
+      new Poser(template, attackStyleFor(template, this.weapons.get(def.weaponId))).compute(
+        { time: 0, speed: 0, phase: 0, attack: -1, airborne: false, stunned: false, leanX: 0, leanZ: 0, seed: 0, refSpeed: 1 },
+        poses,
+      );
+      template.parts.forEach((p, i) => {
+        if (!p.geometry) return;
+        const m = new THREE.Mesh(p.geometry, ok);
+        m.matrixAutoUpdate = false;
+        m.matrix.copy(poses[i]);
+        group.add(m);
+      });
+    }
     group.rotation.y = def.structure === 'wall' ? 0 : side === 'blue' ? Math.PI / 2 : -Math.PI / 2;
     group.visible = false;
     this.scene.add(group);
-    this.ghost = { group, side, valid, mats: [ok, bad], grid: def.structure === 'wall' || def.structure === 'platform' };
+    this.ghost = { group, side, valid, mats: [ok, bad], grid: def.structure === 'wall' || def.structure === 'platform', isWall: def.structure === 'wall' };
   }
 
   /** Canvas snapshot (used for screenshots/share). */
@@ -460,9 +480,14 @@ export class BattleEngine {
     this.projectiles.dispose();
     this.particles.dispose();
     this.effects.dispose();
+    this.audio.dispose();
     this.fireworks.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+  }
+
+  setMuted(muted: boolean): void {
+    this.audio.setMuted(muted);
   }
 
   // ------------------------------------------------------------------ internals
@@ -615,15 +640,25 @@ export class BattleEngine {
             const iz = Math.floor(p.z / WALL_CELL);
             const cell = this.sim?.cellAt(p.x, p.z);
             this.ghost.group.position.set((ix + 0.5) * WALL_CELL, cell ? cell.top : this.terrain!.height((ix + 0.5) * WALL_CELL, (iz + 0.5) * WALL_CELL), (iz + 0.5) * WALL_CELL);
+            if (this.ghost.isWall) {
+              // Same alongX rule as WallRenderer.build(): line up the ghost with whichever neighbour it would actually join.
+              const alongX = [...(this.sim?.walls.values() ?? [])].some(
+                (c) => c.kind === 'wall' && c.iz === iz && (c.ix === ix + 1 || c.ix === ix - 1),
+              );
+              this.ghost.group.rotation.y = alongX ? 0 : Math.PI / 2;
+            }
           }
           const good = this.ghost.valid(p.x, p.z);
           const [ok, bad] = this.ghost.mats;
-          this.ghost.group.children.forEach((c) => ((c as THREE.Mesh).material = good ? ok : bad));
+          this.ghost.group.traverse((c) => {
+            if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = good ? ok : bad;
+          });
         } else this.ghost.group.visible = false;
       }
       this.events.onPointer?.({ type, x: p?.x ?? 0, z: p?.z ?? 0, hit: !!p, button: e.button, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey || e.altKey });
     };
     dom.addEventListener('pointerdown', (e) => {
+      this.audio.resume();
       // A click skips a cinematic and is not treated as a placement.
       if (this.cine) return this.finishCinematic();
       send('down', e);
@@ -640,6 +675,7 @@ export class BattleEngine {
     const dt = Math.min(0.1, this.timer.getDelta());
     if (!this.cine) this.rts.update(dt);
     else if (!this.cine.run.update(dt, this.camera)) this.finishCinematic();
+    this.audio.setListener(this.rts.target.x, this.rts.target.z, this.rts.yaw);
     const sim = this.sim;
     let simDt = 0;
     if (sim && this.mode === 'battle' && !this.paused && !this.holdSim) {
@@ -670,6 +706,7 @@ export class BattleEngine {
       this.projectiles.update(sim, this.alpha, simDt, this.particles);
     }
     this.effects.update(animDt, this.mode === 'battle' ? sim : null, this.alpha, this.effectHost);
+    this.audio.update(animDt, this.mode === 'battle' ? sim : null);
     this.debris.update(simDt);
     this.particles.update(animDt);
     this.fireworks.update(dt);
@@ -723,6 +760,7 @@ export class BattleEngine {
     const terrain = this.terrain!;
     const settings = this.bundle.settings;
     for (const e of events) {
+      this.audio.onEvent(e, this.effectHost, sim);
       switch (e.type) {
         case 'hit': {
           const w = this.weapons.get(e.weaponId);

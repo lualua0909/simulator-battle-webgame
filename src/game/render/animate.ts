@@ -88,6 +88,9 @@ export class Poser {
         case 'humanoid':
           this.humanoid(seg, input);
           break;
+        case 'raptor':
+          this.raptor(seg, input);
+          break;
         case 'quadruped':
           this.quadruped(seg, input);
           break;
@@ -335,6 +338,60 @@ export class Poser {
       default:
         break;
     }
+  }
+
+  // ------------------------------------------------------------------ raptor
+
+  private raptor(seg: SegmentTemplate, a: AnimInput): void {
+    const t = a.time + a.seed * 10;
+    const amp = a.airborne ? 0 : Math.min(1.2, a.speed / Math.max(0.5, a.refSpeed));
+    const p = a.phase;
+    const s = Math.sin(p);
+
+    if (a.airborne || a.stunned) {
+      const f = a.airborne ? 1 : 0.5;
+      this.r(seg, 'thighL', -0.9 * f);
+      this.r(seg, 'thighR', -0.7 * f);
+      this.r(seg, 'shinL', 1.2 * f);
+      this.r(seg, 'shinR', 1.1 * f);
+      this.r(seg, 'tail1', 0.15 * f);
+      this.r(seg, 'neck', 0.25 * f);
+      this.r(seg, 'head', Math.sin(t * 9) * 0.3 * (a.stunned ? 1 : 0.2), Math.sin(t * 7) * 0.2 * f, 0);
+      this.r(seg, 'body', a.leanX * 0.3, 0, a.leanZ * 0.3);
+      return;
+    }
+
+    // hind-leg gait (digitigrade: shins stay partly folded)
+    this.r(seg, 'thighL', -s * 0.65 * amp);
+    this.r(seg, 'thighR', s * 0.65 * amp);
+    this.r(seg, 'shinL', 0.3 + Math.max(0, Math.cos(p)) * 0.85 * amp);
+    this.r(seg, 'shinR', 0.3 + Math.max(0, -Math.cos(p)) * 0.85 * amp);
+    // torso bobs and pitches into the run; the tail sways against the stride
+    this.o(seg, 'body', 0, Math.abs(s) * 0.07 * amp, 0);
+    this.r(seg, 'body', 0.14 * amp + a.leanX * 0.4, s * 0.05 * amp, a.leanZ * 0.4);
+    this.r(seg, 'tail1', -0.05 * amp, Math.sin(t * 2.1) * 0.16, 0);
+    this.r(seg, 'tail2', 0, Math.sin(t * 2.1 - 0.8) * 0.2, 0);
+    this.r(seg, 'tail3', 0, Math.sin(t * 2.1 - 1.6) * 0.22, 0);
+    // tiny arms dangle; head rides level and scans while idle
+    this.r(seg, 'armL', -0.25 - s * 0.15 * amp);
+    this.r(seg, 'armR', -0.25 + s * 0.15 * amp);
+    this.r(seg, 'neck', -0.12 * amp + Math.sin(t * 1.4) * 0.04, Math.sin(t * 0.6) * 0.12 * (1 - amp * 0.5), 0);
+    this.r(seg, 'head', 0.05, Math.sin(t * 0.9) * 0.15 * (1 - amp * 0.5), 0);
+    this.r(seg, 'jaw', 0.05 + Math.sin(t * 2.2) * 0.02);
+
+    // bite: rear up with jaws open, then lunge down and snap shut
+    const k = a.attack;
+    if (k < 0) return;
+    const wind = ease(Math.min(1, k));
+    const strike = k > 1 ? clamp01((k - 1) * 3) : 0;
+    const settle = k > 1 ? clamp01((k - 1.33) * 1.5) : 0;
+    this.r(seg, 'neck', -0.3 * wind * (1 - strike) + 0.6 * strike * (1 - settle));
+    this.r(seg, 'head', -0.15 * wind * (1 - strike) + 0.25 * strike * (1 - settle));
+    this.r(seg, 'jaw', 0.55 * wind * (1 - strike) + 0.1 * strike * (1 - settle));
+    this.r(seg, 'body', 0.22 * strike * (1 - settle) - 0.08 * wind * (1 - strike));
+    this.r(seg, 'tail1', 0.18 * strike * (1 - settle));
+    this.r(seg, 'thighL', -0.3 * strike * (1 - settle));
+    this.r(seg, 'thighR', -0.3 * strike * (1 - settle));
   }
 
   // ------------------------------------------------------------------ quadruped

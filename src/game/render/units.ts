@@ -3,7 +3,9 @@
 // finally freeze into corpses.
 import * as THREE from 'three';
 import type { AssetDef, ConfigBundle, Settings, WeaponDef } from '@/shared/schema';
-import { getUnitTemplate } from '../models';
+import { SKINNED_GLB_KINDS } from '@/shared/schema';
+import { createAssetModel, getUnitTemplate } from '../models';
+import { cloneSkinned, setSkinState, stepSkin, type SkinnedInstance, type SkinState, type SkinTint } from '../models/glbSkinned';
 import type { ModelTemplate } from '../models/bake';
 import type { Side } from '../sim/terrain';
 import { SIM_DT, type BattleSim, type SimEvent, type SimUnit } from '../sim/world';
@@ -13,6 +15,8 @@ import type { Ragdoll, RagdollWorld } from './ragdoll';
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
 const smoothMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
 const STRIKE_TIME = 0.45;
+/** Rider seat on a skinned mount, in the mount's normalised (NORMALIZED_HEIGHT=2) local space; follows the mount's root only (no per-bone gallop bounce). */
+const MOUNT_SEAT = new THREE.Vector3(0, 1.5, -0.05);
 const EMIT_SOCKETS = ['mouth', 'muzzle', 'staff.tip', 'hand.R', 'rider.muzzle', 'rider.staff.tip', 'rider.hand.R'];
 const RAGDOLL_SECONDS = 6;
 
@@ -53,6 +57,19 @@ interface UnitVis {
   collapse: number;
   /** Pose when the collapse started. */
   rest: THREE.Matrix4[] | null;
+  /** Skeletal GLB unit (SKINNED_GLB_KINDS): rendered as a live clone, not instanced parts. */
+  usesSkin: boolean;
+  skin: SkinnedInstance | null;
+  skinUrl: string | null;
+  skinScale: number;
+  skinTint: SkinTint;
+  skinHide: string[];
+  /** Fallen distance of a dead flyer gliding to the ground (corpses must not hover). */
+  fall: number;
+  /** Seconds the attack clip keeps showing after a swing starts (covers the strike). */
+  atkT: number;
+  radius: number;
+  height: number;
 }
 
 const COLLAPSE_TIME = 2.4;
@@ -91,6 +108,13 @@ export class UnitRenderer {
     this.ensure(sim);
   }
 
+  /** Public URL of the skeletal override when `modelId` is a skinned kind with an upload, else null. */
+  private skinUrlFor(modelId: string): { url: string; scale: number; tint: SkinTint; hide: string[] } | null {
+    const a = this.assets.get(modelId);
+    if (!a?.glb || !(SKINNED_GLB_KINDS as readonly string[]).includes(a.kind)) return null;
+    return { url: a.glb.url, scale: a.scale, tint: a.glb.tint ?? {}, hide: a.glb.hide ?? [] };
+  }
+
   /** Visuals for units added since the last call (all of them after build, barracks spawns later). */
   ensure(sim: BattleSim): void {
     const start = this.vis.length;
@@ -113,6 +137,8 @@ export class UnitRenderer {
       const u = sim.units[i];
       const wall = u.wall?.kind === 'wall';
       const type = this.types.get(u.def.id);
+      const skin = this.skinUrlFor(u.def.modelId);
+      const usesSkin = !!skin && !wall;
       const v: UnitVis = {
         type: type!,
         seed: ((u.id * 2654435761) >>> 0) / 4294967296,
@@ -126,7 +152,7 @@ export class UnitRenderer {
         vLeanZ: 0,
         yaw: Math.atan2(u.fx, u.fz),
         tumble: 0,
-        world: type ? type.template.parts.map(() => new THREE.Matrix4()) : [],
+        world: usesSkin || !type ? [] : type.template.parts.map(() => new THREE.Matrix4()),
         ragdoll: null,
         corpse: false,
         sink: 0,
@@ -135,9 +161,19 @@ export class UnitRenderer {
         aim: 0,
         collapse: -1,
         rest: null,
+        usesSkin,
+        skin: null,
+        skinUrl: skin?.url ?? null,
+        skinScale: skin?.scale ?? 1,
+        skinTint: skin?.tint ?? {},
+        skinHide: skin?.hide ?? [],
+        fall: 0,
+        atkT: 0,
+        radius: u.def.radius,
+        height: u.def.height,
       };
       this.vis.push(v);
-      if (!wall) this.poseAlive(u, v, sim, 1, 0);
+      if (!wall && !usesSkin) this.poseAlive(u, v, sim, 1, 0);
     }
   }
 
@@ -145,8 +181,10 @@ export class UnitRenderer {
     const template = old?.template ?? getUnitTemplate(def, this.assets);
     const style = old?.style ?? attackStyleFor(template, this.weapons.get(def.weaponId));
     if (old) for (const m of old.meshes) if (m) this.group.remove(m);
+    // Skinned units never touch the instanced path: keep null slots so update() writes nothing.
+    const skinned = !!this.skinUrlFor(def.modelId);
     const meshes = template.parts.map((p, k) => {
-      if (!p.geometry) return null;
+      if (!p.geometry || skinned) return null;
       const m = new THREE.InstancedMesh(p.geometry, template.smooth ? smoothMaterial : material, capacity);
       const prev = old?.meshes[k];
       if (prev) {
@@ -176,7 +214,24 @@ export class UnitRenderer {
     for (let i = 0; i < sim.units.length; i++) {
       const u = sim.units[i];
       const v = this.vis[i];
-      if (!v || v.gone || (hidden && u.side === hidden)) continue;
+      if (!v) continue;
+      if (v.gone) {
+        // Sunk corpses leave the instanced draw (count excludes them); skinned clones must detach.
+        if (v.skin) {
+          this.group.remove(v.skin.group);
+          v.skin = null;
+        }
+        continue;
+      }
+      if (hidden && u.side === hidden) {
+        if (v.skin) v.skin.group.visible = false;
+        continue;
+      }
+      if (v.skin) v.skin.group.visible = true;
+      if (v.usesSkin) {
+        this.updateSkinned(u, v, alpha, dt);
+        continue;
+      }
       if (u.alive) this.poseAlive(u, v, sim, alpha, dt);
       else if (v.collapse >= 0) this.collapseStep(u, v, dt);
       else if (v.ragdoll && this.ragdolls) this.ragdolls.read(v.ragdoll, v.world);
@@ -269,9 +324,62 @@ export class UnitRenderer {
     return style;
   }
 
+  /** Skeletal GLB units: drive the file's clips (idle/walk/run/attack/death) instead of the procedural poser. */
+  private updateSkinned(u: SimUnit, v: UnitVis, alpha: number, dt: number): void {
+    if (!v.skin) {
+      if (!v.skinUrl) return;
+      const inst = cloneSkinned(v.skinUrl, v.skinTint, v.skinHide);
+      if (!inst) return; // still loading; the unit pops in once the file arrives
+      inst.group.scale.setScalar(v.skinScale);
+      this.group.add(inst.group);
+      v.skin = inst;
+      const riderAsset = u.def.riderModelId ? this.assets.get(u.def.riderModelId) : undefined;
+      if (riderAsset) {
+        const rider = createAssetModel(riderAsset);
+        // Counter the mount's own scale so the rider keeps its own asset scale.
+        rider.scale.multiplyScalar(1 / Math.max(0.0001, v.skinScale));
+        rider.position.copy(MOUNT_SEAT);
+        inst.group.add(rider);
+      }
+    }
+    const skin = v.skin;
+    const x = u.px + (u.x - u.px) * alpha;
+    const y = u.py + (u.y - u.py) * alpha;
+    const z = u.pz + (u.z - u.pz) * alpha;
+    if (dt > 0) {
+      const k = Math.min(1, dt * 10);
+      v.svx += ((u.x - u.px) / SIM_DT - v.svx) * k;
+      v.svz += ((u.z - u.pz) / SIM_DT - v.svz) * k;
+      v.speed = Math.hypot(v.svx, v.svz);
+      v.phase += v.speed * dt * (Math.PI / v.type.stride);
+      const want = Math.atan2(u.fx, u.fz);
+      const d = Math.atan2(Math.sin(want - v.yaw), Math.cos(want - v.yaw));
+      v.yaw += d * (1 - Math.exp(-dt * 10));
+      v.atkT = Math.max(0, v.atkT - dt);
+    }
+    const attacking = (u.action && u.windupLeft >= 0 && u.windupTotal > 0) || u.channelLeft > 0;
+    if (attacking) v.atkT = 0.8;
+    let state: SkinState;
+    if (!u.alive) state = 'death';
+    else if (attacking || v.atkT > 0) state = 'attack';
+    else if ((u.airborne && !u.dashWeapon) || u.climb !== null) state = 'jump';
+    else if (v.speed > Math.max(1.5, v.type.refSpeed * 0.75)) state = 'run';
+    else if (v.speed > 0.4) state = 'walk';
+    else state = 'idle';
+    setSkinState(skin, state);
+    stepSkin(skin, dt);
+    // Dead flyers glide down instead of hovering: settle on the ground, then corpses sink as usual.
+    if (!u.alive && skin.settled && dt > 0) {
+      const restY = y - v.sink - v.fall;
+      if (restY > 0.35) v.fall = Math.min(v.fall + dt * 2.2, y - v.sink - 0.35);
+    }
+    skin.group.position.set(x, y - v.sink - v.fall, z);
+    skin.group.rotation.y = v.yaw;
+  }
+
   onHit(e: HitEvent): void {
     const v = this.vis[e.targetId];
-    if (!v) return;
+    if (!v || v.usesSkin) return;
     const fX = Math.sin(v.yaw);
     const fZ = Math.cos(v.yaw);
     const fwd = e.dx * fX + e.dz * fZ;
@@ -305,6 +413,12 @@ export class UnitRenderer {
     if (u.structure) {
       v.collapse = 0;
       v.rest = v.world.map((w) => w.clone());
+      return;
+    }
+    if (v.usesSkin) {
+      // No rigid parts to ragdoll: the death clip plays, then the corpse freezes and sinks.
+      v.corpse = true;
+      this.corpses.push(v);
       return;
     }
     const vel = new THREE.Vector3((u.x - u.px) / SIM_DT, u.airborne ? u.vy : 0, (u.z - u.pz) / SIM_DT);
@@ -360,14 +474,24 @@ export class UnitRenderer {
   /** Where a unit's attacks and spells leave from: mouth, muzzle, staff orb or weapon hand (a mount's rider when the mount has none). */
   emitPoint(unitId: number, out: THREE.Vector3): boolean {
     for (const name of EMIT_SOCKETS) if (this.socketPosition(unitId, name, out)) return true;
+    // Skinned units carry no named sockets: breathe/bite from in front of the snout.
+    const v = this.vis[unitId];
+    if (v?.usesSkin && v.skin) {
+      out.copy(v.skin.group.position);
+      out.x += Math.sin(v.yaw) * (v.radius + 0.5);
+      out.z += Math.cos(v.yaw) * (v.radius + 0.5);
+      out.y += v.height * 0.6;
+      return true;
+    }
     return false;
   }
 
   /** World position of a named socket on a unit (e.g. dragon "mouth"). */
   socketPosition(unitId: number, name: string, out: THREE.Vector3): boolean {
     const v = this.vis[unitId];
-    const s = v?.type.template.sockets[name];
-    if (!v || !s) return false;
+    if (!v || v.usesSkin) return false;
+    const s = v.type.template.sockets[name];
+    if (!s) return false;
     out.setFromMatrixPosition(this.rootM.multiplyMatrices(v.world[s.part], s.matrix));
     return true;
   }
@@ -378,6 +502,12 @@ export class UnitRenderer {
         if (!m) continue;
         this.group.remove(m);
         m.dispose();
+      }
+    }
+    for (const v of this.vis) {
+      if (v.skin) {
+        this.group.remove(v.skin.group);
+        v.skin = null;
       }
     }
     this.types.clear();

@@ -6,10 +6,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createAssetModel, createUnitModel } from '@/game/models';
 import { COLLECTION_SPECS } from '@/shared/fields';
-import { RIG_OF_KIND, type AssetDef, type ConfigBundle, type UnitDef } from '@/shared/schema';
+import { RIG_OF_KIND, RIGID_GLB_KINDS, SKINNED_GLB_KINDS, type AssetDef, type ConfigBundle, type UnitDef } from '@/shared/schema';
 import type { StudioJobDetail, StudioVersion } from '@/shared/studio';
 import { api, ApiError } from '../admin/api';
 import DocForm from '../admin/DocForm';
+import TintEditor from './TintEditor';
 import { VerdictDot, type RunState } from '../admin/studio/common';
 import { EXPORT_FORMATS, exportModel, type ExportFormat, type ExportSource } from '../admin/studio/exporters';
 import { prepareImage, useStudioRunner } from '../admin/studio/runner';
@@ -89,9 +90,11 @@ interface ToolsProps {
   extraSources?: Array<{ label: string; source: ExportSource }>;
   /** Unit context: point the unit at a new asset created from a version. */
   onNewAsset?(id: string): void;
+  /** Gallery context: asset was deleted, clear the selection. */
+  onDeleted?(): void;
 }
 
-export function AssetModelTools({ bundle, reload, asset, context, candidate, setCandidate, extraSources = [], onNewAsset }: ToolsProps) {
+export function AssetModelTools({ bundle, reload, asset, context, candidate, setCandidate, extraSources = [], onNewAsset, onDeleted }: ToolsProps) {
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const users = bundle.units.filter((u) => u.modelId === asset.id || u.riderModelId === asset.id);
@@ -118,6 +121,14 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
       await api(`/api/admin/assets/${asset.id}`, { method: 'PUT', body: JSON.stringify({ ...doc, sculpt: null }) });
     }, 'Đã hoàn tác về model procedural ✓');
 
+  const remove = () =>
+    act(async () => {
+      if (!confirm(`Xóa hẳn asset "${asset.name}"? Không hoàn tác được.`)) throw new Error('Đã hủy');
+      if (asset.glb) await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'DELETE', cache: 'no-store' });
+      await api(`/api/admin/assets/${asset.id}`, { method: 'DELETE' });
+      onDeleted?.();
+    }, 'Đã xóa asset ✓');
+
   const sources: Array<{ label: string; source: ExportSource }> = [
     ...(previewing ? [{ label: `Bản thử v${previewing.sculpt.version} (đang xem)`, source: { name: `${previewing.sculpt.spec.name}-v${previewing.sculpt.version}`, spec: previewing.sculpt.spec } }] : []),
     { label: `${asset.name}${asset.sculpt ? ' (img2threejs)' : ' (procedural)'}`, source: asset.sculpt ? { name: asset.name, spec: asset.sculpt.spec } : { name: asset.name, build: () => createAssetModel(asset) } },
@@ -138,17 +149,49 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
           )}
         </span>
         {asset.sculpt && (
-          <button className="btn ml-auto px-2 py-0 text-xs" disabled={saving} onClick={() => void revert()}>
+          <button className="btn px-2 py-0 text-xs" disabled={saving} onClick={() => void revert()}>
             Hoàn tác về procedural
+          </button>
+        )}
+        {onDeleted && (
+          <button className="btn ml-auto px-2 py-0 text-xs" disabled={saving || users.length > 0} title={users.length ? 'Còn lính đang dùng, gỡ trước khi xóa' : undefined} onClick={() => void remove()}>
+            Xóa asset
           </button>
         )}
         <span className="w-full text-xs opacity-60">{users.length ? `Dùng bởi: ${users.map((u) => u.name).join(', ')}` : 'Chưa lính nào dùng'}</span>
       </div>
       {status && status.text !== 'Đã hủy' && <p className={`text-xs font-bold ${status.ok ? 'text-green-700' : 'text-red-team'}`}>{status.text}</p>}
       <ScalePanel asset={asset} act={act} saving={saving} />
-      {RIG_OF_KIND[asset.kind] === 'static' && <GlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
+      {(RIG_OF_KIND[asset.kind] === 'static' || (RIGID_GLB_KINDS as readonly string[]).includes(asset.kind)) && <GlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
+      {(SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && <SkinnedGlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
+      {asset.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && <TintSavePanel key={asset.glb.url} asset={asset} users={users} act={act} saving={saving} />}
       <DownloadPanel key={sources.map((s) => s.label).join('|')} sources={sources} />
       <ClaudePanel bundle={bundle} asset={asset} context={context} users={users} setCandidate={setCandidate} act={act} saving={saving} onNewAsset={onNewAsset} />
+    </div>
+  );
+}
+
+/** Recolour the uploaded skeletal model (saved separately; the workshop viewer updates after saving). */
+function TintSavePanel({ asset, users, act, saving }: { asset: AssetDef; users: UnitDef[]; act: (fn: () => Promise<unknown>, ok: string) => Promise<void>; saving: boolean }) {
+  const [tint, setTint] = useState<NonNullable<AssetDef['glb']>['tint']>(asset.glb?.tint ?? {});
+  useEffect(() => setTint(asset.glb?.tint ?? {}), [asset.id, asset.glb?.url]);
+  const dirty = JSON.stringify(tint) !== JSON.stringify(asset.glb?.tint ?? {});
+
+  const save = () =>
+    act(async () => {
+      const notes = users.length ? `Đổi màu cho: ${users.map((u) => u.name).join(', ')}.` : 'Chưa lính nào dùng asset này.';
+      if (!confirm(`Lưu màu mới của asset "${asset.name}"?\n\n${notes}\n\nGame dùng màu mới từ trận tiếp theo.`)) throw new Error('Đã hủy');
+      const doc = await api<AssetDef>(`/api/admin/assets/${asset.id}`);
+      await api(`/api/admin/assets/${asset.id}`, { method: 'PUT', body: JSON.stringify({ ...doc, glb: doc.glb ? { ...doc.glb, tint } : doc.glb }) });
+    }, 'Đã lưu màu ✓ — khung xem thử cập nhật sau khi tải lại');
+
+  if (!asset.glb) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <TintEditor glbUrl={asset.glb.url} tint={tint} onChange={setTint} />
+      <button className="btn btn-gold self-start px-3 py-1 text-xs" disabled={saving || !dirty} onClick={() => void save()}>
+        Lưu màu
+      </button>
     </div>
   );
 }
@@ -178,7 +221,7 @@ function ScalePanel({ asset, act, saving }: { asset: AssetDef; act: (fn: () => P
   );
 }
 
-/** Upload a real .glb/.gltf to replace this (static-rig) asset's procedural model outright. */
+/** Upload a real .glb/.gltf to replace this asset's procedural model outright (static-rig kinds: baked; rigid mounts like elephant: baked rigid, keeps body motion + saddle). */
 function GlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef; users: UnitDef[]; act: (fn: () => Promise<unknown>, ok: string) => Promise<void>; saving: boolean }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -235,6 +278,68 @@ function GlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef; users:
           Hoàn tác về procedural
         </button>
       )}
+    </div>
+  );
+}
+
+/** Upload a skeletal .glb/.gltf for an animated kind: the file's clips (idle/walk/run/attack/death) play in battle. */
+function SkinnedGlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef; users: UnitDef[]; act: (fn: () => Promise<unknown>, ok: string) => Promise<void>; saving: boolean }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const upload = (file: File) =>
+    act(async () => {
+      if (!/\.(glb|gltf)$/i.test(file.name)) throw new Error('Chỉ nhận .glb hoặc .gltf');
+      const notes = users.length ? `Đổi model cho: ${users.map((u) => u.name).join(', ')}.` : 'Chưa lính nào dùng asset này.';
+      if (!confirm(`Thay model của asset "${asset.name}" bằng file "${file.name}"?\n\n${notes}\n\nAnimation lấy từ file (idle/walk/run/attack/death). Model cũ (nếu là glb upload trước đó) sẽ bị xóa để tiết kiệm bộ nhớ.`)) throw new Error('Đã hủy');
+      const form = new FormData();
+      form.set('file', file);
+      const res = await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'POST', body: form, cache: 'no-store' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new ApiError(res.status, (data as { error?: string })?.error ?? res.statusText, (data as { details?: unknown })?.details);
+    }, 'Đã thay model bằng file upload ✓');
+
+  const remove = () =>
+    act(async () => {
+      if (!confirm(`Xóa model upload của "${asset.name}" và hoàn tác về procedural?`)) throw new Error('Đã hủy');
+      const res = await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'DELETE', cache: 'no-store' });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? res.statusText);
+    }, 'Đã xóa model upload ✓');
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
+      <b>🦖 Upload model animated (.glb/.gltf)</b>
+      {asset.glb && (
+        <span className="opacity-70">
+          đang dùng: <b>{asset.glb.fileName}</b>
+        </span>
+      )}
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (!file) return;
+          setBusy(true);
+          try {
+            await upload(file);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+      <button className="btn px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => fileInput.current?.click()}>
+        {busy ? 'Đang tải lên…' : asset.glb ? 'Thay file khác' : 'Chọn file…'}
+      </button>
+      {asset.glb && (
+        <button className="btn ml-auto px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => void remove()}>
+          Hoàn tác về procedural
+        </button>
+      )}
+      <span className="w-full opacity-70">Trận đấu, khung xem thử và thẻ bài đều dùng model + animation từ file.</span>
     </div>
   );
 }

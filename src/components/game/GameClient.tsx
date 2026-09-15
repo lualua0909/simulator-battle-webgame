@@ -66,6 +66,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [stats, setStats] = useState<BattleStats>({ blue: 0, red: 0, time: 0 });
   const [speed, setSpeed] = useState(1);
   const [paused, setPaused] = useState(false);
+  const [muted, setMuted] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -369,6 +370,21 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   useEffect(() => engine?.setSpeed(speed), [engine, speed]);
   useEffect(() => engine?.setPaused(paused), [engine, paused]);
+  useEffect(() => engine?.setMuted(muted), [engine, muted]);
+  useEffect(() => {
+    try {
+      setMuted(localStorage.getItem('sb-muted') === '1');
+    } catch {}
+  }, []);
+  const toggleMuted = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      try {
+        localStorage.setItem('sb-muted', next ? '1' : '0');
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // ------------------------------------------------------------------ flow
   const bot = bundle?.bots.find((b) => b.id === botId);
@@ -650,6 +666,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             total={totals}
             speed={speed}
             paused={paused}
+            muted={muted}
+            onMute={toggleMuted}
             onSpeed={setSpeed}
             onPause={() => setPaused((p) => !p)}
             onStop={backToDeploy}

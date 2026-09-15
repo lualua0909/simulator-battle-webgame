@@ -1,5 +1,7 @@
-// Upload/remove a custom .glb/.gltf override for one asset (static-rig kinds only).
-import { assetSchema, RIG_OF_KIND, type AssetDef } from '@/shared/schema';
+// Upload/remove a custom .glb/.gltf override for one asset (static-rig kinds: baked;
+// SKINNED_GLB_KINDS: kept skeletal, the file's animation clips play in battle;
+// RIGID_GLB_KINDS: baked rigid but keep body motion + saddle).
+import { assetSchema, RIG_OF_KIND, RIGID_GLB_KINDS, SKINNED_GLB_KINDS, type AssetDef } from '@/shared/schema';
 import { getDoc, putDoc } from '@/server/content';
 import { checkRefs, guard, issuesOf, jsonError } from '@/server/admin';
 import { deleteAssetGlb, saveAssetGlb } from '@/server/assetUploads';
@@ -14,7 +16,8 @@ export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const doc = (await getDoc('assets', id)) as AssetDef | null;
   if (!doc) return jsonError(404, 'Không tìm thấy asset');
-  if (RIG_OF_KIND[doc.kind] !== 'static') return jsonError(422, `Asset loại ${doc.kind} cần hoạt hình (rig ${RIG_OF_KIND[doc.kind]}), không nhận glb upload`);
+  if (RIG_OF_KIND[doc.kind] !== 'static' && !(SKINNED_GLB_KINDS as readonly string[]).includes(doc.kind) && !(RIGID_GLB_KINDS as readonly string[]).includes(doc.kind))
+    return jsonError(422, `Asset loại ${doc.kind} cần hoạt hình (rig ${RIG_OF_KIND[doc.kind]}), không nhận glb upload`);
 
   let form: FormData;
   try {
@@ -31,7 +34,7 @@ export async function POST(req: Request, ctx: Ctx) {
   if (ext === '.glb' && buf.toString('ascii', 0, 4) !== 'glTF') return jsonError(422, 'File .glb không hợp lệ');
 
   const { url, fileName } = await saveAssetGlb(id, ext, buf);
-  const updated: AssetDef = { ...doc, glb: { url, fileName: file.name, uploadedAt: Date.now() }, sculpt: null };
+  const updated: AssetDef = { ...doc, glb: { url, fileName: file.name, uploadedAt: Date.now(), tint: {}, hide: [] }, sculpt: null };
   const parsed = assetSchema.safeParse(updated);
   if (!parsed.success) {
     await deleteAssetGlb(url);

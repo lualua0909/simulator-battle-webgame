@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { ASSET_KINDS, type AssetDef, type AssetKind, type CollectionName, type ConfigBundle } from '@/shared/schema';
+import { ASSET_KINDS, SKINNED_GLB_KINDS, type AssetDef, type AssetGlb, type AssetKind, type CollectionName, type ConfigBundle } from '@/shared/schema';
 import { assetParamDefaults, COLLECTION_SPECS } from '@/shared/fields';
 import { useConfig } from '@/game/useConfig';
+import TintEditor from '../models/TintEditor';
 import { api, ApiError, detailsToErrors } from './api';
 import DocForm from './DocForm';
 import { AssetPreview, BotTester, FactionPreview, MapPreview, ParticlePreview, ProjectilePreview, UnitPreview, WeaponPreview } from './Previews';
@@ -14,6 +15,15 @@ type Doc = Record<string, unknown>;
 
 function isSculpted(doc: Doc | null): doc is Doc & { sculpt: NonNullable<AssetDef['sculpt']> } {
   return Boolean(doc && doc.sculpt);
+}
+
+/** Draft asset with an uploaded skeletal .glb whose colours are tint-editable. */
+function tintableGlb(doc: Doc | null): (AssetGlb & { kind: string }) | null {
+  if (!doc || typeof doc !== 'object') return null;
+  const glb = (doc as { glb?: unknown }).glb as AssetGlb | null | undefined;
+  const kind = (doc as { kind?: unknown }).kind;
+  if (!glb || typeof kind !== 'string' || !(SKINNED_GLB_KINDS as readonly string[]).includes(kind)) return null;
+  return { ...glb, kind };
 }
 
 /** `modelId` pre-selects the model of a new unit (e.g. an asset just made in the img2threejs studio). */
@@ -157,8 +167,17 @@ export default function DocEditor({ collection, id, from, modelId }: { collectio
         <p>Đang tải…</p>
       ) : (
         <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_440px]">
-          <div className="panel p-4">
-            <DocForm fields={spec.fields(doc)} doc={doc} onChange={change} bundle={bundle} errors={errors} isNew={isNew} />
+          <div className="flex flex-col gap-3">
+            {tintableGlb(doc) && (
+              <TintEditor
+                glbUrl={(doc.glb as AssetGlb).url}
+                tint={(doc.glb as AssetGlb).tint ?? {}}
+                onChange={(tint) => change({ ...doc, glb: { ...(doc.glb as AssetGlb), tint } })}
+              />
+            )}
+            <div className="panel p-4">
+              <DocForm fields={spec.fields(doc)} doc={doc} onChange={change} bundle={bundle} errors={errors} isNew={isNew} />
+            </div>
           </div>
           <div className="xl:sticky xl:top-3">{bundle && <Preview collection={collection} doc={doc} bundle={bundle} />}</div>
         </div>

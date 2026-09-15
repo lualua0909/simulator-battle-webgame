@@ -10,7 +10,7 @@ export const ATTACK_KINDS = ['melee', 'projectile', 'breath', 'heal', 'chain', '
 /** Body animation while winding up / releasing an ability ('auto' = derived from the kind and the held weapon). */
 export const CAST_STYLES = ['auto', 'swing', 'thrust', 'bow', 'throw', 'cast', 'gun', 'raise', 'palm', 'slam'] as const;
 export const STRIKE_VFX = ['lightning', 'meteor'] as const;
-export const UNIT_ASSET_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'catapult', 'structure'] as const;
+export const UNIT_ASSET_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'raptor', 'catapult', 'structure'] as const;
 export const ENV_ASSET_KINDS = ['tree', 'rock', 'bush'] as const;
 export const ASSET_KINDS = [...UNIT_ASSET_KINDS, ...ENV_ASSET_KINDS] as const;
 export const PROJECTILE_MODELS = ['arrow', 'spear', 'stone', 'boulder', 'fireball', 'orb', 'bullet', 'meteor', 'shuriken'] as const;
@@ -271,6 +271,13 @@ export const birdParamsSchema = z.object({
   beak: hex.default('#f2b01e'),
 });
 
+export const raptorParamsSchema = z.object({
+  body: hex.default('#5f9e4d'),
+  belly: hex.default('#d9cf9e'),
+  back: hex.default('#3c6e35'),
+  eye: hex.default('#ffd23f'),
+});
+
 export const catapultParamsSchema = z.object({
   wood: hex.default('#8a5a2b'),
   metal: hex.default('#5d636b'),
@@ -316,6 +323,7 @@ export const ASSET_PARAM_SCHEMAS = {
   elephant: elephantParamsSchema,
   dragon: dragonParamsSchema,
   bird: birdParamsSchema,
+  raptor: raptorParamsSchema,
   catapult: catapultParamsSchema,
   structure: structureParamsSchema,
   tree: treeParamsSchema,
@@ -328,6 +336,7 @@ export type HorseParams = z.infer<typeof horseParamsSchema>;
 export type ElephantParams = z.infer<typeof elephantParamsSchema>;
 export type DragonParams = z.infer<typeof dragonParamsSchema>;
 export type BirdParams = z.infer<typeof birdParamsSchema>;
+export type RaptorParams = z.infer<typeof raptorParamsSchema>;
 export type CatapultParams = z.infer<typeof catapultParamsSchema>;
 export type StructureParams = z.infer<typeof structureParamsSchema>;
 export type TreeParams = z.infer<typeof treeParamsSchema>;
@@ -341,6 +350,7 @@ export const RIG_OF_KIND = {
   elephant: 'quadruped',
   dragon: 'dragon',
   bird: 'bird',
+  raptor: 'raptor',
   catapult: 'catapult',
   structure: 'static',
   tree: 'static',
@@ -355,11 +365,35 @@ export const assetSculptSchema = z.object({
   spec: sculptSpecSchema,
 });
 
-/** An admin-uploaded .glb/.gltf that replaces the procedural preset outright (static rig only: no named parts to animate). */
+/** Asset kinds whose uploaded .glb keeps its skeletal animation (rendered skinned, see models/glbSkinned.ts). */
+export const SKINNED_GLB_KINDS = ['raptor', 'humanoid', 'dragon', 'horse'] as const satisfies readonly AssetKind[];
+/**
+ * Asset kinds whose uploaded .glb has no skeleton: baked rigid to one vertex-coloured
+ * mesh but mounted on a quadruped `body` pivot (walk bob/lean still apply) with a
+ * `saddle` socket so riders keep seating (see models/glbStatic.ts).
+ */
+export const RIGID_GLB_KINDS = ['elephant'] as const satisfies readonly AssetKind[];
+/**
+ * An admin-uploaded .glb/.gltf that replaces the procedural preset outright. Static-rig kinds
+ * are baked to one vertex-coloured mesh; kinds in SKINNED_GLB_KINDS keep their skeletal
+ * animation and play the embedded clips (idle/walk/run/attack/death) in battle; kinds in
+ * RIGID_GLB_KINDS are baked rigid (the file carries no skeleton) but keep body motion + saddle.
+ */
 export const assetGlbSchema = z.object({
   url: z.string(),
   fileName: z.string().max(200),
   uploadedAt: z.number(),
+  /**
+   * Recolour map keyed by material name. A plain hex multiplies the material (solid packs).
+   * `{ from, to }` repaints textured pixels of the `from` hue family toward `to` (e.g. a blue
+   * robe to red), keeping shading and leaving skin, trim and hair untouched.
+   */
+  tint: z.record(z.string(), z.union([hex, z.object({ from: hex, to: hex })])).default({}),
+  /**
+   * Mesh/node names to drop from a skeletal file on load (e.g. a character pack's whole
+   * weapon arsenal riding in one hand). Exact match; the rest of the file is untouched.
+   */
+  hide: z.array(z.string().max(200)).default([]),
 });
 export type AssetGlb = z.infer<typeof assetGlbSchema>;
 
@@ -387,8 +421,8 @@ export const assetSchema = z
     for (const issue of asset.sculpt ? checkSculptSpec(asset.sculpt.spec) : []) {
       if (issue.level === 'fail') ctx.addIssue({ code: 'custom', message: issue.message, path: ['sculpt', 'spec'] });
     }
-    if (asset.glb && RIG_OF_KIND[asset.kind] !== 'static') {
-      ctx.addIssue({ code: 'custom', message: `upload glb chỉ dùng cho asset tĩnh (rig "static"); asset loại ${asset.kind} cần rig ${RIG_OF_KIND[asset.kind]} để hoạt hình`, path: ['glb'] });
+    if (asset.glb && RIG_OF_KIND[asset.kind] !== 'static' && !(SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && !(RIGID_GLB_KINDS as readonly string[]).includes(asset.kind)) {
+      ctx.addIssue({ code: 'custom', message: `upload glb chỉ dùng cho asset tĩnh (rig "static"), ${SKINNED_GLB_KINDS.join(', ')} (giữ animation trong file) hoặc ${RIGID_GLB_KINDS.join(', ')} (bake cứng, giữ chuyển động thân); asset loại ${asset.kind} cần rig ${RIG_OF_KIND[asset.kind]} để hoạt hình`, path: ['glb'] });
     }
     if (asset.glb && asset.sculpt) {
       ctx.addIssue({ code: 'custom', message: 'chỉ chọn một: model img2threejs hoặc glb upload', path: ['glb'] });

@@ -125,10 +125,12 @@ body {
   flex-shrink: 0;
   padding-top: 1.7rem;
   text-align: left;
-  transition: transform 0.15s;
+  transition: transform 0.15s, filter 0.15s;
 }
-button.cr-card:hover {
-  transform: translateY(-3px);
+.cr-card:hover {
+  transform: scale(1.1);
+  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.45));
+  z-index: 1;
 }
 .cr-card-selected .cr-frame {
   outline: 4px solid #ffd23f;

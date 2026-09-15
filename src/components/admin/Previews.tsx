@@ -9,6 +9,7 @@ import {
   botSchema,
   mapSchema,
   particleSchema,
+  SKINNED_GLB_KINDS,
   unitSchema,
   weaponSchema,
   type AssetDef,
@@ -29,7 +30,13 @@ import { createSkirt, createTerrainMesh, createWater, createZoneOverlay } from '
 import { armyCost } from '@/game/sim/army';
 import { Terrain } from '@/game/sim/terrain';
 import ModelViewer, { type PreviewAnim } from '../ModelViewer';
+import SkinnedModelViewer from '../SkinnedModelViewer';
 import SkillArena from '../SkillArena';
+
+/** Public URL of the file when the draft asset is a skinned kind with an upload, else null. */
+function skinnedUrlOf(asset: Pick<AssetDef, 'kind' | 'glb'> | undefined): string | null {
+  return asset?.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) ? asset.glb.url : null;
+}
 
 type Doc = Record<string, unknown>;
 
@@ -98,6 +105,8 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
   const quickSkills = useMemo(() => skills.map((w) => ({ ...w, initialCooldown: Math.min(w.initialCooldown, 0.8) })), [JSON.stringify(skills)]); // eslint-disable-line react-hooks/exhaustive-deps
   const assets = useMemo(() => new Map(bundle.assets.map((a) => [a.id, a])), [bundle]);
   const template = useMemo(() => tryBake(() => createUnitModel(unit, assets)), [unit.modelId, unit.riderModelId, assets]); // eslint-disable-line react-hooks/exhaustive-deps
+  const skinUrl = skinnedUrlOf(assets.get(unit.modelId));
+  const skinScale = assets.get(unit.modelId)?.scale ?? 1;
   const weapon = bundle.weapons.find((w) => w.id === unit.weaponId);
   const safe = { ...unit, hp: Number(unit.hp) || 1, cost: Number(unit.cost) || 1, attackSpeed: Number(unit.attackSpeed) || 1, castSpeed: Number(unit.castSpeed) || 1, skillIds: unit.skillIds ?? [] };
   const { dps, ehp } = unitPower(safe, bundle);
@@ -122,7 +131,11 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
     >
       <div className="h-80 overflow-hidden rounded-lg border-2 border-ink/20">
         {!arena ? (
-          <ModelViewer template={template} weapon={weapon} anim={anim} />
+          skinUrl ? (
+            <SkinnedModelViewer url={skinUrl} scale={skinScale} tint={assets.get(unit.modelId)?.glb?.tint} hide={assets.get(unit.modelId)?.glb?.hide} anim={anim} />
+          ) : (
+            <ModelViewer template={template} weapon={weapon} anim={anim} />
+          )
         ) : fighter ? (
           <SkillArena bundle={bundle} caster={fighter} abilities={quickSkills} />
         ) : (
@@ -158,31 +171,45 @@ export function AssetPreview({ doc }: { doc: Doc }) {
   const [picked, setPicked] = useState<string | null>(null);
   const template = useMemo(() => tryBake(() => createAssetModel({ ...asset, scale: Number(asset.scale) || 1, seed: Number(asset.seed) || 0 })), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const env = isEnvKind(String(asset.kind));
+  const skinUrl = skinnedUrlOf(asset);
+  const skinScale = Number(asset.scale) || 1;
   return (
     <Frame
       title="Xem trước"
       tools={
         <div className="flex items-center gap-2 text-xs">
           {!env && <AnimButtons anim={anim} setAnim={setAnim} />}
-          <label className="flex items-center gap-1">
-            <input type="checkbox" checked={explode} onChange={(e) => setExplode(e.target.checked)} /> Tách rời
-          </label>
+          {!skinUrl && (
+            <label className="flex items-center gap-1">
+              <input type="checkbox" checked={explode} onChange={(e) => setExplode(e.target.checked)} /> Tách rời
+            </label>
+          )}
         </div>
       }
     >
       <div className="h-96 overflow-hidden rounded-lg border-2 border-ink/20">
-        <ModelViewer template={template} anim={env ? 'idle' : anim} explode={explode} onPick={setPicked} />
+        {skinUrl ? (
+          <SkinnedModelViewer url={skinUrl} scale={skinScale} tint={asset.glb?.tint} hide={asset.glb?.hide} anim={anim} />
+        ) : (
+          <ModelViewer template={template} anim={env ? 'idle' : anim} explode={explode} onPick={setPicked} />
+        )}
       </div>
       <p className="text-xs opacity-70">
-        {template ? `${template.parts.length} bộ phận chuyển động · ${template.parts.reduce((n, p) => n + (p.geometry ? p.geometry.getAttribute('position').count / 3 : 0), 0)} tam giác` : 'Không dựng được mô hình'}
-        {picked && (
+        {skinUrl ? (
+          <>model + animation từ file upload {asset.glb ? `(${asset.glb.fileName})` : ''}</>
+        ) : (
           <>
-            {' '}
-            · đang chọn <b className="font-mono">{picked}</b>
+            {template ? `${template.parts.length} bộ phận chuyển động · ${template.parts.reduce((n, p) => n + (p.geometry ? p.geometry.getAttribute('position').count / 3 : 0), 0)} tam giác` : 'Không dựng được mô hình'}
+            {picked && (
+              <>
+                {' '}
+                · đang chọn <b className="font-mono">{picked}</b>
+              </>
+            )}
           </>
         )}
       </p>
-      <p className="text-xs opacity-60">Mô hình procedural dựng hoàn toàn bằng code (chuẩn img2threejs, không cần ảnh tham chiếu). Bấm vào mô hình để xem tên bộ phận.</p>
+      {!skinUrl && <p className="text-xs opacity-60">Mô hình procedural dựng hoàn toàn bằng code (chuẩn img2threejs, không cần ảnh tham chiếu). Bấm vào mô hình để xem tên bộ phận.</p>}
     </Frame>
   );
 }

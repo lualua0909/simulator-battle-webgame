@@ -1,7 +1,10 @@
-// Unit portrait thumbnails rendered from the real procedural models (one shared context).
+// Unit portrait thumbnails rendered from the real models (one shared context).
+// Skinned units (uploaded skeletal .glb) pose from the file itself — the same source the
+// battle renders — with the procedural model as the fallback before the file arrives.
 import * as THREE from 'three';
-import type { ConfigBundle } from '@/shared/schema';
+import { SKINNED_GLB_KINDS, type ConfigBundle } from '@/shared/schema';
 import { getUnitTemplate } from '../models';
+import { cloneSkinned, type SkinTint } from '../models/glbSkinned';
 import { attackStyleFor, Poser } from './animate';
 
 const cache = new Map<string, Promise<Record<string, string>>>();
@@ -13,6 +16,34 @@ export function unitThumbnails(bundle: ConfigBundle): Promise<Record<string, str
     cache.set(bundle.version, p);
   }
   return p;
+}
+
+function skinnedUrlOf(asset: { kind: string; glb: { url: string } | null } | undefined): string | null {
+  return asset?.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) ? asset.glb.url : null;
+}
+
+/** Renders one skinned unit mid-idle into the shared context; false before its file loads. */
+async function renderSkinned(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, url: string, scale: number, tint?: SkinTint, hide?: string[]): Promise<boolean> {
+  const inst = cloneSkinned(url, tint ?? {}, hide ?? []);
+  if (!inst) return false;
+  try {
+    inst.group.scale.setScalar(scale);
+    inst.actions.get('idle')?.play();
+    inst.mixer.update(0.6);
+    inst.group.updateMatrixWorld(true);
+    scene.add(inst.group);
+    const b = new THREE.Box3().setFromObject(inst.group);
+    if (b.isEmpty()) return false;
+    const center = b.getCenter(new THREE.Vector3());
+    const radius = b.getSize(new THREE.Vector3()).length() * 0.5;
+    const dist = (radius / Math.tan((camera.fov * Math.PI) / 360)) * 1.02;
+    camera.position.set(center.x + Math.sin(0.6) * dist, center.y + dist * 0.25, center.z + Math.cos(0.6) * dist);
+    camera.lookAt(center);
+    renderer.render(scene, camera);
+    return true;
+  } finally {
+    scene.remove(inst.group);
+  }
 }
 
 async function render(bundle: ConfigBundle): Promise<Record<string, string>> {
@@ -33,6 +64,13 @@ async function render(bundle: ConfigBundle): Promise<Record<string, string>> {
   const weapons = new Map(bundle.weapons.map((w) => [w.id, w]));
   const out: Record<string, string> = {};
   for (const unit of bundle.units) {
+    const skinAsset = assets.get(unit.modelId);
+    const skinUrl = skinnedUrlOf(skinAsset);
+    if (skinUrl && (await renderSkinned(renderer, scene, camera, skinUrl, skinAsset?.scale ?? 1, skinAsset?.glb?.tint, skinAsset?.glb?.hide))) {
+      out[unit.id] = renderer.domElement.toDataURL('image/png');
+      await new Promise((r) => setTimeout(r, 0));
+      continue;
+    }
     const template = getUnitTemplate(unit, assets);
     const poses = template.parts.map(() => new THREE.Matrix4());
     new Poser(template, attackStyleFor(template, weapons.get(unit.weaponId))).compute(

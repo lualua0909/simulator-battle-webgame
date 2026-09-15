@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { Object3D } from 'three';
 import { COLLECTION_SPECS, ENUM_LABELS } from '@/shared/fields';
-import { CHEST_VARIANTS, unitSchema, weaponSchema, type ChestVariant, type UnitDef, type WeaponDef } from '@/shared/schema';
+import { CHEST_VARIANTS, SKINNED_GLB_KINDS, unitSchema, weaponSchema, type AssetDef, type ChestVariant, type UnitDef, type WeaponDef } from '@/shared/schema';
 import { canAccessCms } from '@/shared/users';
 import { abilityCaster } from '@/game/arena';
 import { bakeModel, type ModelTemplate } from '@/game/models/bake';
@@ -19,6 +19,7 @@ import { AssetModelTools, withCandidate, type Candidate } from './models/ModelTo
 import UnitEditor from './models/UnitEditor';
 import { api, ApiError } from './admin/api';
 import ModelViewer, { type PreviewAnim } from './ModelViewer';
+import SkinnedModelViewer from './SkinnedModelViewer';
 import ChestStage from './player/ChestStage';
 import SkillArena from './SkillArena';
 
@@ -109,6 +110,12 @@ export default function ModelsGallery(props: Props) {
     return null;
   }, [modelKey, skill]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A skinned asset (uploaded skeletal .glb) previews from the file itself — the same
+  // source the battle renders — unless a Claude sculpt candidate is being tried on it.
+  const skinAsset: AssetDef | undefined = asset ?? (deferredUnit && !skill ? assets.get(deferredUnit.modelId) : undefined);
+  const previewingCandidate = candidate?.assetId === skinAsset?.id ? candidate : null;
+  const skinnedUrl = !previewingCandidate && skinAsset?.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(skinAsset.kind) ? skinAsset.glb.url : null;
+
   // The arena runs the real engine on the drafts: settle them so typing does not restart it every key.
   const arenaBundle = useMemo(() => (bundle ? { ...bundle, assets: assetList, version: `${bundle.version}|${candidate ? `${candidate.assetId}@${candidate.sculpt.studioId}v${candidate.sculpt.version}` : ''}` } : null), [bundle, assetList, candidate]);
   const parsedUnit = unit ? unitSchema.safeParse({ ...unit, id: unit.id || 'draft' }) : null;
@@ -146,6 +153,8 @@ export default function ModelsGallery(props: Props) {
     practice ? <SkillArena bundle={arenaBundle} caster={practice.caster} abilities={practice.abilities} /> : <p className="p-4 text-sm">Dữ liệu kỹ năng chưa hợp lệ</p>
   ) : arena && unit && !asset ? (
     fighter ? <SkillArena bundle={arenaBundle} caster={fighter} abilities={abilities} /> : <p className="p-4 text-sm">Dữ liệu lính chưa hợp lệ</p>
+  ) : skinnedUrl ? (
+    <SkinnedModelViewer url={skinnedUrl} scale={skinAsset?.scale ?? 1} tint={skinAsset?.glb?.tint} hide={skinAsset?.glb?.hide} anim={anim} yaw={props.yaw} />
   ) : (
     <ModelViewer template={template} weapon={weapon} anim={anim} yaw={props.yaw} explode={explode} onPick={setPicked} />
   );
@@ -236,7 +245,7 @@ export default function ModelsGallery(props: Props) {
               ⚔️ Đấu thử
             </button>
           )}
-          {!skill && !sel.chest && !(arena && unit && !asset) && (
+          {!skill && !sel.chest && !(arena && unit && !asset) && !skinnedUrl && (
             <>
               {(['idle', 'walk', 'attack'] as const).map((a) => (
                 <button key={a} className={`btn px-2 py-1 text-xs ${anim === a ? 'btn-gold' : ''}`} onClick={() => setAnim(a)}>
@@ -247,6 +256,16 @@ export default function ModelsGallery(props: Props) {
                 <input type="checkbox" checked={explode} onChange={(e) => setExplode(e.target.checked)} /> Tách rời
               </label>
               <span className="opacity-70">{template ? `${template.parts.length} part` : ''}</span>
+            </>
+          )}
+          {!skill && !sel.chest && !(arena && unit && !asset) && skinnedUrl && (
+            <>
+              {(['idle', 'walk', 'attack'] as const).map((a) => (
+                <button key={a} className={`btn px-2 py-1 text-xs ${anim === a ? 'btn-gold' : ''}`} onClick={() => setAnim(a)}>
+                  {a === 'idle' ? 'Đứng' : a === 'walk' ? 'Đi' : 'Đánh'}
+                </button>
+              ))}
+              <span className="opacity-70">model + animation từ file upload</span>
             </>
           )}
           {picked && <span className="rounded bg-white px-2 py-0.5 font-mono text-xs">{picked}</span>}
@@ -306,7 +325,18 @@ export default function ModelsGallery(props: Props) {
           ) : assetDef ? (
             <div className="flex flex-col gap-3">
               <h2 className="font-display text-lg leading-tight">{assetDef.name}</h2>
-              <AssetModelTools key={assetDef.id} bundle={bundle} reload={reload} asset={assetDef} candidate={candidate} setCandidate={setCandidate} />
+              <AssetModelTools
+                key={assetDef.id}
+                bundle={bundle}
+                reload={reload}
+                asset={assetDef}
+                candidate={candidate}
+                setCandidate={setCandidate}
+                onDeleted={() => {
+                  setSel({});
+                  window.history.replaceState(null, '', '/models');
+                }}
+              />
             </div>
           ) : null}
         </aside>

@@ -8,7 +8,7 @@ import { createAssetModel } from '../models';
 import { bakeModel } from '../models/bake';
 
 /** Studio targets: every asset kind plus a free-standing static prop (download only). */
-export const SCULPT_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'catapult', 'tree', 'rock', 'bush', 'prop'] as const;
+export const SCULPT_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'raptor', 'catapult', 'tree', 'rock', 'bush', 'prop'] as const;
 export type SculptKind = (typeof SCULPT_KINDS)[number];
 
 export function rigOfKind(kind: SculptKind): SculptRig {
@@ -102,6 +102,22 @@ export const RIG_CONTRACTS: Record<SculptRig, RigContract> = {
       legs: { parents: ['body'], required: false, note: 'both legs and talons; swing about X' },
     },
     sockets: {},
+  },
+  raptor: {
+    summary: 'Bipedal theropod standing on y = 0, facing +Z. Horizontal torso, stiff tail chain counter-balancing the head.',
+    parts: {
+      body: { parents: ['root'], required: true, note: 'horizontal torso; bobs and pitches into the run' },
+      neck: { parents: ['body'], required: true, note: 'neck base; lunges down-forward about X when biting' },
+      head: { parents: ['neck'], required: true, note: 'skull pivot' },
+      jaw: { parents: ['head'], required: true, note: 'lower jaw hinge; opens about X' },
+      tail1: { parents: ['body'], required: true, note: 'tail chain (tail1→tail3), sways about Y' },
+      tail2: { parents: ['tail1'], required: true, note: 'tail segment' },
+      tail3: { parents: ['tail2'], required: true, note: 'tail tip' },
+      ...pair((s) => `arm${s}`, () => ({ parents: ['body'], required: false, note: 'tiny arm; dangles along −Y' })),
+      ...pair((s) => `thigh${s}`, () => ({ parents: ['body'], required: true, note: 'hip joint; thigh angles down-forward; swings about X' })),
+      ...pair((s) => `shin${s}`, (s) => ({ parents: [`thigh${s}`], required: true, note: 'knee joint; shin + clawed foot below; folds about X' })),
+    },
+    sockets: { mouth: { note: 'on head, just past the snout: bite effect origin' } },
   },
   catapult: {
     summary: 'Siege engine on wheels, shooting towards +Z.',

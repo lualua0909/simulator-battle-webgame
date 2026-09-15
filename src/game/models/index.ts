@@ -11,7 +11,9 @@ import { createBushModel, createRockModel, createTreeModel } from './environment
 import { createHorseModel } from './horse';
 import { createHumanoidModel, HIP_Y } from './humanoid';
 import { getCustomGlbGroup } from './glbStatic';
+import { createRaptorModel } from './raptor';
 import { createStructureModel } from './structures';
+import { SKINNED_GLB_KINDS } from '@/shared/schema';
 
 export type { ModelTemplate } from './bake';
 
@@ -25,8 +27,12 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
     root.userData.assetId = asset.id;
     return root;
   }
-  // An admin-uploaded glb/gltf replaces the procedural preset (static-rig kinds only; see assetSchema).
-  const uploaded = asset.glb ? getCustomGlbGroup(asset.glb.url) : undefined;
+  // An admin-uploaded glb/gltf replaces the procedural preset (static-rig kinds only, plus
+  // RIGID_GLB_KINDS which bake rigid but keep body motion + saddle; see assetSchema).
+  // Skinned kinds (SKINNED_GLB_KINDS) skip this baked path: the battle renderer plays the file's
+  // skeletal clips instead, and everything else falls back to the procedural model below.
+  const skinned = (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind);
+  const uploaded = !skinned && asset.glb ? getCustomGlbGroup(asset.glb.url, asset.kind) : undefined;
   if (uploaded) {
     uploaded.scale.setScalar(asset.scale);
     uploaded.userData.assetId = asset.id;
@@ -47,6 +53,9 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
       break;
     case 'bird':
       root = createBirdModel(parseAssetParams('bird', asset.params));
+      break;
+    case 'raptor':
+      root = createRaptorModel(parseAssetParams('raptor', asset.params));
       break;
     case 'catapult':
       root = createCatapultModel(parseAssetParams('catapult', asset.params));

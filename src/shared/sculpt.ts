@@ -5,7 +5,7 @@
 // Frame: forward +Z, up +Y, the model's own left = +X, metres, feet on y = 0.
 import { z } from 'zod';
 
-export const SCULPT_RIGS = ['humanoid', 'quadruped', 'dragon', 'bird', 'catapult', 'static'] as const;
+export const SCULPT_RIGS = ['humanoid', 'quadruped', 'dragon', 'bird', 'raptor', 'catapult', 'static'] as const;
 export type SculptRig = (typeof SCULPT_RIGS)[number];
 
 /** How a humanoid uses its held weapon (drives the attack animation). */
