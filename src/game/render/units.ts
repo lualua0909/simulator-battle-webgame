@@ -15,8 +15,28 @@ import type { Ragdoll, RagdollWorld } from './ragdoll';
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
 const smoothMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
 const STRIKE_TIME = 0.45;
-/** Rider seat on a skinned mount, in the mount's normalised (NORMALIZED_HEIGHT=2) local space; follows the mount's root only (no per-bone gallop bounce). */
-const MOUNT_SEAT = new THREE.Vector3(0, 1.5, -0.05);
+/** Where a rider's hips should land on a skinned mount's back, in the mount's normalised (NORMALIZED_HEIGHT=2) local space; follows the mount's root only (no per-bone gallop bounce). */
+const MOUNT_SEAT = new THREE.Vector3(0, 1.15, -0.05);
+
+/**
+ * Bends a static rider's legs into a riding stance (thighs splayed out, knees bent) so it
+ * straddles a skinned mount instead of standing on its back in the idle rest pose (matches
+ * the seg.mounted leg pose the procedural Poser uses for baked mounts; see animate.ts), and
+ * drops the rider so its hips — not its feet — land on `MOUNT_SEAT`.
+ */
+function seatRider(rider: THREE.Object3D): void {
+  const parts = new Map<string, THREE.Object3D>();
+  rider.traverse((o) => {
+    if (o.userData.part) parts.set(o.userData.part as string, o);
+  });
+  parts.get('thighL')?.rotation.set(-1.35, 0, 0.45);
+  parts.get('thighR')?.rotation.set(-1.35, 0, -0.45);
+  parts.get('shinL')?.rotation.set(1.25, 0, 0);
+  parts.get('shinR')?.rotation.set(1.25, 0, 0);
+  const hipY = parts.get('hips')?.position.y ?? 0;
+  rider.position.copy(MOUNT_SEAT);
+  rider.position.y -= hipY * rider.scale.y;
+}
 const EMIT_SOCKETS = ['mouth', 'muzzle', 'staff.tip', 'hand.R', 'rider.muzzle', 'rider.staff.tip', 'rider.hand.R'];
 const RAGDOLL_SECONDS = 6;
 
@@ -338,7 +358,7 @@ export class UnitRenderer {
         const rider = createAssetModel(riderAsset);
         // Counter the mount's own scale so the rider keeps its own asset scale.
         rider.scale.multiplyScalar(1 / Math.max(0.0001, v.skinScale));
-        rider.position.copy(MOUNT_SEAT);
+        seatRider(rider);
         inst.group.add(rider);
       }
     }
