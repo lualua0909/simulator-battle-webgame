@@ -1,7 +1,7 @@
 // World chat: signed-in players post here; everyone reads `chat/world` live from Firestore.
 import { chatPostSchema } from '@/shared/chat';
 import { jsonError, readJson } from '@/server/admin';
-import { postWorldMessage } from '@/server/chat';
+import { ChatRateLimitError, postWorldMessage } from '@/server/chat';
 import { currentUser } from '@/server/users';
 
 export const dynamic = 'force-dynamic';
@@ -17,6 +17,7 @@ export async function POST(req: Request) {
   try {
     return Response.json({ message: await postWorldMessage(user, parsed.data.text) });
   } catch (e) {
+    if (e instanceof ChatRateLimitError) return jsonError(429, e.message);
     console.error('chat:', e);
     return jsonError(503, 'Chưa gửi được tin nhắn, thử lại sau');
   }
