@@ -29,6 +29,10 @@ export const playerStateSchema = z.object({
   dailyDay: z.string().nullable().default(null),
   /** Epoch ms of the last box opened, daily or x-hour: the x-hour countdown starts here. */
   lastBoxAt: z.number().nullable().default(null),
+  /** Vietnam date (YYYY-MM-DD) of the Monday whose week `weekClaims` tracks. */
+  weekStart: z.string().nullable().default(null),
+  /** Which of the 7 VN days (Mon…Sun) of `weekStart`'s week had the daily box claimed. */
+  weekClaims: z.array(z.boolean()).length(7).default(() => Array(7).fill(false)),
 });
 
 export type PlayerState = z.infer<typeof playerStateSchema>;
@@ -60,9 +64,16 @@ export function formatCoins(n: number): string {
 
 export type BoxKind = 'daily' | 'hourly';
 
+/** One slot of the 7-day claim calendar (Monday…Sunday of the current Vietnam week). */
+export interface WeekSlot {
+  /** Vietnam date (YYYY-MM-DD). */
+  date: string;
+  status: 'claimed' | 'missed' | 'today' | 'future';
+}
+
 export interface BoxStatus {
-  /** One per Vietnam day; `resetAt` is the next midnight. */
-  daily: { ready: boolean; resetAt: number };
+  /** One per Vietnam day; `resetAt` is the next midnight. `week` is always Monday-first, length 7. */
+  daily: { ready: boolean; resetAt: number; week: WeekSlot[] };
   /** Unlocked by today's daily box, then ready every `boxHours` after the last box. */
   hourly: { unlocked: boolean; ready: boolean; readyAt: number | null };
 }
@@ -75,19 +86,52 @@ function nextVnMidnight(ms: number): number {
   return (Math.floor((ms + VN_OFFSET_MS) / DAY_MS) + 1) * DAY_MS - VN_OFFSET_MS;
 }
 
+/**
+ * Monday-based weekday of a Vietnam calendar instant: 0 = Monday … 6 = Sunday. Epoch day 0
+ * (1970-01-01) was a Thursday, hence the +3 (checked against 2026-09-14, the existing `MORNING`
+ * test fixture below, which is a Monday: day index 20710, (20710 + 3) % 7 = 0).
+ */
+function vnWeekday(ms: number): number {
+  return (Math.floor((ms + VN_OFFSET_MS) / DAY_MS) + 3) % 7;
+}
+
+/** Vietnam date (YYYY-MM-DD) of the Monday of `ms`'s week. */
+function vnWeekStart(ms: number): string {
+  return vnDay(ms - vnWeekday(ms) * DAY_MS);
+}
+
+/** `date` (YYYY-MM-DD) plus `n` calendar days — plain arithmetic, no VN offset needed once it's already a date string. */
+function addVnDays(date: string, n: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** Monday…Sunday of `now`'s Vietnam week; `claimed(i, date)` marks which of the 7 slots are claimed. */
+function buildWeek(now: number, claimed: (i: number, date: string) => boolean): WeekSlot[] {
+  const monday = vnWeekStart(now);
+  const today = vnDay(now);
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addVnDays(monday, i);
+    const status: WeekSlot['status'] = claimed(i, date) ? 'claimed' : date === today ? 'today' : date < today ? 'missed' : 'future';
+    return { date, status };
+  });
+}
+
 export function boxStatus(p: PlayerState, economy: Pick<Economy, 'boxHours'>, now: number): BoxStatus {
   const openedToday = p.dailyDay === vnDay(now);
   const readyAt = openedToday && p.lastBoxAt !== null ? p.lastBoxAt + economy.boxHours * HOUR_MS : null;
+  const thisWeek = p.weekStart === vnWeekStart(now) ? p.weekClaims : null;
   return {
-    daily: { ready: !openedToday, resetAt: nextVnMidnight(now) },
+    daily: { ready: !openedToday, resetAt: nextVnMidnight(now), week: buildWeek(now, (i) => thisWeek?.[i] ?? false) },
     hourly: { unlocked: openedToday, ready: readyAt !== null && now >= readyAt, readyAt },
   };
 }
 
 /** A status fetched earlier, brought up to `now`. */
 export function liveBoxes(b: BoxStatus, now: number): BoxStatus {
-  if (!b.daily.ready && now >= b.daily.resetAt) return { daily: { ready: true, resetAt: nextVnMidnight(now) }, hourly: { unlocked: false, ready: false, readyAt: null } };
-  return { daily: b.daily, hourly: { ...b.hourly, ready: b.hourly.readyAt !== null && now >= b.hourly.readyAt } };
+  const claimedDates = new Set(b.daily.week.filter((w) => w.status === 'claimed').map((w) => w.date));
+  const week = buildWeek(now, (_, date) => claimedDates.has(date));
+  if (!b.daily.ready && now >= b.daily.resetAt) return { daily: { ready: true, resetAt: nextVnMidnight(now), week }, hourly: { unlocked: false, ready: false, readyAt: null } };
+  return { daily: { ...b.daily, week }, hourly: { ...b.hourly, ready: b.hourly.readyAt !== null && now >= b.hourly.readyAt } };
 }
 
 export interface BoxReward {
@@ -182,7 +226,15 @@ export function openBox(p: PlayerState, kind: BoxKind, units: readonly UnitDef[]
   const reward = rollBox(units, kind === 'daily' ? economy.dailyBox : economy.hourlyBox, random);
   const cards = { ...p.cards };
   for (const c of reward.cards) cards[c.unitId] = (cards[c.unitId] ?? 0) + c.count;
-  const state: PlayerState = { ...p, coins: p.coins + reward.coins, cards, lastBoxAt: now, dailyDay: kind === 'daily' ? vnDay(now) : p.dailyDay };
+  let weekStart = p.weekStart;
+  let weekClaims = p.weekClaims;
+  if (kind === 'daily') {
+    const monday = vnWeekStart(now);
+    weekClaims = monday === p.weekStart ? [...p.weekClaims] : Array(7).fill(false);
+    weekClaims[vnWeekday(now)] = true;
+    weekStart = monday;
+  }
+  const state: PlayerState = { ...p, coins: p.coins + reward.coins, cards, lastBoxAt: now, dailyDay: kind === 'daily' ? vnDay(now) : p.dailyDay, weekStart, weekClaims };
   const entry: LedgerEntry = { type: kind === 'daily' ? 'daily-box' : 'hourly-box', coins: reward.coins, balance: state.coins, cards: Object.fromEntries(reward.cards.map((c) => [c.unitId, c.count])) };
   return { state, entry, reward };
 }

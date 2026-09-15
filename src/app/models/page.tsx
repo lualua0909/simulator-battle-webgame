@@ -1,7 +1,7 @@
 import ModelsGallery from '@/components/ModelsGallery';
 import { CHEST_VARIANTS, type ChestVariant } from '@/shared/schema';
 
-export const metadata = { title: 'Xưởng mô hình — Đại Chiến Lô Nhô' };
+export const metadata = { title: 'Xưởng mô hình — Mini Battle Simulator' };
 
 type Search = Record<string, string | string[] | undefined>;
 

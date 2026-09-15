@@ -50,6 +50,49 @@ test('a status fetched earlier follows the clock', () => {
   assert.equal(nextDay.hourly.unlocked, false);
 });
 
+test('the weekly grid is always Monday-first, whichever day of the week `now` falls on', () => {
+  for (let d = 0; d < 7; d++) {
+    const week = boxStatus(emptyPlayer(), economy, MORNING + d * 24 * HOUR).daily.week;
+    assert.equal(week.length, 7);
+    assert.equal(week[0].date, '2026-09-14');
+    assert.equal(week[6].date, '2026-09-20');
+  }
+});
+
+test('the weekly grid tracks claims across days and permanently marks a skipped day missed', () => {
+  const monday = openBox(emptyPlayer(), 'daily', SEED.units, economy, MORNING, random()).state;
+  assert.equal(monday.weekStart, '2026-09-14');
+  assert.deepEqual(monday.weekClaims, [true, false, false, false, false, false, false]);
+  const wednesday = MORNING + 2 * 24 * HOUR; // Tuesday skipped
+  const beforeClaim = boxStatus(monday, economy, wednesday).daily.week;
+  assert.equal(beforeClaim[0].status, 'claimed'); // Mon
+  assert.equal(beforeClaim[1].status, 'missed'); // Tue
+  assert.equal(beforeClaim[2].status, 'today'); // Wed: not claimed yet
+  assert.equal(beforeClaim[3].status, 'future'); // Thu
+  const wed = openBox(monday, 'daily', SEED.units, economy, wednesday, random()).state;
+  assert.deepEqual(wed.weekClaims, [true, false, true, false, false, false, false]);
+  const afterClaim = boxStatus(wed, economy, wednesday).daily.week;
+  assert.equal(afterClaim[1].status, 'missed'); // Tue: still permanently lost
+  assert.equal(afterClaim[2].status, 'claimed'); // Wed: now claimed
+});
+
+test('a stale weekStart (a previous week) is ignored — the grid starts fresh', () => {
+  const stale = boxStatus({ ...emptyPlayer(), weekStart: '2026-09-07', weekClaims: [true, true, true, true, true, true, true] }, economy, MORNING).daily.week;
+  assert.equal(stale[0].date, '2026-09-14');
+  assert.ok(stale.every((w) => w.status !== 'claimed'));
+});
+
+test('liveBoxes carries claims within a week and wipes the grid across a Monday rollover', () => {
+  const monday = openBox(emptyPlayer(), 'daily', SEED.units, economy, MORNING, random()).state;
+  const status = boxStatus(monday, economy, MORNING);
+  const midweek = liveBoxes(status, MORNING + 2 * 24 * HOUR); // Wednesday, same week
+  assert.equal(midweek.daily.week[0].status, 'claimed'); // Mon still shows claimed
+  assert.equal(midweek.daily.week[2].status, 'today'); // Wed: unclaimed
+  const nextMonday = liveBoxes(status, MORNING + 7 * 24 * HOUR); // the following Monday
+  assert.equal(nextMonday.daily.week[0].date, '2026-09-21');
+  assert.ok(nextMonday.daily.week.every((w) => w.status !== 'claimed'));
+});
+
 test('a box holds coins in range and exactly its cards over distinct units, cheap units more often', () => {
   const rng = new Rng(11);
   const tally = new Map<string, number>();

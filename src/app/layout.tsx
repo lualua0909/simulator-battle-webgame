@@ -7,7 +7,7 @@ import './globals.css';
 const paytone = Paytone_One({ weight: '400', subsets: ['latin', 'vietnamese'], variable: '--font-paytone' });
 
 export const metadata: Metadata = {
-  title: 'Đại Chiến Lô Nhô — Battle Simulator',
+  title: 'Mini Battle Simulator',
   description: 'Mô phỏng đại chiến low-poly: đấu với máy, 2 người 1 máy hoặc online.',
 };
 

@@ -1,6 +1,6 @@
 import GameClient, { type Mode } from '@/components/game/GameClient';
 
-export const metadata = { title: 'Chiến trường — Đại Chiến Lô Nhô' };
+export const metadata = { title: 'Chiến trường — Mini Battle Simulator' };
 
 const MODES: Mode[] = ['ai', 'local', 'online'];
 

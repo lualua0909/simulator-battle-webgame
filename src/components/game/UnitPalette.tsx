@@ -11,6 +11,10 @@ interface Props {
   thumbs: Record<string, string>;
   selected: string | null;
   onSelect(id: string): void;
+  /** Pointer went down on a card: begin dragging that unit onto the map (picks it immediately, ignoring whatever was selected before). */
+  onDragStart?(id: string, e: React.PointerEvent<HTMLButtonElement>): void;
+  /** The unit currently being dragged, if any — dims its source card. */
+  draggingId?: string | null;
   budgetLeft: number;
   /** The player's wallet (null for guests): locked units stay visible but greyed out. */
   player: PlayerState | null;
@@ -22,7 +26,7 @@ interface Props {
 
 const ROLE_LABEL: Record<UnitDef['role'], string> = { melee: 'Cận chiến', ranged: 'Tầm xa', support: 'Hỗ trợ', siege: 'Công thành' };
 
-export default function UnitPalette({ bundle, thumbs, selected, onSelect, budgetLeft, player, stars, available }: Props) {
+export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDragStart, draggingId, budgetLeft, player, stars, available }: Props) {
   const [tab, setTab] = useState<string>('all');
   const [hover, setHover] = useState<UnitDef | null>(null);
   const pool = bundle.units.filter((u) => !available || available(u));
@@ -53,9 +57,13 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, budget
               <button
                 key={u.id}
                 onClick={() => onSelect(u.id)}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return;
+                  onDragStart?.(u.id, e);
+                }}
                 onMouseEnter={() => setHover(u)}
                 onMouseLeave={() => setHover(null)}
-                className={`relative flex flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive || locked ? 'opacity-50' : ''}`}
+                className={`relative flex touch-none flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive || locked ? 'opacity-50' : ''} ${draggingId === u.id ? 'opacity-40' : ''}`}
                 style={{ boxShadow: `inset 0 -4px 0 ${faction?.color ?? '#999'}` }}
               >
                 {thumbs[u.id] ? <img src={thumbs[u.id]} alt="" className={`h-14 w-14 object-contain ${locked ? 'grayscale' : ''}`} draggable={false} /> : <div className="h-14 w-14 animate-pulse rounded bg-parch" />}

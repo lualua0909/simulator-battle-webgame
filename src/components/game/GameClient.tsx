@@ -62,6 +62,9 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [side, setSide] = useState<Side>('blue');
   const [selected, setSelected] = useState<string | null>(null);
   const [tool, setTool] = useState<'place' | 'erase'>('place');
+  /** Unit currently being dragged from the palette onto the map (null when not dragging). */
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const dragRef = useRef<{ id: string; pointerId: number } | null>(null);
   const [result, setResult] = useState<BattleResult | null>(null);
   const [stats, setStats] = useState<BattleStats>({ blue: 0, red: 0, time: 0 });
   const [speed, setSpeed] = useState(1);
@@ -225,6 +228,21 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     [engine, selected, units, bundle, mySide, maxUnits, myBudget, player, defense],
   );
 
+  /** Selects a unit type to place (used by both a palette click and a drag pickup). Returns false if it's locked. */
+  const pickUnit = useCallback(
+    (id: string): boolean => {
+      const u = units.get(id);
+      if (u && !isUnlocked(u, player)) {
+        flash(user ? `Chưa mở khóa ${u.name}: mở trong Bộ sưu tập thẻ ở màn hình chính` : `${u.name} cần đăng nhập và mở khóa`);
+        return false;
+      }
+      setSelected(id);
+      setTool('place');
+      return true;
+    },
+    [units, player, user, flash],
+  );
+
   const place = useCallback(
     (x: number, z: number): boolean => {
       if (!selected || !canPlace(x, z)) return false;
@@ -323,6 +341,38 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       if (h[h.length - 1] === armiesRef.current) h.pop();
     }
   };
+
+  // Dragging a card from the palette: it starts outside the canvas, so the canvas's own pointer
+  // listeners never see it — feed the engine screen-coordinate events directly instead.
+  useEffect(() => {
+    if (!engine) return;
+    // The canvas fills the whole screen behind the UI panels, so a bounding-rect check alone would
+    // treat a release on top of a card or button as "over the map" too — hit-test the actual
+    // topmost element instead.
+    const overMap = (x: number, y: number) => document.elementFromPoint(x, y) === engine.renderer.domElement;
+    const onMove = (e: PointerEvent) => {
+      if (!dragRef.current || e.pointerId !== dragRef.current.pointerId) return;
+      if (overMap(e.clientX, e.clientY)) engine.dispatchPointer('move', e.clientX, e.clientY, e);
+      else engine.hideGhost();
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!dragRef.current || e.pointerId !== dragRef.current.pointerId) return;
+      if (overMap(e.clientX, e.clientY)) {
+        engine.dispatchPointer('down', e.clientX, e.clientY, e);
+        engine.dispatchPointer('up', e.clientX, e.clientY, e);
+      } else engine.hideGhost();
+      dragRef.current = null;
+      setDraggingId(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [engine]);
 
   const undo = () => {
     const prev = history.current.pop();
@@ -531,7 +581,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       <div className="pointer-events-none absolute inset-0 flex flex-col p-3">
         {(phase === 'setup' || phase === 'lobby') && (
           <div className="absolute right-3 top-3 z-10">
-            <PlayerHud />
+            <PlayerHud bundle={bundle} />
           </div>
         )}
 
@@ -623,7 +673,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 </button>
               </div>
               <div className="ml-auto flex flex-col items-end gap-2">
-                <PlayerHud />
+                <PlayerHud bundle={bundle} />
                 <button className={`btn pointer-events-auto text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
                   {mode === 'ai' ? '⚔ Bắt đầu!' : mode === 'local' ? (side === 'blue' ? 'Xong → Người chơi 2' : '⚔ Bắt đầu!') : locked ? 'Hủy sẵn sàng' : '✔ Sẵn sàng'}
                 </button>
@@ -644,11 +694,12 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   bundle={bundle}
                   thumbs={thumbs}
                   selected={selected}
-                  onSelect={(id) => {
-                    const u = units.get(id);
-                    if (u && !isUnlocked(u, player)) return flash(user ? `Chưa mở khóa ${u.name}: mở trong Bộ sưu tập thẻ ở màn hình chính` : `${u.name} cần đăng nhập và mở khóa`);
-                    setSelected(id);
-                    setTool('place');
+                  onSelect={pickUnit}
+                  draggingId={draggingId}
+                  onDragStart={(id, e) => {
+                    if (!pickUnit(id)) return;
+                    dragRef.current = { id, pointerId: e.pointerId };
+                    setDraggingId(id);
                   }}
                   budgetLeft={myBudget - spent}
                   available={(u) => canField(u, mySide, defense)}

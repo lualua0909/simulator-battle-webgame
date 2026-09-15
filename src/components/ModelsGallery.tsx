@@ -171,7 +171,7 @@ export default function ModelsGallery(props: Props) {
       <aside className="w-64 shrink-0 overflow-y-auto border-r-2 border-ink bg-parch p-3">
         <div className="flex items-baseline justify-between gap-2">
           <Link href="/" className="font-display text-lg">
-            ← Đại Chiến Lô Nhô
+            ← Mini Battle Simulator
           </Link>
           {admin && (
             <Link href="/admin" className="text-xs underline">

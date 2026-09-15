@@ -1,4 +1,4 @@
-# Đại Chiến Lô Nhô — Tài liệu kiến trúc, PvP online, phân quyền và bảo mật
+# Mini Battle Simulator — Tài liệu kiến trúc, PvP online, phân quyền và bảo mật
 
 Tài liệu mô tả hệ thống theo code hiện tại (Next.js 16 + Socket.IO trong một tiến trình Node, Firebase Auth/Firestore/FCM, SQLite, Claude API/CLI). Sơ đồ viết bằng Mermaid, xem được trực tiếp trên GitHub/VS Code.
 
@@ -81,7 +81,7 @@ flowchart LR
 
 ```mermaid
 mindmap
-  root((Đại Chiến Lô Nhô))
+  root((Mini Battle Simulator))
     Chơi game /play
       Đấu với máy
         6 bot có hồ sơ

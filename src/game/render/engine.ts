@@ -116,7 +116,17 @@ export class BattleEngine {
   private readonly sun = new THREE.DirectionalLight('#fff1d8', 2.6);
   private readonly hemi = new THREE.HemisphereLight('#dcecff', '#5a4a30', 1.25);
   private readonly sky: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
-  private ghost: { group: THREE.Group; side: Side; valid: (x: number, z: number) => boolean; mats: THREE.MeshStandardMaterial[]; grid: boolean; isWall: boolean } | null = null;
+  private ghost:
+    | {
+        group: THREE.Group;
+        side: Side;
+        valid: (x: number, z: number) => boolean;
+        mats: THREE.MeshStandardMaterial[];
+        grid: boolean;
+        isWall: boolean;
+        footprint: { fill: THREE.Mesh; edge: THREE.LineSegments; fillOk: THREE.Material; fillBad: THREE.Material; edgeOk: THREE.Material; edgeBad: THREE.Material; disposables: (THREE.BufferGeometry | THREE.Material)[] };
+      }
+    | null = null;
   private readonly timer = new THREE.Timer();
   private time = 0;
   private statsTimer = 0;
@@ -419,6 +429,7 @@ export class BattleEngine {
     if (this.ghost) {
       this.scene.remove(this.ghost.group);
       for (const m of this.ghost.mats) m.dispose();
+      for (const d of this.ghost.footprint.disposables) d.dispose();
       this.ghost = null;
     }
     const def = unitId ? this.bundle.units.find((u) => u.id === unitId) : undefined;
@@ -455,9 +466,38 @@ export class BattleEngine {
       });
     }
     group.rotation.y = def.structure === 'wall' ? 0 : side === 'blue' ? Math.PI / 2 : -Math.PI / 2;
+
+    // Footprint: a translucent green (red when invalid) square with a dashed outline, marking the
+    // exact ground cell/spot the unit would land on — the drop-target cue during drag placement.
+    const footprintSize = def.structure === 'wall' || def.structure === 'platform' ? WALL_CELL * 0.92 : Math.max(1.2, def.radius * 2.2);
+    const fillGeo = new THREE.PlaneGeometry(footprintSize, footprintSize);
+    const fillOk = new THREE.MeshBasicMaterial({ color: '#39d353', transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide });
+    const fillBad = new THREE.MeshBasicMaterial({ color: '#ff3030', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
+    const fill = new THREE.Mesh(fillGeo, fillOk);
+    fill.rotation.x = -Math.PI / 2;
+    fill.position.y = 0.04;
+    fill.renderOrder = 5;
+    const edgeGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(footprintSize, footprintSize));
+    const edgeOk = new THREE.LineDashedMaterial({ color: '#39d353', dashSize: 0.28, gapSize: 0.18, transparent: true, opacity: 0.9, depthWrite: false });
+    const edgeBad = new THREE.LineDashedMaterial({ color: '#ff3030', dashSize: 0.28, gapSize: 0.18, transparent: true, opacity: 0.9, depthWrite: false });
+    const edge = new THREE.LineSegments(edgeGeo, edgeOk);
+    edge.computeLineDistances();
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.y = 0.045;
+    edge.renderOrder = 6;
+    group.add(fill, edge);
+
     group.visible = false;
     this.scene.add(group);
-    this.ghost = { group, side, valid, mats: [ok, bad], grid: def.structure === 'wall' || def.structure === 'platform', isWall: def.structure === 'wall' };
+    this.ghost = {
+      group,
+      side,
+      valid,
+      mats: [ok, bad],
+      grid: def.structure === 'wall' || def.structure === 'platform',
+      isWall: def.structure === 'wall',
+      footprint: { fill, edge, fillOk, fillBad, edgeOk, edgeBad, disposables: [fillGeo, edgeGeo, fillOk, fillBad, edgeOk, edgeBad] },
+    };
   }
 
   /** Canvas snapshot (used for screenshots/share). */
@@ -629,45 +669,55 @@ export class BattleEngine {
 
   private bindPointer(): void {
     const dom = this.renderer.domElement;
-    const send = (type: PointerInfo['type'], e: PointerEvent) => {
-      const p = this.groundAt(e.clientX, e.clientY);
-      if (this.ghost) {
-        if (p && this.mode === 'deploy' && !this.cine) {
-          this.ghost.group.visible = true;
-          this.ghost.group.position.copy(p);
-          if (this.ghost.grid) {
-            const ix = Math.floor(p.x / WALL_CELL);
-            const iz = Math.floor(p.z / WALL_CELL);
-            const cell = this.sim?.cellAt(p.x, p.z);
-            this.ghost.group.position.set((ix + 0.5) * WALL_CELL, cell ? cell.top : this.terrain!.height((ix + 0.5) * WALL_CELL, (iz + 0.5) * WALL_CELL), (iz + 0.5) * WALL_CELL);
-            if (this.ghost.isWall) {
-              // Same alongX rule as WallRenderer.build(): line up the ghost with whichever neighbour it would actually join.
-              const alongX = [...(this.sim?.walls.values() ?? [])].some(
-                (c) => c.kind === 'wall' && c.iz === iz && (c.ix === ix + 1 || c.ix === ix - 1),
-              );
-              this.ghost.group.rotation.y = alongX ? 0 : Math.PI / 2;
-            }
-          }
-          const good = this.ghost.valid(p.x, p.z);
-          const [ok, bad] = this.ghost.mats;
-          this.ghost.group.traverse((c) => {
-            if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).material = good ? ok : bad;
-          });
-        } else this.ghost.group.visible = false;
-      }
-      this.events.onPointer?.({ type, x: p?.x ?? 0, z: p?.z ?? 0, hit: !!p, button: e.button, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey || e.altKey });
-    };
     dom.addEventListener('pointerdown', (e) => {
       this.audio.resume();
       // A click skips a cinematic and is not treated as a placement.
       if (this.cine) return this.finishCinematic();
-      send('down', e);
+      this.dispatchPointer('down', e.clientX, e.clientY, e);
     });
-    dom.addEventListener('pointermove', (e) => send('move', e));
-    dom.addEventListener('pointerup', (e) => send('up', e));
-    dom.addEventListener('pointerleave', () => {
-      if (this.ghost) this.ghost.group.visible = false;
-    });
+    dom.addEventListener('pointermove', (e) => this.dispatchPointer('move', e.clientX, e.clientY, e));
+    dom.addEventListener('pointerup', (e) => this.dispatchPointer('up', e.clientX, e.clientY, e));
+    dom.addEventListener('pointerleave', () => this.hideGhost());
+  }
+
+  /**
+   * Feeds a map-input event by screen coordinates through the same placement/ghost pipeline as a
+   * native canvas pointer event. Lets a drag started on a unit card (outside the canvas, so it
+   * never receives the canvas's own pointer events) drive placement once it reaches the map.
+   */
+  dispatchPointer(type: PointerInfo['type'], clientX: number, clientY: number, e: { button?: number; shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {}): void {
+    const p = this.groundAt(clientX, clientY);
+    if (this.ghost) {
+      if (p && this.mode === 'deploy' && !this.cine) {
+        this.ghost.group.visible = true;
+        this.ghost.group.position.copy(p);
+        if (this.ghost.grid) {
+          const ix = Math.floor(p.x / WALL_CELL);
+          const iz = Math.floor(p.z / WALL_CELL);
+          const cell = this.sim?.cellAt(p.x, p.z);
+          this.ghost.group.position.set((ix + 0.5) * WALL_CELL, cell ? cell.top : this.terrain!.height((ix + 0.5) * WALL_CELL, (iz + 0.5) * WALL_CELL), (iz + 0.5) * WALL_CELL);
+          if (this.ghost.isWall) {
+            // Same alongX rule as WallRenderer.build(): line up the ghost with whichever neighbour it would actually join.
+            const alongX = [...(this.sim?.walls.values() ?? [])].some((c) => c.kind === 'wall' && c.iz === iz && (c.ix === ix + 1 || c.ix === ix - 1));
+            this.ghost.group.rotation.y = alongX ? 0 : Math.PI / 2;
+          }
+        }
+        const good = this.ghost.valid(p.x, p.z);
+        const [ok, bad] = this.ghost.mats;
+        const { fill, edge, fillOk, fillBad, edgeOk, edgeBad } = this.ghost.footprint;
+        this.ghost.group.traverse((c) => {
+          if ((c as THREE.Mesh).isMesh && c !== fill) (c as THREE.Mesh).material = good ? ok : bad;
+        });
+        fill.material = good ? fillOk : fillBad;
+        edge.material = good ? edgeOk : edgeBad;
+      } else this.ghost.group.visible = false;
+    }
+    this.events.onPointer?.({ type, x: p?.x ?? 0, z: p?.z ?? 0, hit: !!p, button: e.button ?? 0, shift: !!e.shiftKey, ctrl: !!(e.ctrlKey || e.metaKey || e.altKey) });
+  }
+
+  /** Hides the placement ghost/footprint — e.g. while a dragged card is over UI, not the map. */
+  hideGhost(): void {
+    if (this.ghost) this.ghost.group.visible = false;
   }
 
   private frame(): void {

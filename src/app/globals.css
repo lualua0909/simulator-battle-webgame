@@ -250,35 +250,72 @@ body {
     radial-gradient(circle at 50% 36%, #4586e6 0%, #24499c 48%, #11225a 100%);
 }
 
-.dock-slot {
+/* The one reward-box icon next to the avatar: today's daily calendar, then the x-hour box. */
+.reward-slot {
+  position: relative;
   display: flex;
+  height: 46px;
+  width: 46px;
+  flex-shrink: 0;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.3rem 0.9rem 0.3rem 0.45rem;
-  border-radius: 1rem;
+  justify-content: center;
+  border-radius: 999px;
   border: 2px solid #16181b;
   background: linear-gradient(180deg, rgba(52, 94, 170, 0.94), rgba(28, 52, 108, 0.94));
   box-shadow:
     inset 0 2px 0 rgba(255, 255, 255, 0.2),
-    0 4px 0 #16181b;
+    0 3px 0 #16181b;
   transition: transform 0.15s;
 }
-.dock-slot:hover {
+.reward-slot:hover {
   transform: translateY(-2px);
 }
-.dock-slot-ready {
+.reward-slot-ready {
   background: linear-gradient(180deg, rgba(255, 200, 70, 0.96), rgba(224, 140, 26, 0.96));
 }
-.dock-ready {
-  color: #86ff6e;
-  -webkit-text-stroke: 3px #16330f;
-  paint-order: stroke fill;
-  animation: dock-blink 1s ease-in-out infinite;
+.reward-badge {
+  position: absolute;
+  bottom: -0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  border: 2px solid #16181b;
+  background: #1d2f55;
+  color: #fff;
+  font-size: 0.65rem;
+  line-height: 1.3;
+  white-space: nowrap;
 }
-@keyframes dock-blink {
-  50% {
-    opacity: 0.65;
-  }
+
+/* Weekly claim calendar: one cell per day, Monday first. */
+.week-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  aspect-ratio: 1;
+  border-radius: 0.8rem;
+  border: 2px solid #16181b;
+  background: linear-gradient(180deg, rgba(52, 94, 170, 0.7), rgba(28, 52, 108, 0.7));
+}
+.week-cell-claimed {
+  background: linear-gradient(180deg, rgba(86, 180, 90, 0.85), rgba(40, 110, 45, 0.85));
+  opacity: 0.85;
+}
+.week-cell-missed {
+  background: rgba(60, 64, 72, 0.55);
+  opacity: 0.6;
+}
+.week-cell-today {
+  background: linear-gradient(180deg, rgba(255, 200, 70, 0.96), rgba(224, 140, 26, 0.96));
+  box-shadow:
+    0 0 0 3px #ffe57a,
+    0 3px 0 #16181b;
+}
+.week-cell-future {
+  opacity: 0.5;
 }
 
 /* Idle chest in the menu: squash, hop and rock. */
@@ -329,8 +366,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .chest-wobble,
-  .reward-pop,
-  .dock-ready {
+  .reward-pop {
     animation: none;
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "simulator-battle",
+  "name": "mini-battle-simulator",
   "version": "0.1.0",
   "private": true,
   "description": "Low-poly wobbly battle simulator (TABS-like) on the web: Next.js + Three.js, vs AI / local / online PvP, custom CMS.",

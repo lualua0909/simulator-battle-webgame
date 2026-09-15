@@ -323,6 +323,10 @@ function WalletPanel({ uid, editable }: { uid: string; editable: boolean }) {
           <dd>{Object.values(p.cards).reduce((a, b) => a + b, 0)} thẻ / {Object.keys(p.cards).length} loại</dd>
           <dt className="opacity-60">Hộp hằng ngày gần nhất</dt>
           <dd>{p.dailyDay ?? '—'}</dd>
+          <dt className="opacity-60">Tuần điểm danh</dt>
+          <dd>
+            {p.weekStart ?? '—'} {p.weekClaims.map((c) => (c ? '✔' : '✕')).join(' ')}
+          </dd>
         </dl>
       ) : (
         !status && <p className="text-sm opacity-60">Đang tải…</p>

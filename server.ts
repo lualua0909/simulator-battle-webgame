@@ -26,6 +26,6 @@ app.prepare().then(() => {
   const io: RoomServer = new Server(httpServer, { path: '/socket.io', destroyUpgrade: false, maxHttpBufferSize: MAX_PACKET_BYTES, allowRequest: allowSocketRequest });
   attachRooms(io);
   httpServer.listen(port, () => {
-    console.log(`> Đại Chiến Lô Nhô: http://localhost:${port} (${dev ? 'development' : 'production'})`);
+    console.log(`> Mini Battle Simulator: http://localhost:${port} (${dev ? 'development' : 'production'})`);
   });
 });

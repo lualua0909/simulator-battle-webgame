@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import WorldChat from '@/components/chat/WorldChat';
-import HomeMenu from '@/components/player/HomeMenu';
 import PlayerHud from '@/components/player/PlayerHud';
 
 const MODES = [
@@ -22,9 +21,9 @@ export default function Home() {
       </div>
       <div className="relative mx-auto flex max-w-5xl flex-col items-center gap-8 px-4 pb-8 pt-24 sm:pt-16">
         <div className="text-center">
-          <h1 className="text-outline text-5xl leading-none sm:text-7xl">ĐẠI CHIẾN</h1>
+          <h1 className="text-outline text-5xl leading-none sm:text-7xl">MINI BATTLE</h1>
           <h1 className="text-outline text-5xl leading-none sm:text-7xl" style={{ color: 'var(--color-gold)' }}>
-            LÔ NHÔ
+            SIMULATOR
           </h1>
           <p className="mt-3">Mô phỏng đại chiến low-poly: xếp quân, bấm bắt đầu, xem hỗn loạn.</p>
         </div>
@@ -40,9 +39,6 @@ export default function Home() {
         <Link href="/models" className="btn">
           🧱 Xưởng mô hình
         </Link>
-      </div>
-      <div className="relative z-10 flex justify-center px-3 pb-3 sm:absolute sm:bottom-3 sm:left-3 sm:justify-start sm:p-0">
-        <HomeMenu />
       </div>
       <WorldChat />
     </main>

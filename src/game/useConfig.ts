@@ -6,7 +6,8 @@ import { SKINNED_GLB_KINDS } from '@/shared/schema';
 import { preloadCustomGlbs } from '@/game/models/glbStatic';
 import { preloadSkinnedGlbs } from '@/game/models/glbSkinned';
 
-export function useConfig() {
+/** `enabled: false` skips the fetch and GLB preload entirely — for a caller that already has a bundle from elsewhere. */
+export function useConfig(enabled = true) {
   const [bundle, setBundle] = useState<ConfigBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,8 +26,8 @@ export function useConfig() {
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (enabled) void reload();
+  }, [enabled, reload]);
 
   return { bundle, error, reload };
 }

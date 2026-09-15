@@ -103,7 +103,7 @@ function bakedTypeScript(root: THREE.Object3D, name: string): string {
   };
   visit(root, -1);
   const fn = `create${slug(name).split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('').replace(/^[0-9]+/, '') || 'Baked'}Model`;
-  return `// ${name} — exported from the model workshop (/models) of Đại Chiến Lô Nhô.
+  return `// ${name} — exported from the model workshop (/models) of Mini Battle Simulator.
 // Baked procedural model: node tree with part/socket/rig userData (animation contract) and
 // flat-shaded, vertex-coloured meshes. Requires three.js.
 import * as THREE from 'three';
