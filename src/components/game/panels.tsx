@@ -336,7 +336,17 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
       <div className="panel flex w-[min(420px,92vw)] flex-col items-center gap-3 p-6 text-center">
         <div className={`font-display text-4xl ${color}`}>{title}</div>
         <p className="text-sm opacity-80">
-          {result.reason === 'core' ? 'Nhà chính đã bị phá hủy!' : result.reason === 'timeout' ? (props.siege ? 'Hết giờ — phe thủ đã giữ được thành.' : 'Hết giờ — hai bên hòa nhau.') : 'Một bên đã bị tiêu diệt hoàn toàn.'}
+          {result.reason === 'surrender'
+            ? props.mySide && result.winner === props.mySide
+              ? 'Đối thủ đã dừng trận!'
+              : 'Bạn đã dừng trận.'
+            : result.reason === 'core'
+              ? 'Nhà chính đã bị phá hủy!'
+              : result.reason === 'timeout'
+                ? props.siege
+                  ? 'Hết giờ — phe thủ đã giữ được thành.'
+                  : 'Hết giờ — hai bên hòa nhau.'
+                : 'Một bên đã bị tiêu diệt hoàn toàn.'}
           <br />
           Còn sống: <b className="text-blue-team">{result.survivors.blue}</b> xanh · <b className="text-red-team">{result.survivors.red}</b> đỏ · {(result.tick / 30).toFixed(0)} giây
         </p>

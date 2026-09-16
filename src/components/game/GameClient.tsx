@@ -100,10 +100,15 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const { user, loading: authLoading, openAuth } = useAuth();
   const { player } = usePlayer();
   const onStartRef = useRef<(s: BattleStart) => void>(() => {});
+  /** A `battle:result` that arrives while still in `battle` phase means the other side surrendered: force the transition. */
+  const endOnlineRef = useRef<(winner: Side | 'draw') => void>(() => {});
   const net = useOnline(mode === 'online' ? user?.uid ?? null : null, {
     onStart: (s) => onStartRef.current(s),
     onDesync: () => setDesync(true),
-    onResult: (res) => flash(res.ok ? 'Máy chủ đã xác nhận và lưu kết quả trận.' : `Kết quả không được lưu: ${res.error}`),
+    onResult: (res) => {
+      flash(res.ok ? 'Máy chủ đã xác nhận và lưu kết quả trận.' : `Kết quả không được lưu: ${res.error}`);
+      if (res.ok) endOnlineRef.current(res.winner);
+    },
   });
 
   useEffect(() => {
@@ -477,6 +482,15 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   checksumRef.current = (tick, hash) => {
     if (mode === 'online') net.checksum(tick, hash);
   };
+  endOnlineRef.current = (winner) => {
+    if (phase !== 'battle') return; // already ended locally (normal finish) — this ack is just a confirmation
+    const r: BattleResult = { winner, tick: engine?.sim?.tick ?? 0, reason: 'surrender', survivors: { blue: stats.blue, red: stats.red } };
+    setResult(r);
+    const show = () => setPhase((p) => (p === 'battle' ? 'result' : p));
+    if (winner === 'draw') return void window.setTimeout(show, 1200);
+    window.setTimeout(() => (engine ? engine.playVictory(winner, show) : show()), 400);
+  };
+  const surrenderOnline = () => net.surrender();
   onStartRef.current = (s) => {
     if (bundle && s.configVersion !== bundle.version) flash('Cảnh báo: cấu hình game khác máy chủ — hãy tải lại trang để đồng bộ.');
     if (engine && (engine.map?.id !== s.mapId || (engine.terrain?.defense ?? null) !== s.defense)) {
@@ -721,8 +735,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             onMute={toggleMuted}
             onSpeed={setSpeed}
             onPause={() => setPaused((p) => !p)}
-            onStop={backToDeploy}
-            stopLabel={mode === 'online' ? 'Về xếp quân' : 'Dừng trận'}
+            onStop={mode === 'online' && phase === 'battle' ? surrenderOnline : backToDeploy}
+            stopLabel={mode === 'online' ? (phase === 'battle' ? 'Dừng trận' : 'Về xếp quân') : 'Dừng trận'}
             timeLimit={bundle.settings.battleTimeLimit}
             defense={engine?.sim?.defense ?? defense}
           />

@@ -96,7 +96,7 @@ test('a packet without its ack callback is dropped instead of crashing the serve
   const raw = c as unknown as { emit(event: string, ...args: unknown[]): void };
   raw.emit('room:join', { code: 'NOPE' });
   raw.emit('room:create');
-  assert.equal((await join(c, 'NOPE')).ok, false);
+  assert.deepEqual(await join(c, 'NOPE'), { ok: true, code: 'NOPE', side: 'blue' });
   close(c);
 });
 
@@ -148,6 +148,20 @@ test('win + lose from both players is saved with the server-side battle data', a
   assert.deepEqual(match.battle.players, { blue: { uid: 'alice', name: 'alice' }, red: { uid: 'bob', name: 'bob' } });
   assert.deepEqual(match.battle.armies, start.armies);
   assert.deepEqual(match.battle.stars, start.stars);
+  close(alice, bob);
+});
+
+test('surrendering mid-battle declares the other side the winner right away, without a matching report', async () => {
+  const { alice, bob } = await startBattle();
+  const before = saved.length;
+  const results = Promise.all([once(alice, 'battle:result'), once(bob, 'battle:result')]);
+  bob.emit('battle:surrender');
+  assert.deepEqual(await results, [
+    { ok: true, winner: 'blue' },
+    { ok: true, winner: 'blue' },
+  ]);
+  assert.equal(saved.length, before + 1);
+  assert.equal(saved.at(-1)!.winner, 'blue');
   close(alice, bob);
 });
 

@@ -1,4 +1,6 @@
+import { redirect } from 'next/navigation';
 import ModelsGallery from '@/components/ModelsGallery';
+import { cmsUser } from '@/server/admin';
 import { CHEST_VARIANTS, type ChestVariant } from '@/shared/schema';
 
 export const metadata = { title: 'Xưởng mô hình — Mini Battle Simulator' };
@@ -6,6 +8,9 @@ export const metadata = { title: 'Xưởng mô hình — Mini Battle Simulator' 
 type Search = Record<string, string | string[] | undefined>;
 
 export default async function ModelsPage({ searchParams }: { searchParams: Promise<Search> }) {
+  // Xưởng mô hình chỉ dành cho root/admin (kể cả xem). Dev mode vẫn mở để
+  // `npm run shots` chụp ảnh không cần đăng nhập; production luôn chặn.
+  if (process.env.NODE_ENV === 'production' && !(await cmsUser())) redirect('/admin/login');
   const sp = await searchParams;
   const one = (k: string) => (typeof sp[k] === 'string' ? (sp[k] as string) : undefined);
   const yaw = one('yaw');

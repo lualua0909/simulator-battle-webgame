@@ -64,6 +64,8 @@ export interface ClientToServer {
   'room:leave': () => void;
   'battle:checksum': (req: { tick: number; hash: number }) => void;
   'battle:end': (req: { outcome: BattleOutcome; tick: number }) => void;
+  /** Concedes the running battle: the other side wins immediately, no matching report needed. */
+  'battle:surrender': () => void;
 }
 
 export interface ServerToClient {

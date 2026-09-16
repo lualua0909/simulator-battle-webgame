@@ -266,8 +266,8 @@ interface SimStrike {
 export interface BattleResult {
   winner: Side | 'draw';
   tick: number;
-  /** `core`: the defenders' keep fell (siege mode). */
-  reason: 'eliminated' | 'timeout' | 'core';
+  /** `core`: the defenders' keep fell (siege mode). `surrender`: the loser conceded online. */
+  reason: 'eliminated' | 'timeout' | 'core' | 'surrender';
   survivors: Record<Side, number>;
 }
 

@@ -103,5 +103,6 @@ export function useOnline(uid: string | null, handlers: OnlineHandlers) {
     settings: (next: RoomSettings) => socket?.emit('room:settings', next),
     checksum: (tick: number, hash: number) => socket?.emit('battle:checksum', { tick, hash }),
     end: (outcome: BattleOutcome, tick: number) => socket?.emit('battle:end', { outcome, tick }),
+    surrender: () => socket?.emit('battle:surrender'),
   };
 }

@@ -129,7 +129,7 @@ mindmap
       Rương 3D nhún nhảy, mở có ánh sáng
       Bộ sưu tập thẻ kiểu Clash Royale
       Mở khóa lính, mua thẻ, nâng sao bằng coin
-    Xem mô hình /models
+    Xưởng mô hình /models (chỉ root/admin)
       Tách rời bộ phận
       Chọn từng part
       Xem thử 6 kiểu rương
@@ -445,8 +445,8 @@ Lưu ở Firestore `users/{uid}.role` ([src/shared/users.ts](../src/shared/users
 | --- | --- | --- |
 | `0` | Root | toàn quyền CMS, quản lý mọi user khác (kể cả root/admin khác), cấp mọi vai trò |
 | `1` | Admin | toàn quyền nội dung CMS + Xưởng; chỉ quản lý user role `2`; chỉ cấp role `2` |
-| `2` | Người dùng | chơi mọi chế độ kể cả online (kết quả lưu theo `uid`), đăng ký FCM token, có ví coin (hộp quà, mở khóa, mua thẻ, nâng sao); không vào `/admin` |
-| — | Khách (chưa đăng nhập) | chơi với máy, 2 người 1 máy **chỉ với lính miễn phí** (`unlockCost = 0`), xem `/models`, đọc `/api/config`; **không** đấu online, không có ví |
+| `2` | Người dùng | chơi mọi chế độ kể cả online (kết quả lưu theo `uid`), đăng ký FCM token, có ví coin (hộp quà, mở khóa, mua thẻ, nâng sao); không vào `/admin`, không vào `/models` (bị chuyển về trang đăng nhập CMS) |
+| — | Khách (chưa đăng nhập) | chơi với máy, 2 người 1 máy **chỉ với lính miễn phí** (`unlockCost = 0`), đọc `/api/config`; **không** đấu online, không có ví, không vào `/models` |
 
 Quy tắc (hàm thuần, dùng chung):
 
@@ -493,6 +493,11 @@ flowchart TD
   L -- "null" --> RL["redirect /admin/login"]
   L -- "root/admin" --> P["render trang"]
 
+  T -- "trang /models (production)" --> LM["page.tsx: cmsUser()"]
+  LM -- "null (khách / user thường)" --> RLM["redirect /admin/login"]
+  LM -- "root/admin" --> PM["render Xưởng mô hình"]
+  LM -. "dev mode (NODE_ENV != production):<br/>mở để npm run shots chụp ảnh" .-> PM
+
   T -- "/api/admin/{collection}, settings, bundle, studio" --> G["guard() = requireCms()"]
   G -- "không cookie / cookie sai / bị khóa" --> E401["401 Chưa đăng nhập"]
   G -- "role 2" --> E403["403 Chỉ root/admin"]
@@ -524,6 +529,7 @@ Ma trận quyền theo endpoint:
 | `POST /api/player` (mở hộp, mở khóa, nâng sao, mua thẻ) | ✗ | ✓ ví của mình | ✓ | ✓ |
 | `GET /api/fonts/clash` | ✓ | ✓ | ✓ | ✓ |
 | Trang `/admin/*` | ✗ | ✗ | ✓ | ✓ |
+| Trang `/models` (production; dev mở để chụp ảnh) | ✗ | ✗ | ✓ | ✓ |
 | `/api/admin/{collection}[/{id}]`, `settings`, `bundle` | ✗ | ✗ | ✓ | ✓ |
 | `/api/admin/studio/**` (gọi Claude, tốn chi phí) | ✗ | ✗ | ✓ | ✓ |
 | `GET /api/admin/users[/{uid}]` | ✗ | ✗ | ✓ (xem tất cả) | ✓ |

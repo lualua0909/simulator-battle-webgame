@@ -145,8 +145,10 @@ export class BattleEngine {
     private readonly bundle: ConfigBundle,
     private readonly events: EngineEvents = {},
   ) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(1.75, window.devicePixelRatio));
+    // Phones draw fewer pixels and a smaller shadow map; the low-poly look survives both.
+    const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    this.renderer = new THREE.WebGLRenderer({ antialias: !coarse });
+    this.renderer.setPixelRatio(Math.min(coarse ? 1.25 : 1.75, window.devicePixelRatio));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -166,7 +168,7 @@ export class BattleEngine {
     );
     this.sky.frustumCulled = false;
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
     this.units = new UnitRenderer(bundle);
@@ -675,20 +677,22 @@ export class BattleEngine {
 
   private bindPointer(): void {
     const dom = this.renderer.domElement;
-    // A left press that neither travels nor lingers is a click: in battle it aims the director.
-    let press: { x: number; y: number; at: number } | null = null;
+    // A left press (or a tap) that neither travels nor lingers aims the director during a battle.
+    let press: { x: number; y: number; at: number; slack: number } | null = null;
     dom.addEventListener('pointerdown', (e) => {
       this.audio.resume();
       // A click skips a cinematic and is not treated as a placement.
       if (this.cine) return this.finishCinematic();
-      press = e.button === 0 ? { x: e.clientX, y: e.clientY, at: performance.now() } : null;
+      // A second finger makes it a pinch, not a tap.
+      const tap = !press && e.button === 0;
+      press = tap ? { x: e.clientX, y: e.clientY, at: performance.now(), slack: e.pointerType === 'touch' ? 14 : 6 } : null;
       this.dispatchPointer('down', e.clientX, e.clientY, e);
     });
     dom.addEventListener('pointermove', (e) => this.dispatchPointer('move', e.clientX, e.clientY, e));
     dom.addEventListener('pointerup', (e) => {
       const p = press;
       press = null;
-      if (p && this.mode === 'battle' && !this.cine && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6 && performance.now() - p.at < 400) {
+      if (p && this.mode === 'battle' && !this.cine && Math.hypot(e.clientX - p.x, e.clientY - p.y) < p.slack && performance.now() - p.at < 400) {
         const g = this.groundAt(e.clientX, e.clientY);
         if (g) this.director.focusAt(g.x, g.z);
       }

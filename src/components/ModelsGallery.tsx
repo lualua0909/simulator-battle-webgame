@@ -1,8 +1,9 @@
 'use client';
 
-// Model workshop (/models): everyone can browse units, abilities and assets in the turntable
-// or the practice arena. Root/admin also get the editing panel — unit stats, abilities, price,
-// model download and Claude img2threejs regeneration — previewed live from unsaved drafts.
+// Model workshop (/models): root/admin only (the page redirects everyone else to
+// /admin/login). Admins browse units, abilities and assets in the turntable or the practice
+// arena, and edit them in the side panel — unit stats, abilities, price, model download and
+// Claude img2threejs regeneration — previewed live from unsaved drafts.
 import Link from 'next/link';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { Object3D } from 'three';

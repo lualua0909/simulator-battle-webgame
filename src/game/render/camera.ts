@@ -1,14 +1,15 @@
-// RTS camera tuned for mouse and trackpad:
+// RTS camera tuned for mouse, trackpad and touch:
 //   wheel / pinch                 zoom toward the cursor, proportional to the scroll amount
 //   right-drag                    orbit (yaw) + tilt around the screen centre
 //   middle-drag, Shift+right-drag grab-pan: the ground point under the cursor sticks to it
 //   left-drag when `leftPan`      grab-pan too (whenever the left button is not placing units)
+//   one-finger drag               grab-pan; two fingers pinch to zoom, twist to orbit, drag to pan
 //   WASD / arrows pan, Q/E rotate.
 // Tilt follows zoom (close = low and cinematic, far = top-down) plus the user's own tilt offset.
 import * as THREE from 'three';
 import type { Terrain } from '../sim/terrain';
 
-const MIN_DISTANCE = 14;
+const MIN_DISTANCE = 10;
 const MIN_PITCH = 0.12;
 const MAX_PITCH = 1.45;
 const CLEARANCE = 1.5;
@@ -28,6 +29,14 @@ export interface CameraView {
   yaw: number;
   pitch: number;
   distance: number;
+}
+
+/** Two-finger state: spread, twist and midpoint on screen. */
+interface Gesture {
+  dist: number;
+  angle: number;
+  x: number;
+  y: number;
 }
 
 interface Drag {
@@ -51,11 +60,16 @@ export class RtsCamera {
   pick: ((clientX: number, clientY: number) => THREE.Vector3 | null) | null = null;
   /** Auto-director hook; returning true means the director applied the input itself. */
   onInput: ((e: CameraInput) => boolean) | null = null;
+  /** Pitch the auto-director asks for (null = the pitch that follows the zoom distance). */
+  autoPitch: number | null = null;
   private panWithLeft = false;
   private tilt = 0;
   private readonly goal = { yaw: this.yaw, distance: this.distance, target: new THREE.Vector3() };
   private keys = new Set<string>();
   private drag: Drag | null = null;
+  /** Live touch points, and the two-finger gesture they form. */
+  private readonly touches = new Map<number, { x: number; y: number }>();
+  private pinch: Gesture | null = null;
   private terrain: Terrain | null = null;
   private maxDistance = 220;
   private readonly scratch = new THREE.PerspectiveCamera();
@@ -83,6 +97,15 @@ export class RtsCamera {
     on(dom, 'mousedown', (e) => e.button === 1 && e.preventDefault());
     on(dom, 'pointerdown', (e) => {
       if (!this.enabled) return;
+      if (e.pointerType === 'touch') {
+        this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        // A second finger ends the one-finger pan and starts a pinch.
+        if (this.touches.size >= 2) {
+          this.drag = null;
+          this.pinch = this.touches.size === 2 ? this.gesture() : null;
+          return;
+        }
+      }
       const pan = e.button === 1 || (e.button === 2 && e.shiftKey) || (e.button === 0 && this.panWithLeft);
       if (!pan && e.button !== 2) return;
       this.spin = 0;
@@ -91,6 +114,12 @@ export class RtsCamera {
       dom.style.cursor = 'grabbing';
     });
     on(window, 'pointermove', (e) => {
+      const touch = this.touches.get(e.pointerId);
+      if (touch) {
+        touch.x = e.clientX;
+        touch.y = e.clientY;
+        if (this.pinch) return this.pinchMove();
+      }
       const d = this.drag;
       if (!d) return;
       const dx = e.clientX - d.x;
@@ -100,15 +129,18 @@ export class RtsCamera {
       if (d.mode === 'orbit') {
         this.goal.yaw -= dx * 0.0065;
         const pitch = THREE.MathUtils.clamp(this.goalPitch() + dy * 0.005, MIN_PITCH, MAX_PITCH);
-        this.tilt = pitch - basePitch(this.goal.distance);
+        this.tilt = pitch - this.pitchBase();
       } else this.dragPan(e.clientX, e.clientY, dx, dy, d.grab);
       this.onInput?.({ kind: d.mode });
     });
-    on(window, 'pointerup', () => {
+    const lift = (e: PointerEvent) => {
+      if (this.touches.delete(e.pointerId)) this.pinch = this.touches.size === 2 ? this.gesture() : null;
       if (!this.drag) return;
       this.drag = null;
       dom.style.cursor = this.panWithLeft ? 'grab' : '';
-    });
+    };
+    on(window, 'pointerup', lift);
+    on(window, 'pointercancel', lift);
     on(
       dom,
       'wheel',
@@ -151,6 +183,13 @@ export class RtsCamera {
     if (distance) this.goal.distance = this.clampDistance(distance);
   }
 
+  /** Hand the pitch back: whatever angle the director held becomes the user's own tilt. */
+  releasePitch(): void {
+    if (this.autoPitch === null) return;
+    this.tilt = this.goalPitch() - basePitch(this.goal.distance);
+    this.autoPitch = null;
+  }
+
   /** Zoom to a distance without touching the aim point (the auto-director's zoom). */
   setDistance(distance: number): void {
     this.goal.distance = this.clampDistance(distance);
@@ -159,7 +198,7 @@ export class RtsCamera {
   setView(yaw: number, pitch: number, distance: number): void {
     this.goal.yaw = yaw;
     this.goal.distance = this.clampDistance(distance);
-    this.tilt = pitch - basePitch(this.goal.distance);
+    this.tilt = pitch - this.pitchBase();
   }
 
   /** Snap to a view with no smoothing (a cinematic handing the camera back). */
@@ -168,7 +207,7 @@ export class RtsCamera {
     this.target.copy(view.target);
     this.goal.yaw = this.yaw = view.yaw;
     this.goal.distance = this.distance = this.clampDistance(view.distance);
-    this.tilt = view.pitch - basePitch(this.distance);
+    this.tilt = view.pitch - this.pitchBase();
     this.pitch = this.goalPitch();
     this.applyPose();
   }
@@ -228,7 +267,44 @@ export class RtsCamera {
   // ------------------------------------------------------------------ internals
 
   private goalPitch(): number {
-    return THREE.MathUtils.clamp(basePitch(this.goal.distance) + this.tilt, MIN_PITCH, MAX_PITCH);
+    return THREE.MathUtils.clamp(this.pitchBase() + this.tilt, MIN_PITCH, MAX_PITCH);
+  }
+
+  /** Pitch before the user's own tilt: the director's, else the one that follows the zoom. */
+  private pitchBase(): number {
+    return this.autoPitch ?? basePitch(this.goal.distance);
+  }
+
+  /** Spread, twist and midpoint of the two live touch points. */
+  private gesture(): Gesture | null {
+    const [a, b] = [...this.touches.values()];
+    if (!a || !b) return null;
+    return { dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)), angle: Math.atan2(b.y - a.y, b.x - a.x), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  /** Two fingers: spread zooms, twist orbits, and the midpoint drags the map. */
+  private pinchMove(): void {
+    const from = this.pinch;
+    const to = this.gesture();
+    if (!from || !to) return;
+    this.pinch = to;
+    this.spin = 0;
+    const factor = from.dist / to.dist;
+    if (factor !== 1 && !this.onInput?.({ kind: 'zoom', factor })) this.zoomAt(to.x, to.y, factor);
+    // Twist past a small deadzone rotates; a plain pinch must not spin the view.
+    let twist = to.angle - from.angle;
+    if (twist > Math.PI) twist -= Math.PI * 2;
+    if (twist < -Math.PI) twist += Math.PI * 2;
+    if (Math.abs(twist) > 0.01) {
+      this.goal.yaw -= twist;
+      this.onInput?.({ kind: 'orbit' });
+    }
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    if (dx || dy) {
+      this.onInput?.({ kind: 'pan' });
+      this.dragPan(to.x, to.y, dx, dy, null);
+    }
   }
 
   private clampDistance(d: number): number {

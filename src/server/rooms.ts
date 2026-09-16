@@ -147,6 +147,26 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     io.to(room.code).emit('battle:result', { ok: false, error });
   };
 
+  /** A player conceding mid-battle: the other side wins immediately, no matching report required. */
+  const surrender = async (room: Room, loser: Side) => {
+    const battle = room.battle;
+    if (!battle) return;
+    room.battle = null;
+    const winner: Side = loser === 'blue' ? 'red' : 'blue';
+    room.phase = 'lobby';
+    for (const p of Object.values(room.players)) if (p) p.ready = false;
+    const tick = Math.max(0, ...battle.verified);
+    try {
+      await deps.saveMatch(battle, winner, tick);
+      recordBattleResult(winner);
+    } catch (e) {
+      recordSaveFailed();
+      console.error(`Không lưu được kết quả trận phòng ${room.code}:`, e instanceof Error ? e.message : e);
+    }
+    io.to(room.code).emit('battle:result', { ok: true, winner });
+    void broadcast(room);
+  };
+
   const settle = async (room: Room) => {
     const battle = room.battle!;
     room.battle = null;
@@ -231,10 +251,25 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       void broadcast(room);
     });
 
-    socket.on('room:join', (req, ack) => {
+    socket.on('room:join', async (req, ack) => {
       const code = typeof req?.code === 'string' ? req.code.trim().toUpperCase() : '';
-      const target = rooms.get(code);
-      if (!target) return ack({ ok: false, error: 'Không tìm thấy phòng' });
+      if (!code) return ack({ ok: false, error: 'Không tìm thấy phòng' });
+      let target = rooms.get(code);
+      if (!target) {
+        // Room was closed or never existed: recreate it under the same code instead of erroring.
+        const bundle = await getBundle();
+        const map = bundle.maps[0];
+        if (!map) return ack({ ok: false, error: 'Chưa có bản đồ nào trong CMS' });
+        leave();
+        target = { code, phase: 'lobby', mapId: map.id, budget: map.budget, useStars: true, defense: null, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [], stars: {} } }, battle: null, cleanup: null };
+        rooms.set(code, target);
+        room = target;
+        side = 'blue';
+        void socket.join(code);
+        ack({ ok: true, code, side: 'blue' });
+        void broadcast(target);
+        return;
+      }
       // A seat belongs to its uid: rejoining reclaims it, and nobody plays against themself.
       let seat: Side | null = (['blue', 'red'] as const).find((s) => target.players[s]?.uid === user.uid) ?? null;
       if (!seat && !target.players.red) seat = 'red';
@@ -363,6 +398,11 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
         void broadcast(room);
       }
       if (battle.reports.blue && battle.reports.red) void settle(room);
+    });
+
+    socket.on('battle:surrender', () => {
+      if (!room || !side || !room.battle) return;
+      void surrender(room, side);
     });
 
     socket.on('room:leave', leave);

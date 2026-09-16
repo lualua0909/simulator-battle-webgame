@@ -1,20 +1,28 @@
 // Auto camera director: films the battle the way an action cameraman would.
-//   marching        rides just behind the player's own front line, close in
-//   fighting        pulls back over the busiest clash so the melee and its skills stay in frame
+//   marching        rides close behind the player's own front line, low to the ground
+//   fighting        pulls back over the busiest clash so both lines, the melee and its skills fit
 //   click on ground cranes over to that spot and tracks whatever fights there
-// The mouse still works while it films: the wheel is a zoom bias on top of the director's framing,
-// a drag or a WASD pan hands control back for a moment and the director resumes from where it was left.
+// Every move runs through a critically damped spring, so a new shot glides in instead of snapping.
+// The mouse and touch still work while it films: pinch/wheel is a zoom bias on top of the director's
+// framing, a drag or a WASD pan hands control back for a moment and it resumes from where it was left.
 import * as THREE from 'three';
 import type { Side } from '../sim/terrain';
 import { SIM_HZ, type BattleSim, type SimUnit } from '../sim/world';
 import type { CameraInput, RtsCamera } from './camera';
 
-const MARCH_MIN = 26;
-const MARCH_MAX = 46;
-const FIGHT_MIN = 34;
-const FIGHT_MAX = 62;
+const MARCH_MIN = 17;
+const MARCH_MAX = 30;
+const FIGHT_MIN = 22;
+const FIGHT_MAX = 42;
 const ZOOM_BIAS_MIN = 0.62;
 const ZOOM_BIAS_MAX = 1.55;
+/** Low, near-level shot up close; a little higher once the shot opens up. */
+const PITCH_NEAR = 0.22;
+const PITCH_FAR = 0.4;
+/** Seconds the camera takes to settle on a new aim point — the longer the trip, the gentler it is. */
+const AIM_SMOOTH = 0.85;
+const AIM_SMOOTH_FAR = 2.2;
+const ZOOM_SMOOTH = 1.1;
 /** Seconds the director keeps its hands off after the last drag or key pan. */
 const PAN_HOLD = 2.5;
 /** Seconds a clicked (or panned-to) spot owns the shot: only fights inside ANCHOR_RADIUS of it count. */
@@ -33,6 +41,28 @@ const HOT_SECONDS = 1.5;
 /** One unit loosing an arrow is not a battle: the shot stays with the army until this many fight. */
 const MIN_FIGHTERS = 2;
 
+/** Critically damped spring: the velocity stays continuous, so no new shot ever jolts the camera. */
+class Spring {
+  private vel = 0;
+
+  constructor(public value: number) {}
+
+  step(target: number, smoothTime: number, dt: number): number {
+    const omega = 2 / smoothTime;
+    const x = omega * dt;
+    const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+    const change = this.value - target;
+    const step = (this.vel + omega * change) * dt;
+    this.vel = (this.vel - omega * step) * decay;
+    return (this.value = target + (change + step) * decay);
+  }
+
+  set(value: number): void {
+    this.value = value;
+    this.vel = 0;
+  }
+}
+
 interface Cell {
   x: number;
   z: number;
@@ -44,9 +74,13 @@ export class CameraDirector {
   /** The side the camera belongs to: its troops are the ones followed. */
   side: Side = 'blue';
   private active = false;
-  /** Smoothed aim point (x, z) and the spot the action is at. */
-  private readonly focus = new THREE.Vector2();
+  /** Smoothed aim point and zoom. */
+  private readonly aimX = new Spring(0);
+  private readonly aimZ = new Spring(0);
+  private readonly zoom = new Spring(MARCH_MIN);
+  /** Where the action is, and how wide the shot wants to be. */
   private readonly goal = new THREE.Vector2();
+  private want = MARCH_MIN;
   /** Clicked or parked spot: while it lasts, only fights within ANCHOR_RADIUS of it are filmed. */
   private readonly anchor = new THREE.Vector2();
   private anchorLeft = 0;
@@ -55,8 +89,6 @@ export class CameraDirector {
   /** Seconds left of a clicked spot's hold on the shot. */
   private lock = 0;
   private zoomBias = 1;
-  private distance = MARCH_MIN;
-  private want = MARCH_MIN;
   /** Extra pull-back while travelling, decays away on arrival. */
   private bump = 0;
   private think = 0;
@@ -68,7 +100,7 @@ export class CameraDirector {
     rts.onInput = (e) => this.onInput(e);
   }
 
-  /** A click on the map: crane over and track whatever happens there. */
+  /** A click (or tap) on the map: crane over and track whatever happens there. */
   focusAt(x: number, z: number): void {
     if (!this.active) return;
     this.anchor.set(x, z);
@@ -88,17 +120,19 @@ export class CameraDirector {
       this.active = live;
       // Take over from wherever the camera is, so the hand-over has no jump.
       if (live) {
-        this.focus.set(this.rts.target.x, this.rts.target.z);
-        this.goal.copy(this.focus);
-        this.distance = this.want = this.rts.distance;
+        this.aimX.set(this.rts.target.x);
+        this.aimZ.set(this.rts.target.z);
+        this.zoom.set(this.rts.distance);
+        this.goal.set(this.rts.target.x, this.rts.target.z);
+        this.want = this.rts.distance;
         this.zoomBias = 1;
         this.hold = 0;
         this.anchorLeft = 0;
-        this.bump = 0;
         this.lock = 0;
+        this.bump = 0;
         this.shotKey = -1;
         this.think = 0;
-      }
+      } else this.rts.releasePitch();
     }
     if (!live) return;
     this.hold = Math.max(0, this.hold - dt);
@@ -113,13 +147,19 @@ export class CameraDirector {
     }
     if (this.hold > 0) {
       // The user is driving: track the live view so the director resumes from there.
-      this.focus.set(this.rts.target.x, this.rts.target.z);
+      this.aimX.set(this.rts.target.x);
+      this.aimZ.set(this.rts.target.z);
     } else {
-      this.focus.lerp(this.goal, 1 - Math.exp(-dt * 2.4));
-      this.rts.focus(this.focus.x, this.focus.y);
+      // A long trip eases in and out: a far shot is taken slowly, the last metres settle tight.
+      const far = Math.hypot(this.goal.x - this.aimX.value, this.goal.y - this.aimZ.value);
+      const smooth = THREE.MathUtils.clamp(AIM_SMOOTH + far * 0.02, AIM_SMOOTH, AIM_SMOOTH_FAR);
+      this.rts.focus(this.aimX.step(this.goal.x, smooth, dt), this.aimZ.step(this.goal.y, smooth, dt));
     }
-    this.distance += (this.want - this.distance) * (1 - Math.exp(-dt * 1.6));
-    this.rts.setDistance(this.distance * this.zoomBias + this.bump);
+    // A narrow phone frame sees less of the field, so the same action needs a little more distance.
+    const fit = THREE.MathUtils.clamp(1.2 / this.rts.camera.aspect, 1, 1.35);
+    const distance = this.zoom.step((this.want * fit + this.bump) * this.zoomBias, ZOOM_SMOOTH, dt);
+    this.rts.setDistance(distance);
+    this.rts.autoPitch = THREE.MathUtils.lerp(PITCH_NEAR, PITCH_FAR, THREE.MathUtils.clamp((distance - MARCH_MIN) / 30, 0, 1));
   }
 
   // ------------------------------------------------------------------ internals
@@ -127,7 +167,7 @@ export class CameraDirector {
   private onInput(e: CameraInput): boolean {
     if (!this.active) return false;
     if (e.kind === 'zoom') {
-      // The wheel biases the director's framing instead of fighting it.
+      // The wheel (or a pinch) biases the director's framing instead of fighting it.
       this.zoomBias = THREE.MathUtils.clamp(this.zoomBias * e.factor, ZOOM_BIAS_MIN, ZOOM_BIAS_MAX);
       return true;
     }
@@ -143,8 +183,8 @@ export class CameraDirector {
 
   /** Pull back for the length of the trip, like a cameraman craning over the field. */
   private travel(): void {
-    const far = Math.hypot(this.goal.x - this.focus.x, this.goal.y - this.focus.y);
-    if (far > 20) this.bump = Math.max(this.bump, Math.min(30, far * 0.25));
+    const far = Math.hypot(this.goal.x - this.aimX.value, this.goal.y - this.aimZ.value);
+    if (far > 20) this.bump = Math.max(this.bump, Math.min(18, far * 0.2));
   }
 
   /** Picks the patch of battlefield worth filming, with hysteresis so the shot holds still. */
@@ -209,7 +249,7 @@ export class CameraDirector {
     for (const u of near) spread = Math.max(spread, Math.hypot(u.x - gx, u.z - gz));
     this.shotKey = key;
     this.goal.set(gx, gz);
-    this.want = THREE.MathUtils.clamp(spread * 2 + 24, FIGHT_MIN, FIGHT_MAX);
+    this.want = THREE.MathUtils.clamp(spread * 1.6 + 16, FIGHT_MIN, FIGHT_MAX);
     this.travel();
   }
 
@@ -244,7 +284,7 @@ export class CameraDirector {
     for (const u of front) spread = Math.max(spread, Math.hypot(u.x - cx, u.z - cz));
     this.shotKey = -1;
     this.goal.set(cx + f * 5, cz); // look a step ahead of the line
-    this.want = THREE.MathUtils.clamp(spread * 1.3 + 18, MARCH_MIN, MARCH_MAX);
+    this.want = THREE.MathUtils.clamp(spread * 1.1 + 12, MARCH_MIN, MARCH_MAX);
     this.travel();
   }
 
@@ -258,13 +298,13 @@ export class CameraDirector {
     }
     this.shotKey = -1;
     this.goal.copy(this.anchor);
-    this.want = THREE.MathUtils.clamp(spread * 1.4 + 18, MARCH_MIN, MARCH_MAX);
+    this.want = THREE.MathUtils.clamp(spread * 1.1 + 14, MARCH_MIN, MARCH_MAX);
     this.travel();
   }
 
   /** Busy cells win; the player's own troops and the shot already running both pull. */
   private score(c: Cell, x: number, z: number): number {
     const s = c.n * (1 + (c.mine / c.n) * 0.6);
-    return s / (1 + Math.hypot(x - this.focus.x, z - this.focus.y) / 90);
+    return s / (1 + Math.hypot(x - this.aimX.value, z - this.aimZ.value) / 90);
   }
 }
