@@ -3,9 +3,7 @@
 // `turret` pivot (rig 'tower') that the animator yaws toward the target.
 import * as THREE from 'three';
 import type { StructureParams } from '@/shared/schema';
-import { WALL_CELL } from '../sim/terrain';
 import { ball, beam, box, cone, cyl, detail, faceColors, jitter, mesh, metal, modelRoot, part, Rng, shade, socket, type Vec3 } from './common';
-import { getWallSegmentGeometry } from './glbStatic';
 
 const TAU = Math.PI * 2;
 
@@ -13,6 +11,7 @@ const TAU = Math.PI * 2;
 export function createStructureModel(p: StructureParams, seed = 1): THREE.Group {
   switch (p.type) {
     case 'wall':
+    case 'brick-wall':
       return wallModel(p, seed);
     case 'watchtower':
       return watchtowerModel(p);
@@ -31,55 +30,100 @@ export function createStructureModel(p: StructureParams, seed = 1): THREE.Group 
 
 // ---------------------------------------------------------------- wall pieces
 
-/** Stone cube of one tier, brick-patched by face colours (or an admin-uploaded wall mesh, once loaded). */
-export function wallBlockGeometry(p: StructureParams, height: number, seed: number, glbUrl?: string | null): THREE.BufferGeometry {
-  const s = WALL_CELL;
-  const glb = glbUrl ? getWallSegmentGeometry(glbUrl, s, height, seed) : undefined;
-  if (glb) return glb;
-  const g = jitter(new THREE.BoxGeometry(s, height, s, 3, 2, 3), 0.05, seed).translate(0, height / 2, 0);
-  return faceColors(g, p.stone, p.stone2, seed * 13 + 1);
+/** Kích thước khối tường chữ nhật (m), cấu hình trong CMS (asset params). */
+export function wallFootprint(p: StructureParams): { L: number; D: number } {
+  const L = Math.min(8, Math.max(1, Number(p.wallLength) || 4));
+  const D = Math.min(8, Math.max(1, Number(p.wallDepth) || 2));
+  return { L, D };
+}
+
+/**
+ * Khối tường chữ nhật vẽ bằng Three.js (nhẹ, không dùng glb):
+ * - `wall` = tường đá trắng xám, khối đặc + gờ coping
+ * - `brick-wall` = tường gạch vàng nâu, viền đen (đỉnh/đáy/cột góc/mạch vữa)
+ * Hình duy nhất 1 BoxGeometry + vài trim gộp chung, render instanced nên rất nhẹ.
+ */
+export function wallBlockGeometry(p: StructureParams, height: number, seed: number): THREE.BufferGeometry {
+  const { L, D } = wallFootprint(p);
+  const H = Math.min(4, Math.max(0.5, height || 2));
+  if (p.type === 'brick-wall') return brickWallBlock(p, L, H, D, seed);
+  return stoneWallBlock(p, L, H, D, seed);
+}
+
+/** Tường đá: khối trắng xám + tấm coping trên đỉnh. */
+function stoneWallBlock(p: StructureParams, L: number, H: number, D: number, seed: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  parts.push(faceColors(new THREE.BoxGeometry(L, H, D).translate(0, H / 2, 0), p.stone, p.stone2, seed * 13 + 1));
+  parts.push(faceColors(new THREE.BoxGeometry(L + 0.24, 0.16, D + 0.24).translate(0, H + 0.08, 0), shade(p.stone, 1.06), p.stone2, seed * 13 + 2));
+  return mergeColored(parts);
+}
+
+/** Tường gạch: thân vàng nâu + viền đen (đỉnh, đáy, 4 cột góc, 2 mạch ngang). */
+function brickWallBlock(p: StructureParams, L: number, H: number, D: number, seed: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const trim = p.accent || '#1e1a16';
+  const trimDark = shade(trim, 0.85);
+  parts.push(faceColors(new THREE.BoxGeometry(L, H, D).translate(0, H / 2, 0), p.stone, p.stone2, seed * 13 + 1));
+  // Viền đen đỉnh + đáy
+  parts.push(faceColors(new THREE.BoxGeometry(L + 0.18, 0.14, D + 0.18).translate(0, H + 0.07, 0), trim, trimDark, seed + 101));
+  parts.push(faceColors(new THREE.BoxGeometry(L + 0.12, 0.16, D + 0.12).translate(0, 0.08, 0), trimDark, trim, seed + 102));
+  // 4 cột góc viền đen
+  for (const sx of [1, -1]) {
+    for (const sz of [1, -1]) {
+      parts.push(faceColors(new THREE.BoxGeometry(0.14, H, 0.14).translate((sx * L) / 2, H / 2, (sz * D) / 2), trim, trimDark, seed + sx * 7 + sz * 3));
+    }
+  }
+  // 2 mạch vữa ngang viền đen (gợi khối gạch xếp lớp)
+  for (const fy of [0.33, 0.66]) {
+    parts.push(faceColors(new THREE.BoxGeometry(L + 0.03, 0.05, D + 0.03).translate(0, H * fy, 0), trimDark, trim, seed + Math.round(fy * 100)));
+  }
+  return mergeColored(parts);
 }
 
 /** Merlons and walkway lip on top of the highest block (origin = block top). */
 export function wallCrownGeometry(p: StructureParams, seed: number): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
-  const h = WALL_CELL / 2;
+  const { L, D } = wallFootprint(p);
   const dark = shade(p.stone2, 0.9);
-  for (const [x, z] of [
-    [-h + 0.25, -h + 0.25],
-    [h - 0.25, -h + 0.25],
-    [-h + 0.25, h - 0.25],
-    [h - 0.25, h - 0.25],
-  ] as const) {
-    parts.push(faceColors(new THREE.BoxGeometry(0.5, 0.5, 0.5).translate(x, 0.25, z), p.stone, dark, seed + x * 7 + z * 3));
+  const n = Math.max(2, Math.round(L));
+  for (let i = 0; i < n; i++) {
+    const x = n === 1 ? 0 : -L / 2 + 0.5 + (i * (L - 1)) / (n - 1);
+    for (const z of [-D / 2 + 0.25, D / 2 - 0.25]) {
+      parts.push(faceColors(new THREE.BoxGeometry(0.5, 0.5, 0.4).translate(x, 0.25, z), p.stone, dark, seed + x * 7 + z * 3));
+    }
   }
-  parts.push(faceColors(new THREE.BoxGeometry(WALL_CELL, 0.08, WALL_CELL).translate(0, 0.04, 0), shade(p.stone, 1.08), p.stone, seed + 5));
+  parts.push(faceColors(new THREE.BoxGeometry(L, 0.08, D).translate(0, 0.04, 0), shade(p.stone, 1.08), p.stone, seed + 5));
   return mergeColored(parts);
 }
 
 /** Collapsed stones lying where a wall cell stood. */
 export function wallRubbleGeometry(p: StructureParams, seed: number): THREE.BufferGeometry {
   const rng = new Rng(seed * 31 + 7);
+  const { L, D } = wallFootprint(p);
   const parts: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 9; i++) {
     const r = 0.25 + rng.next() * 0.3;
     const g = jitter(new THREE.IcosahedronGeometry(r, 0), r * 0.4, seed + i).scale(1, 0.6, 1);
-    g.rotateY(rng.next() * TAU).translate((rng.next() - 0.5) * 1.8, r * 0.35, (rng.next() - 0.5) * 1.8);
+    g.rotateY(rng.next() * TAU).translate((rng.next() - 0.5) * L * 0.9, r * 0.35, (rng.next() - 0.5) * D * 0.9);
     parts.push(faceColors(g, p.stone, p.stone2, seed * 3 + i));
   }
-  const heap = jitter(new THREE.IcosahedronGeometry(0.9, 1), 0.35, seed + 99).scale(1.1, 0.35, 1.1);
+  const heap = jitter(new THREE.IcosahedronGeometry(0.9, 1), 0.35, seed + 99).scale(L / 2.5, 0.35, D / 2.5);
   parts.push(faceColors(heap, shade(p.stone2, 0.85), p.stone2, seed + 11));
   return mergeColored(parts);
 }
 
 /** Dark crack lines on the four faces of a block (drawn when the top block is damaged). */
-export function wallCrackGeometry(height: number, seed: number): THREE.BufferGeometry {
+export function wallCrackGeometry(p: StructureParams, height: number, seed: number): THREE.BufferGeometry {
   const rng = new Rng(seed * 17 + 3);
   const tris: number[] = [];
-  const h = WALL_CELL / 2 + 0.012;
+  const { L, D } = wallFootprint(p);
+  const hx = L / 2 + 0.012;
+  const hz = D / 2 + 0.012;
   for (let face = 0; face < 4; face++) {
+    const off = face < 2 ? hz : hx;
+    const span = face < 2 ? L : D;
     for (let c = 0; c < 2; c++) {
-      let u = (rng.next() - 0.5) * 1.4;
+      let u = (rng.next() - 0.5) * (span - 0.6);
       let v = height * (0.25 + rng.next() * 0.6);
       for (let k = 0; k < 4; k++) {
         const nu = u + (rng.next() - 0.5) * 0.7;
@@ -95,13 +139,13 @@ export function wallCrackGeometry(height: number, seed: number): THREE.BufferGeo
           const [a, b] = q;
           switch (face) {
             case 0:
-              return [a, b, h];
+              return [a, b, off];
             case 1:
-              return [-a, b, -h];
+              return [-a, b, -off];
             case 2:
-              return [h, b, -a];
+              return [off, b, -a];
             default:
-              return [-h, b, a];
+              return [-off, b, a];
           }
         };
         const [q0, q1, q2, q3] = quad.map(P);
@@ -137,8 +181,8 @@ function mergeColored(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
 }
 
 function wallModel(p: StructureParams, seed: number): THREE.Group {
-  const root = modelRoot('wall', 'static');
-  const h = 1.6;
+  const root = modelRoot(p.type === 'brick-wall' ? 'brick-wall' : 'wall', 'static');
+  const h = Math.min(4, Math.max(0.5, Number(p.wallHeight) || 2));
   root.add(mesh('block', wallBlockGeometry(p, h, seed), p.stone));
   root.add(detail(mesh('crown', wallCrownGeometry(p, seed), p.stone, [0, h, 0])));
   return root;

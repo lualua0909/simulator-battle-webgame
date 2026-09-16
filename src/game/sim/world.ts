@@ -5,7 +5,7 @@
 // iteration order (spawn order), no Math.random / trig / Date. Cosmetics (ragdolls,
 // particles, animation) live in the renderer and never feed back into this file.
 import { starScale } from '@/shared/economy';
-import type { ContentBundle, MapDef, ProjectileDef, UnitDef, WeaponDef } from '@/shared/schema';
+import type { AssetDef, ContentBundle, MapDef, ProjectileDef, UnitDef, WeaponDef } from '@/shared/schema';
 import type { Armies, Side } from './army';
 import { Rng, clamp, dcos, fnv1a } from './rng';
 import { EDGE_MARGIN, WALL_CELL, type Obstacle, Terrain, wallIndex } from './terrain';
@@ -208,6 +208,8 @@ export class WallCell {
     /** HP of one block; a wall loses a tier per `blockHp` of damage. */
     readonly blockHp: number,
     public tiers: number,
+    /** Chiều cao 1 khối của ô này (asset wallHeight, fallback siege.tierHeight). */
+    readonly blockHeight: number,
   ) {}
 
   get top(): number {
@@ -269,7 +271,16 @@ export interface BattleResult {
   survivors: Record<Side, number>;
 }
 
-type SimContent = Pick<ContentBundle, 'units' | 'weapons' | 'projectiles' | 'settings'>;
+type SimContent = Pick<ContentBundle, 'units' | 'weapons' | 'projectiles' | 'settings'> & Partial<Pick<ContentBundle, 'assets'>>;
+
+/** Chiều cao 1 khối tường của unit (asset wallHeight trong CMS, fallback siege.tierHeight). */
+function wallHeightFor(base: Pick<UnitDef, 'modelId'>, content: SimContent): number {
+  const tierHeight = content.settings.siege.tierHeight;
+  const assets = (content as { assets?: readonly AssetDef[] }).assets;
+  const asset = assets?.find((a) => a.id === base.modelId);
+  const h = Number((asset?.params as Record<string, unknown> | undefined)?.wallHeight);
+  return Number.isFinite(h) && h >= 0.5 && h <= 4 ? h : tierHeight;
+}
 
 export class BattleSim {
   readonly units: SimUnit[] = [];
@@ -336,9 +347,10 @@ export class BattleSim {
         const blocks = kind === 'wall' ? Math.min(stacks.get(key) ?? 1, content.settings.siege.maxTiers) : 1;
         const cx = (ix + 0.5) * WALL_CELL;
         const cz = (iz + 0.5) * WALL_CELL;
-        const u = this.createUnit(side, base, cx, cz, (def) => ({ ...def, hp: def.hp * blocks, height: kind === 'wall' ? blocks * tierHeight : def.height }));
+        const blockHeight = kind === 'wall' ? wallHeightFor(base, content) : tierHeight;
+        const u = this.createUnit(side, base, cx, cz, (def) => ({ ...def, hp: def.hp * blocks, height: kind === 'wall' ? blocks * blockHeight : def.height }));
         if (!u) continue;
-        u.wall = new WallCell(u, ix, iz, kind, u.def.hp / blocks, blocks);
+        u.wall = new WallCell(u, ix, iz, kind, u.def.hp / blocks, blocks, blockHeight);
         this.walls.set(key, u.wall);
       }
     }
@@ -852,7 +864,8 @@ export class BattleSim {
       const cell = this.cellAt(u.x, u.z);
       if (cell === from) return;
       const dy = cell ? cell.top - from.top : 0;
-      if (cell && cell.unit.alive && dy <= tierHeight + 0.01 && -dy <= tierHeight + 0.01) {
+      const step = Math.max(tierHeight, from.blockHeight, cell?.blockHeight ?? 0);
+      if (cell && cell.unit.alive && dy <= step + 0.01 && -dy <= step + 0.01) {
         u.onWall = cell;
         return;
       }
@@ -1766,7 +1779,6 @@ export class BattleSim {
   /** Wall cells lose a tier per blockHp of damage; a destroyed cell becomes rubble. */
   private updateWalls(): void {
     if (this.walls.size === 0) return;
-    const tierHeight = this.content.settings.siege.tierHeight;
     for (const cell of this.walls.values()) {
       if (cell.tiers === 0) continue;
       const u = cell.unit;
@@ -1774,7 +1786,7 @@ export class BattleSim {
       if (tiers >= cell.tiers) continue;
       const lost = cell.tiers - tiers;
       cell.tiers = tiers;
-      if (cell.kind === 'wall' && tiers > 0) (u.def as { height: number }).height = tiers * tierHeight;
+      if (cell.kind === 'wall' && tiers > 0) (u.def as { height: number }).height = tiers * cell.blockHeight;
       this.events.push({ type: 'wall-break', unitId: u.id, tiers, lost, x: u.x, y: cell.top, z: u.z, dx: -u.fx, dz: -u.fz });
     }
   }

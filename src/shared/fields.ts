@@ -58,7 +58,8 @@ export const ENUM_LABELS: Record<string, string> = {
   nova: 'Chấn động quanh thân',
   dash: 'Lướt tới chém',
   none: 'Không',
-  wall: 'Tường thành (khối lưới)',
+  wall: 'Tường đá (khối chữ nhật)',
+  'brick-wall': 'Tường gạch (khối chữ nhật)',
   platform: 'Tháp canh (sàn đứng)',
   building: 'Công trình',
   core: 'Nhà chính',
@@ -189,6 +190,9 @@ const PARAM_LABELS: Record<string, string> = {
   stone2: 'Màu đá phụ',
   roof: 'Màu mái / cờ',
   accent: 'Màu điểm nhấn',
+  wallLength: 'Tường: dài (m)',
+  wallHeight: 'Tường: cao 1 khối (m)',
+  wallDepth: 'Tường: dày (m)',
 };
 
 interface ZodDefLike {

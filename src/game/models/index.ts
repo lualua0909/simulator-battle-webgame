@@ -31,8 +31,10 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
   // RIGID_GLB_KINDS which bake rigid but keep body motion + saddle; see assetSchema).
   // Skinned kinds (SKINNED_GLB_KINDS) skip this baked path: the battle renderer plays the file's
   // skeletal clips instead, and everything else falls back to the procedural model below.
+  // Wall blocks (wall/brick-wall) never use glb: they are lightweight Three.js boxes.
   const skinned = (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind);
-  const uploaded = !skinned && asset.glb ? getCustomGlbGroup(asset.glb.url, asset.kind) : undefined;
+  const wallLook = asset.kind === 'structure' && ((asset.params as Record<string, unknown> | undefined)?.type === 'wall' || (asset.params as Record<string, unknown> | undefined)?.type === 'brick-wall');
+  const uploaded = !skinned && !wallLook && asset.glb ? getCustomGlbGroup(asset.glb.url, asset.kind) : undefined;
   if (uploaded) {
     uploaded.scale.setScalar(asset.scale);
     uploaded.userData.assetId = asset.id;

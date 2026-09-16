@@ -176,10 +176,17 @@ function ensureLoading(url: string): Promise<void> {
 }
 
 /** Loads (and caches) every asset's uploaded glb override; call before rendering so lookups below are synchronous. */
-export function preloadCustomGlbs(assets: ReadonlyArray<Pick<AssetDef, 'glb' | 'kind'>>): Promise<void> {
+export function preloadCustomGlbs(assets: ReadonlyArray<Pick<AssetDef, 'glb' | 'kind' | 'params'>>): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
   // Skinned kinds keep their skeletal animation via glbSkinned.ts — never bake them here.
-  const urls = new Set(assets.filter((a) => !(SKINNED_GLB_KINDS as readonly string[]).includes(a.kind)).map((a) => a.glb?.url).filter((u): u is string => !!u));
+  // Wall blocks never use glb: lightweight Three.js boxes.
+  const urls = new Set(
+    assets
+      .filter((a) => !(SKINNED_GLB_KINDS as readonly string[]).includes(a.kind))
+      .filter((a) => !(a.kind === 'structure' && ((a.params as Record<string, unknown> | undefined)?.type === 'wall' || (a.params as Record<string, unknown> | undefined)?.type === 'brick-wall')))
+      .map((a) => a.glb?.url)
+      .filter((u): u is string => !!u),
+  );
   return Promise.all([...urls].map(ensureLoading)).then(() => undefined);
 }
 
@@ -196,17 +203,4 @@ export function getCustomGlbGroup(url: string, kind?: string): THREE.Group | und
   const root = modelRoot('glb', 'static');
   root.add(mesh('body', baked.geometry.clone(), '#ffffff'));
   return root;
-}
-
-/** One wall-tier geometry sized to `height` and stretched to span a `cellSize`-wide run, or undefined before load. */
-export function getWallSegmentGeometry(url: string, cellSize: number, height: number, seed: number): THREE.BufferGeometry | undefined {
-  const baked = cache.get(url);
-  if (!baked) return undefined;
-  const g = baked.geometry.clone();
-  const sx = cellSize / baked.length;
-  const sy = height / baked.height;
-  g.scale(sx, sy, sx);
-  // Tiny seeded offset so stacked/adjacent tiers don't read as an obviously repeated tile.
-  g.rotateY(((seed % 4) - 1.5) * 0.02);
-  return g;
 }

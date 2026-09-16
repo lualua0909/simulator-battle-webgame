@@ -162,7 +162,7 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
       </div>
       {status && status.text !== 'Đã hủy' && <p className={`text-xs font-bold ${status.ok ? 'text-green-700' : 'text-red-team'}`}>{status.text}</p>}
       <ScalePanel asset={asset} act={act} saving={saving} />
-      {(RIG_OF_KIND[asset.kind] === 'static' || (RIGID_GLB_KINDS as readonly string[]).includes(asset.kind)) && <GlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
+      {(RIG_OF_KIND[asset.kind] === 'static' || (RIGID_GLB_KINDS as readonly string[]).includes(asset.kind)) && !(asset.kind === 'structure' && ((asset.params as Record<string, unknown> | undefined)?.type === 'wall' || (asset.params as Record<string, unknown> | undefined)?.type === 'brick-wall')) && <GlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
       {(SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && <SkinnedGlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
       {asset.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && <TintSavePanel key={asset.glb.url} asset={asset} users={users} act={act} saving={saving} />}
       <DownloadPanel key={sources.map((s) => s.label).join('|')} sources={sources} />

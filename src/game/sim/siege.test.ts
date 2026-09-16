@@ -45,7 +45,7 @@ test('wall blocks on one cell stack into one wall unit; defenders stand on top',
   const w = walls[0];
   assert.equal(w.wall!.tiers, 3);
   assert.equal(w.hp, 400 * 3);
-  assert.equal(w.def.height, 1.6 * 3);
+  assert.equal(w.def.height, CONTENT.settings.siege.tierHeight * 3);
   const archer = sim.units.find((u) => u.def.id === 'archer')!;
   assert.equal(archer.onWall, w.wall);
   assert.equal(archer.y, w.wall!.top);

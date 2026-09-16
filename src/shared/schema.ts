@@ -29,7 +29,7 @@ export const STRUCTURE_KINDS = ['none', 'wall', 'platform', 'building', 'core'] 
 /** Which side may field a unit in siege mode. */
 export const SIEGE_SIDES = ['any', 'defense', 'attack'] as const;
 /** Looks of the `structure` asset kind (src/game/models/structures.ts). */
-export const STRUCTURE_TYPES = ['wall', 'watchtower', 'bow-tower', 'gun-tower', 'tesla', 'barracks', 'keep'] as const;
+export const STRUCTURE_TYPES = ['wall', 'brick-wall', 'watchtower', 'bow-tower', 'gun-tower', 'tesla', 'barracks', 'keep'] as const;
 /** Highest star level of an upgraded unit. */
 export const STAR_MAX = 5;
 
@@ -293,6 +293,10 @@ export const structureParamsSchema = z.object({
   wood: hex.default('#7a5230'),
   roof: hex.default('#9a3a2a'),
   accent: hex.default('#d8b04a'),
+  /** Khối tường chữ nhật vẽ bằng Three.js (nhẹ, không dùng glb): dài × cao × dày (m). */
+  wallLength: z.number().min(1).max(8).default(4),
+  wallHeight: z.number().min(0.5).max(4).default(2),
+  wallDepth: z.number().min(1).max(8).default(2),
 });
 
 export const treeParamsSchema = z.object({
@@ -510,8 +514,8 @@ export const siegeSettingsSchema = z.object({
   /** Budget of each side = map (or room) budget × this. */
   defenseBudget: z.number().min(0.1).max(10).default(1),
   attackBudget: z.number().min(0.1).max(10).default(1),
-  /** Height of one wall block (m); blocks are 2×2 m. */
-  tierHeight: z.number().min(0.5).max(4).default(1.6),
+  /** Height of one wall block (m); should match the wall assets' wallHeight. Blocks are wallLength×wallDepth m. */
+  tierHeight: z.number().min(0.5).max(4).default(2),
   maxTiers: z.number().int().min(1).max(6).default(3),
   maxWallBlocks: z.number().int().min(0).max(1000).default(400),
   /** Range bonus of units standing on a watchtower (0.3 = +30 %). */

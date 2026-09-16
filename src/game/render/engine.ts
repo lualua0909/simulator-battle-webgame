@@ -13,6 +13,7 @@ import { BattleSim, SIM_DT, type BattleResult, type SimEvent } from '../sim/worl
 import { attackStyleFor, Poser } from './animate';
 import { basePitch, RtsCamera, type CameraView } from './camera';
 import { Cinematic, type Shot } from './cinematic';
+import { CameraDirector } from './director';
 import { EffectRenderer, type EffectHost } from './effects';
 import { Fireworks } from './fireworks';
 import { ParticleSystem } from './particles';
@@ -80,6 +81,8 @@ export class BattleEngine {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(50, 1, 0.3, 1400);
   readonly rts: RtsCamera;
+  /** Films the battle whenever a cinematic is not running. */
+  readonly director: CameraDirector;
   terrain: Terrain | null = null;
   map: MapDef | null = null;
   sim: BattleSim | null = null;
@@ -191,6 +194,7 @@ export class BattleEngine {
 
     this.rts = new RtsCamera(this.camera, this.renderer.domElement);
     this.rts.pick = (x, y) => this.groundAt(x, y);
+    this.director = new CameraDirector(this.rts);
     this.bindPointer();
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
@@ -265,6 +269,7 @@ export class BattleEngine {
   viewSide(side: Side): void {
     const t = this.terrain;
     if (!t) return;
+    this.director.side = side;
     const zone = t.zones[side];
     this.rts.focus(((zone.x0 + zone.x1) / 2) * 0.55, 0);
     this.rts.setView(side === 'blue' ? Math.PI : 0, 0.85, t.size * 0.42);
@@ -339,6 +344,7 @@ export class BattleEngine {
   /** Short flight from the enemy line to close behind `side`'s army; the sim waits for it. */
   playBattleIntro(side: Side, onEnd: () => void = () => {}): void {
     const sim = this.sim;
+    this.director.side = side;
     if (!this.terrain || !sim) return onEnd();
     const own = this.armyCenter(sim, side);
     const foe = this.armyCenter(sim, side === 'blue' ? 'red' : 'blue');
@@ -669,14 +675,25 @@ export class BattleEngine {
 
   private bindPointer(): void {
     const dom = this.renderer.domElement;
+    // A left press that neither travels nor lingers is a click: in battle it aims the director.
+    let press: { x: number; y: number; at: number } | null = null;
     dom.addEventListener('pointerdown', (e) => {
       this.audio.resume();
       // A click skips a cinematic and is not treated as a placement.
       if (this.cine) return this.finishCinematic();
+      press = e.button === 0 ? { x: e.clientX, y: e.clientY, at: performance.now() } : null;
       this.dispatchPointer('down', e.clientX, e.clientY, e);
     });
     dom.addEventListener('pointermove', (e) => this.dispatchPointer('move', e.clientX, e.clientY, e));
-    dom.addEventListener('pointerup', (e) => this.dispatchPointer('up', e.clientX, e.clientY, e));
+    dom.addEventListener('pointerup', (e) => {
+      const p = press;
+      press = null;
+      if (p && this.mode === 'battle' && !this.cine && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6 && performance.now() - p.at < 400) {
+        const g = this.groundAt(e.clientX, e.clientY);
+        if (g) this.director.focusAt(g.x, g.z);
+      }
+      this.dispatchPointer('up', e.clientX, e.clientY, e);
+    });
     dom.addEventListener('pointerleave', () => this.hideGhost());
   }
 
@@ -723,8 +740,10 @@ export class BattleEngine {
   private frame(): void {
     this.timer.update();
     const dt = Math.min(0.1, this.timer.getDelta());
-    if (!this.cine) this.rts.update(dt);
-    else if (!this.cine.run.update(dt, this.camera)) this.finishCinematic();
+    if (!this.cine) {
+      this.director.update(dt, this.mode === 'battle' ? this.sim : null);
+      this.rts.update(dt);
+    } else if (!this.cine.run.update(dt, this.camera)) this.finishCinematic();
     this.audio.setListener(this.rts.target.x, this.rts.target.z, this.rts.yaw);
     const sim = this.sim;
     let simDt = 0;
@@ -841,13 +860,16 @@ export class BattleEngine {
           const u = sim.units[e.unitId];
           const cell = u.wall;
           if (!cell) break;
-          const tierHeight = settings.siege.tierHeight;
+          const blockH = cell.blockHeight || settings.siege.tierHeight;
+          const wparams = (this.bundle.assets.find((a) => a.id === u.def.modelId)?.params ?? {}) as Record<string, unknown>;
+          const wL = typeof wparams.wallLength === 'number' ? Math.min(8, Math.max(1, wparams.wallLength)) : WALL_CELL;
+          const wD = typeof wparams.wallDepth === 'number' ? Math.min(8, Math.max(1, wparams.wallDepth)) : WALL_CELL;
           const colors = this.walls.colors(cell);
           for (let k = 0; k < e.lost; k++) {
-            const y = u.y + (e.tiers + k + 0.5) * tierHeight;
-            this.debris.burst({ x: u.x, y, z: u.z, hx: WALL_CELL * 0.45, hy: tierHeight * 0.45, hz: WALL_CELL * 0.45, count: 26, colors, dx: e.dx, dz: e.dz, force: 3.5 + k, delay: k * 0.08 });
+            const y = u.y + (e.tiers + k + 0.5) * blockH;
+            this.debris.burst({ x: u.x, y, z: u.z, hx: wL * 0.45, hy: blockH * 0.45, hz: wD * 0.45, count: 26, colors, dx: e.dx, dz: e.dz, force: 3.5 + k, delay: k * 0.08 });
             this.emit('debris', u.x, y, u.z);
-            this.emit('smoke', u.x, y - tierHeight * 0.3, u.z, undefined, 10);
+            this.emit('smoke', u.x, y - blockH * 0.3, u.z, undefined, 10);
           }
           const collapsed = e.tiers === 0;
           this.emit('shock-dust', u.x, u.y + 0.2, u.z, undefined, collapsed ? 40 : 16);

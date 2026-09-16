@@ -255,7 +255,8 @@ const units: UnitDef[] = [
   U({ id: 'ninja', name: 'Ninja áo đen', factionId: 'phuong-dong', role: 'melee', cost: 300, hp: 170, speed: 5.8, climbWalls: true, siegeSide: 'attack', skillIds: ['chem-luot', 'phi-tieu'], weaponId: 'katana', modelId: 'm-ninja', description: 'Leo qua tường thành, chém lướt vào cung thủ trên tường.' }),
   U({ id: 'fire-catapult', name: 'Máy bắn đá lửa', factionId: 'phuong-dong', role: 'siege', cost: 1300, hp: 550, speed: 1.3, mass: 20, radius: 1.6, height: 2.2, armorClass: 'siege', knockbackResist: 0.8, siegeSide: 'attack', weaponId: 'fire-catapult', modelId: 'm-fire-catapult', description: 'Ném hũ dầu nổ lửa, thiêu cháy tường và quân thủ.' }),
   // ---- siege structures (speed 0, immovable)
-  S({ id: 'tuong-thanh', name: 'Tường thành', structure: 'wall', siegeSide: 'defense', cost: 25, hp: 400, radius: 1.45, height: 1.6, modelId: 'm-wall', unlockCost: 0, description: 'Khối 2×2 m, xếp chồng 3 tầng. Lính phe thủ đứng và đi lại trên mặt tường.' }),
+  S({ id: 'tuong-thanh', name: 'Tường đá', structure: 'wall', siegeSide: 'defense', cost: 25, hp: 400, radius: 1.45, height: 2, modelId: 'm-wall', unlockCost: 0, description: 'Khối 4×2×2 m, xếp chồng 3 tầng. Lính phe thủ đứng và đi lại trên mặt tường.' }),
+  S({ id: 'tuong-gach', name: 'Tường gạch', structure: 'wall', siegeSide: 'defense', cost: 25, hp: 400, radius: 1.45, height: 2, modelId: 'm-brick-wall', unlockCost: 0, description: 'Khối 4×2×2 m, xếp chồng 3 tầng. Lính phe thủ đứng và đi lại trên mặt tường.' }),
   S({ id: 'thap-canh', name: 'Tháp canh', structure: 'platform', siegeSide: 'defense', cost: 200, hp: 1800, radius: 1.45, height: 6, modelId: 'm-watchtower', description: 'Sàn cho 2 lính, tăng 30% tầm bắn cho lính đứng trên.' }),
   S({ id: 'thap-cung', name: 'Tháp cung', structure: 'building', siegeSide: 'defense', cost: 400, hp: 1600, radius: 1.5, height: 7, weaponId: 'tower-bow', modelId: 'm-bow-tower', description: 'Bắn loạt 2 mũi tên, tầm xa.' }),
   S({ id: 'thap-sung', name: 'Tháp súng', structure: 'building', siegeSide: 'defense', cost: 550, hp: 1800, radius: 1.5, height: 6.5, weaponId: 'tower-gun', modelId: 'm-gun-tower', description: 'Đạn chì mạnh, xuyên giáp nhẹ.' }),
@@ -303,7 +304,8 @@ const assets: AssetDef[] = [
   A({ id: 'm-storm-lord', name: 'Thần sấm', kind: 'humanoid', scale: 1.2, params: { bulk: 1.3, skin: '#e8c0a0', shirt: '#4a2a8a', pants: '#2a2440', armor: 'plate', armorColor: '#b8c4d8', head: 'horned', headColor: '#c9ced6', hair: 'long', hairColor: '#f2d27a', beard: 'long', cape: true, capeColor: '#b3262e', weapon: 'hammer', metalColor: '#dfe6f0', woodColor: '#5a3a24' }, glb: { url: '/models/phap-su.glb', fileName: 'phap su.glb', uploadedAt: 0, tint: { Wizard_Texture: { from: '#2e44a8', to: '#c8922a' } }, hide: [] } }),
   A({ id: 'm-ninja', name: 'Ninja áo đen', kind: 'humanoid', scale: 0.9, params: { skin: '#e8b88a', shirt: '#17171b', pants: '#17171b', boots: '#0e0e10', armor: 'none', head: 'ninja', headColor: '#121215', hair: 'none', brows: 'angry', weapon: 'katana', metalColor: '#dfe6ee', woodColor: '#2a2a2e' }, glb: { url: '/models/ninja.glb', fileName: 'ninja.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-fire-catapult', name: 'Máy bắn đá lửa', kind: 'catapult', params: { wood: '#6b3f22', metal: '#3f3a36', rope: '#b89a5a', fire: true } }),
-  A({ id: 'm-wall', name: 'Tường thành', kind: 'structure', params: { type: 'wall' } }),
+  A({ id: 'm-wall', name: 'Tường đá', kind: 'structure', params: { type: 'wall', stone: '#cfd3d8', stone2: '#9aa0a8', wallLength: 4, wallHeight: 2, wallDepth: 2 } }),
+  A({ id: 'm-brick-wall', name: 'Tường gạch', kind: 'structure', params: { type: 'brick-wall', stone: '#c08c3a', stone2: '#8a5f24', accent: '#1e1a16', wallLength: 4, wallHeight: 2, wallDepth: 2 } }),
   A({ id: 'm-watchtower', name: 'Tháp canh', kind: 'structure', params: { type: 'watchtower' } }),
   A({ id: 'm-bow-tower', name: 'Tháp cung', kind: 'structure', params: { type: 'bow-tower', roof: '#2f5f9a' } }),
   A({ id: 'm-gun-tower', name: 'Tháp súng', kind: 'structure', params: { type: 'gun-tower', roof: '#4a4f58' } }),
@@ -397,7 +399,7 @@ const settings: Settings = {
   siege: {
     defenseBudget: 1,
     attackBudget: 1,
-    tierHeight: 1.6,
+    tierHeight: 2,
     maxTiers: 3,
     maxWallBlocks: 400,
     towerRangeBonus: 0.3,

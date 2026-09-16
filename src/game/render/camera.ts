@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import type { Terrain } from '../sim/terrain';
 
-const MIN_DISTANCE = 5;
+const MIN_DISTANCE = 14;
 const MIN_PITCH = 0.12;
 const MAX_PITCH = 1.45;
 const CLEARANCE = 1.5;
@@ -19,6 +19,9 @@ export function basePitch(distance: number): number {
   const t = THREE.MathUtils.clamp(Math.log(distance / 8) / Math.log(20), 0, 1);
   return 0.3 + t * 0.6;
 }
+
+/** Input the auto-director may take over (see `onInput`). */
+export type CameraInput = { kind: 'zoom'; factor: number } | { kind: 'pan' } | { kind: 'orbit' } | { kind: 'key' };
 
 export interface CameraView {
   target: THREE.Vector3;
@@ -46,6 +49,8 @@ export class RtsCamera {
   spin = 0;
   /** Ground point under a screen position (terrain raycast), supplied by the engine. */
   pick: ((clientX: number, clientY: number) => THREE.Vector3 | null) | null = null;
+  /** Auto-director hook; returning true means the director applied the input itself. */
+  onInput: ((e: CameraInput) => boolean) | null = null;
   private panWithLeft = false;
   private tilt = 0;
   private readonly goal = { yaw: this.yaw, distance: this.distance, target: new THREE.Vector3() };
@@ -81,6 +86,7 @@ export class RtsCamera {
       const pan = e.button === 1 || (e.button === 2 && e.shiftKey) || (e.button === 0 && this.panWithLeft);
       if (!pan && e.button !== 2) return;
       this.spin = 0;
+      this.onInput?.({ kind: pan ? 'pan' : 'orbit' });
       this.drag = { mode: pan ? 'pan' : 'orbit', x: e.clientX, y: e.clientY, grab: pan ? this.groundUnder(e.clientX, e.clientY)?.clone() ?? null : null };
       dom.style.cursor = 'grabbing';
     });
@@ -96,6 +102,7 @@ export class RtsCamera {
         const pitch = THREE.MathUtils.clamp(this.goalPitch() + dy * 0.005, MIN_PITCH, MAX_PITCH);
         this.tilt = pitch - basePitch(this.goal.distance);
       } else this.dragPan(e.clientX, e.clientY, dx, dy, d.grab);
+      this.onInput?.({ kind: d.mode });
     });
     on(window, 'pointerup', () => {
       if (!this.drag) return;
@@ -113,7 +120,9 @@ export class RtsCamera {
         const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
         const dy = THREE.MathUtils.clamp(e.deltaY * unit, -160, 160);
         // ctrlKey = trackpad pinch: small deltas, so a stronger gain.
-        this.zoomAt(e.clientX, e.clientY, Math.exp(dy * (e.ctrlKey ? 0.012 : 0.0015)));
+        const factor = Math.exp(dy * (e.ctrlKey ? 0.012 : 0.0015));
+        if (this.onInput?.({ kind: 'zoom', factor })) return;
+        this.zoomAt(e.clientX, e.clientY, factor);
       },
       { passive: false },
     );
@@ -131,7 +140,8 @@ export class RtsCamera {
 
   setTerrain(terrain: Terrain): void {
     this.terrain = terrain;
-    this.maxDistance = Math.max(90, terrain.size * 1.4);
+    // Zoomed all the way out the map just fills the frame — no further.
+    this.maxDistance = Math.max(70, terrain.size * 1.05);
     this.goal.target.set(0, 0, 0);
     this.setView(Math.PI, 0.8, terrain.size * 0.55);
   }
@@ -139,6 +149,11 @@ export class RtsCamera {
   focus(x: number, z: number, distance?: number): void {
     this.goal.target.set(x, 0, z);
     if (distance) this.goal.distance = this.clampDistance(distance);
+  }
+
+  /** Zoom to a distance without touching the aim point (the auto-director's zoom). */
+  setDistance(distance: number): void {
+    this.goal.distance = this.clampDistance(distance);
   }
 
   setView(yaw: number, pitch: number, distance: number): void {
@@ -182,7 +197,10 @@ export class RtsCamera {
     if (this.enabled) {
       const k = this.keys;
       const speed = this.goal.distance * 0.9 * dt * (k.has('shift') ? 2.5 : 1);
-      if (MOVE_KEYS.some((key) => k.has(key))) this.spin = 0;
+      if (MOVE_KEYS.some((key) => k.has(key))) {
+        this.spin = 0;
+        this.onInput?.({ kind: 'key' });
+      }
       if (k.has('w') || k.has('arrowup')) this.pan(0, -speed);
       if (k.has('s') || k.has('arrowdown')) this.pan(0, speed);
       if (k.has('a') || k.has('arrowleft')) this.pan(-speed, 0);
