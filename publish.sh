@@ -59,6 +59,16 @@ fi
 
 if port_open; then
   echo "Port ${PORT} đang chạy sẵn -> bỏ qua bước start app."
+  # Next.js dev chặn HMR websocket khác origin bằng body "Unauthorized" thô (không có
+  # status line), khiến cloudflared báo: malformed HTTP response "Unauthorized" (type=ws).
+  # Probe đúng lỗi đó trước khi mở tunnel.
+  HMR_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H "Origin: https://${DOMAIN}" "${URL}/_next/hmr" 2>/dev/null || echo 000)"
+  if [ "${HMR_CODE}" = "403" ]; then
+    echo "Port ${PORT} đang chạy Next.js DEV chặn origin https://${DOMAIN} ở /_next/hmr." >&2
+    echo "Dừng dev server (npm run dev) rồi chạy lại ./publish.sh để publish bản production," >&2
+    echo "hoặc thêm '${DOMAIN}' vào allowedDevOrigins trong next.config.ts rồi restart dev." >&2
+    exit 1
+  fi
 else
   echo "Start app ở port ${PORT}..."
   PORT="${PORT}" npm run start > "./publish-app.log" 2>&1 &
