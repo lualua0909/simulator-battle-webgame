@@ -36,7 +36,7 @@ export function generateSiegeDefense(opts: SiegeDefenseOptions): Placement[] {
     return true;
   };
 
-  const zone = terrain.zones[side];
+  const zone = terrain.zoneOf(side);
   const front = side === 'blue' ? 1 : -1; // toward the attackers along x
   const depth = zone.x1 - zone.x0;
   const width = zone.z1 - zone.z0;

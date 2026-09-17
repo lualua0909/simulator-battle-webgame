@@ -189,7 +189,7 @@ function counterPlan(opts: BotArmyOptions): { shares: Record<Role, number>; bonu
 const ROLE_RANK: Record<Role, number> = { melee: 0, support: 1, ranged: 2, siege: 3 };
 
 function layout(units: UnitDef[], formation: BotDef['formation'], terrain: Terrain, side: Side, rng: Rng): Placement[] {
-  const zone = terrain.zones[side];
+  const zone = terrain.zoneOf(side);
   const dir = side === 'blue' ? -1 : 1; // from the front line back into the zone
   const front = side === 'blue' ? zone.x1 - 1.5 : zone.x0 + 1.5;
   const back = side === 'blue' ? zone.x0 + 1 : zone.x1 - 1;

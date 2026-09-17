@@ -109,7 +109,7 @@ export const unitSchema = z.object({
   starCoins: z
     .array(z.number().int().min(0).max(100_000_000))
     .length(STAR_MAX)
-    .default(() => [1000, 2000, 4000, 8000, 16000]),
+    .default(() => [10, 20, 40, 80, 160]),
 });
 
 // ---------------------------------------------------------------- weapons
@@ -506,8 +506,24 @@ export const economySchema = z.object({
   boxHours: z.number().min(0.1).max(168).default(3),
   /** Extra HP and damage per star (0.1 = +10 %). */
   starBonus: z.number().min(0).max(1).default(0.1),
-  dailyBox: boxRewardSchema.default(() => ({ chest: 'golden' as const, coins: [200, 500] as [number, number], cards: 40, kinds: 3 })),
-  hourlyBox: boxRewardSchema.default(() => ({ chest: 'silver' as const, coins: [50, 150] as [number, number], cards: 12, kinds: 2 })),
+  dailyBox: boxRewardSchema.default(() => ({ chest: 'golden' as const, coins: [2, 5] as [number, number], cards: 40, kinds: 3 })),
+  hourlyBox: boxRewardSchema.default(() => ({ chest: 'silver' as const, coins: [1, 2] as [number, number], cards: 12, kinds: 2 })),
+  /** Reward box for beating a bot, keyed by `bot.difficulty` 1‑5 (a plain object, never an array — the
+   *  CMS field editor clones settings with `{...obj}`, which would silently turn a tuple into an
+   *  object and fail validation on save). */
+  botBoxes: z
+    .object({ '1': boxRewardSchema, '2': boxRewardSchema, '3': boxRewardSchema, '4': boxRewardSchema, '5': boxRewardSchema })
+    .default(() => ({
+      '1': { chest: 'wooden' as const, coins: [1, 3] as [number, number], cards: 8, kinds: 2 },
+      '2': { chest: 'silver' as const, coins: [2, 5] as [number, number], cards: 14, kinds: 2 },
+      '3': { chest: 'golden' as const, coins: [3, 8] as [number, number], cards: 20, kinds: 3 },
+      '4': { chest: 'giant' as const, coins: [5, 12] as [number, number], cards: 28, kinds: 3 },
+      '5': { chest: 'magical' as const, coins: [8, 20] as [number, number], cards: 40, kinds: 4 },
+    })),
+  /** Extra coins and cards per bot beyond the first (0.5 = +50 % per extra bot). */
+  botWinBonusPerExtra: z.number().min(0).max(2).default(0.5),
+  /** Minimum seconds between two bot-win rewards (anti-farm). */
+  botWinCooldown: z.number().min(0).max(3600).default(20),
 });
 
 export const siegeSettingsSchema = z.object({

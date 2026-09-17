@@ -34,13 +34,19 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
     [bundle, tab, player],
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = bundle.units.find((u) => u.id === selectedId) ?? units[0] ?? null;
+  const selected = bundle.units.find((u) => u.id === selectedId) ?? null;
+  // Desktop keeps a persistent side panel; mobile only shows a popup after a tap.
+  const desktopSelected = selected ?? units[0] ?? null;
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (selectedId) setSelectedId(null);
+      else onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, selectedId]);
 
   // Lock the page behind the full-screen modal so only the collection scrolls on mobile.
   useEffect(() => {
@@ -52,50 +58,73 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
   }, []);
 
   return createPortal(
-    <div className="game-ui box-backdrop fixed inset-0 z-40 flex flex-col overflow-hidden">
-      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3 pt-3 sm:px-4">
-        <h2 className="text-outline min-w-0 text-xl sm:text-2xl md:text-3xl">Bộ sưu tập thẻ</h2>
-        <div className="order-1 ml-auto mr-4 flex min-w-0 shrink-0 items-center gap-3">
-          {user && <CoinBar value={player?.coins ?? 0} />}
+    <>
+      <div className="game-ui box-backdrop fixed inset-0 z-40 flex flex-col overflow-hidden">
+        <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3 pt-3 sm:px-4">
+          <h2 className="text-outline min-w-0 text-xl sm:text-2xl md:text-3xl">Bộ sưu tập thẻ</h2>
+          <div className="order-1 ml-auto mr-4 flex min-w-0 shrink-0 items-center gap-3">
+            {user && <CoinBar value={player?.coins ?? 0} />}
+          </div>
+          <button className="btn order-2 shrink-0 px-2.5 py-1 text-xl" onClick={onClose} aria-label="Đóng">
+            ✕
+          </button>
+          <div className="order-3 flex max-w-full basis-full flex-nowrap gap-1 overflow-x-auto pb-1 md:order-none md:basis-auto md:flex-1 md:flex-wrap md:overflow-visible md:pb-0">
+            {[{ id: 'all', name: 'Tất cả', icon: '', color: '' }, ...factions].map((f) => (
+              <button key={f.id} className={`shrink-0 rounded-full border-2 border-[#16181b] px-3 py-0.5 ${tab === f.id ? 'bg-gold' : 'bg-white/85'}`} onClick={() => { setTab(f.id); setSelectedId(null); }}>
+                {f.icon} {f.name}
+              </button>
+            ))}
+          </div>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-3 sm:p-4 md:flex-row md:overflow-hidden">
+          <div className="grid w-full flex-none auto-rows-auto grid-cols-2 justify-items-center gap-x-3 gap-y-5 p-2 min-[480px]:grid-cols-3 md:min-h-0 md:flex-1 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:overflow-y-auto">
+            {units.map((u) => {
+              const star = player?.stars[u.id] ?? 0;
+              const next = nextStar(u, star);
+              return (
+                <UnitCard
+                  key={u.id}
+                  unit={u}
+                  thumb={thumbs[u.id]}
+                  faction={factions.find((f) => f.id === u.factionId)}
+                  star={star}
+                  locked={!isUnlocked(u, player)}
+                  progress={{ have: player?.cards[u.id] ?? 0, need: next?.cards ?? null }}
+                  selected={selected?.id === u.id}
+                  onClick={() => setSelectedId(u.id)}
+                />
+              );
+            })}
+          </div>
+          {desktopSelected && (
+            <aside className="panel hidden w-full flex-none p-4 md:block md:w-[24rem] md:shrink-0 md:overflow-y-auto">
+              {user ? <UnitDetail key={desktopSelected.id} bundle={bundle} unit={desktopSelected} thumb={thumbs[desktopSelected.id]} /> : <GuestDetail unit={desktopSelected} onSignIn={() => openAuth('signin')} />}
+            </aside>
+          )}
         </div>
-        <button className="btn order-2 shrink-0 px-2.5 py-1 text-xl" onClick={onClose} aria-label="Đóng">
-          ✕
-        </button>
-        <div className="order-3 flex max-w-full basis-full flex-nowrap gap-1 overflow-x-auto pb-1 md:order-none md:basis-auto md:flex-1 md:flex-wrap md:overflow-visible md:pb-0">
-          {[{ id: 'all', name: 'Tất cả', icon: '', color: '' }, ...factions].map((f) => (
-            <button key={f.id} className={`shrink-0 rounded-full border-2 border-[#16181b] px-3 py-0.5 ${tab === f.id ? 'bg-gold' : 'bg-white/85'}`} onClick={() => setTab(f.id)}>
-              {f.icon} {f.name}
-            </button>
-          ))}
-        </div>
-      </header>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-3 sm:p-4 md:flex-row md:overflow-hidden">
-        <div className="grid w-full flex-none auto-rows-auto grid-cols-2 justify-items-center gap-x-3 gap-y-5 p-2 min-[480px]:grid-cols-3 md:min-h-0 md:flex-1 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:overflow-y-auto">
-          {units.map((u) => {
-            const star = player?.stars[u.id] ?? 0;
-            const next = nextStar(u, star);
-            return (
-              <UnitCard
-                key={u.id}
-                unit={u}
-                thumb={thumbs[u.id]}
-                faction={factions.find((f) => f.id === u.factionId)}
-                star={star}
-                locked={!isUnlocked(u, player)}
-                progress={{ have: player?.cards[u.id] ?? 0, need: next?.cards ?? null }}
-                selected={selected?.id === u.id}
-                onClick={() => setSelectedId(u.id)}
-              />
-            );
-          })}
-        </div>
-        {selected && (
-          <aside className="panel w-full flex-none p-4 md:w-[24rem] md:shrink-0 md:overflow-y-auto">
-            {user ? <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} /> : <GuestDetail unit={selected} onSignIn={() => openAuth('signin')} />}
-          </aside>
-        )}
       </div>
-    </div>,
+      {selected && (
+        <div className="game-ui fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label={`Chi tiết ${selected.name}`}>
+          <button className="absolute inset-0 h-full w-full bg-black/60" onClick={() => setSelectedId(null)} aria-label="Đóng chi tiết" />
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end">
+            <div
+              className="panel sheet-in pointer-events-auto relative mx-0 flex min-h-0 w-full max-w-full max-h-[85vh] flex-col overflow-hidden rounded-b-none p-4 pt-2"
+              style={{ maxHeight: '85dvh' }}
+            >
+              <div className="relative flex shrink-0 items-center justify-center pb-2">
+                <span className="h-1.5 w-12 rounded-full bg-ink/20" />
+                <button className="btn absolute right-0 top-0 px-2.5 py-1 text-xl" onClick={() => setSelectedId(null)} aria-label="Đóng">
+                  ✕
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+                {user ? <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} /> : <GuestDetail unit={selected} onSignIn={() => openAuth('signin')} />}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>,
     document.body,
   );
 }

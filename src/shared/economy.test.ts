@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Rng } from '@/game/sim/rng';
-import { adjustCoins, boxStatus, buyCards, EconomyError, emptyPlayer, isUnlocked, liveBoxes, openBox, rollBox, starScale, unlockUnit, upgradeUnit, vnDay, type PlayerState } from './economy';
+import { adjustCoins, botBoxTier, boxStatus, buyCards, EconomyError, emptyPlayer, isUnlocked, liveBoxes, openBox, rollBox, starScale, unlockUnit, upgradeUnit, vnDay, winBotBattle, type PlayerState } from './economy';
 import { SEED } from './seed';
 
 const HOUR = 3_600_000;
@@ -98,7 +98,7 @@ test('a box holds coins in range and exactly its cards over distinct units, chea
   const tally = new Map<string, number>();
   for (let i = 0; i < 3000; i++) {
     const r = rollBox(SEED.units, economy.dailyBox, () => rng.next());
-    assert.ok(r.coins >= 200 && r.coins <= 500);
+    assert.ok(r.coins >= 2 && r.coins <= 5);
     assert.equal(r.cards.reduce((s, c) => s + c.count, 0), 40);
     assert.equal(new Set(r.cards.map((c) => c.unitId)).size, 3);
     for (const c of r.cards) tally.set(c.unitId, (tally.get(c.unitId) ?? 0) + 1);
@@ -110,17 +110,17 @@ test('a box holds coins in range and exactly its cards over distinct units, chea
 
 test('a star uses up cards and coins, up to 5 stars', () => {
   const archer = unit('archer');
-  let p: PlayerState = { ...emptyPlayer(), coins: 100_000, cards: { archer: 1600 } };
+  let p: PlayerState = { ...emptyPlayer(), coins: 1000, cards: { archer: 1600 } };
   assert.ok(isUnlocked(archer, null), 'starter units are free');
   for (let star = 1; star <= 5; star++) p = upgradeUnit(p, archer).state;
   assert.equal(p.stars.archer, 5);
   assert.equal(p.cards.archer, 1600 - 150);
-  assert.equal(p.coins, 100_000 - 31_000);
+  assert.equal(p.coins, 1000 - 310);
   assert.throws(() => upgradeUnit(p, archer), /5 sao/);
-  assert.throws(() => upgradeUnit({ ...emptyPlayer(), coins: 5000, cards: { archer: 9 } }, archer), /Cần 10 thẻ/);
-  assert.throws(() => upgradeUnit({ ...emptyPlayer(), coins: 999, cards: { archer: 10 } }, archer), /Không đủ coin/);
-  const upgrade = upgradeUnit({ ...emptyPlayer(), coins: 1000, cards: { archer: 10 } }, archer);
-  assert.deepEqual(upgrade.entry, { type: 'upgrade', coins: -1000, balance: 0, cards: { archer: -10 }, unitId: 'archer', star: 1 });
+  assert.throws(() => upgradeUnit({ ...emptyPlayer(), coins: 50, cards: { archer: 9 } }, archer), /Cần 10 thẻ/);
+  assert.throws(() => upgradeUnit({ ...emptyPlayer(), coins: 9, cards: { archer: 10 } }, archer), /Không đủ coin/);
+  const upgrade = upgradeUnit({ ...emptyPlayer(), coins: 10, cards: { archer: 10 } }, archer);
+  assert.deepEqual(upgrade.entry, { type: 'upgrade', coins: -10, balance: 0, cards: { archer: -10 }, unitId: 'archer', star: 1 });
 });
 
 test('locked units must be bought before their cards are bought or upgraded', () => {
@@ -145,6 +145,29 @@ test('admin adjustments never leave a negative balance', () => {
   assert.equal(p.coins, 5000);
   assert.throws(() => adjustCoins(p, -5001, 'sai', 'root'), EconomyError);
   assert.equal(adjustCoins(p, -5000, 'hoàn', 'root').state.coins, 0);
+});
+
+test('beating a bot pays its difficulty tier, scaled up for extra bots, then cools down', () => {
+  const easy = economy.botBoxes['1'];
+  const legendary = economy.botBoxes['5'];
+  const won = winBotBattle(emptyPlayer(), { id: 'de', difficulty: 1 }, 1, SEED.units, economy, MORNING, random());
+  assert.equal(won.entry.type, 'bot-win');
+  assert.ok(won.reward!.coins >= easy.coins[0] && won.reward!.coins <= easy.coins[1]);
+  assert.throws(() => winBotBattle(won.state, { id: 'de', difficulty: 1 }, 1, SEED.units, economy, MORNING + 1000, random()), /Đợi/);
+  const afterCooldown = winBotBattle(won.state, { id: 'de', difficulty: 1 }, 1, SEED.units, economy, MORNING + economy.botWinCooldown * 1000, random());
+  assert.equal(afterCooldown.entry.coins >= easy.coins[0] && afterCooldown.entry.coins <= easy.coins[1], true);
+  const solo = winBotBattle(emptyPlayer(), { id: 'huyen-thoai', difficulty: 5 }, 1, SEED.units, economy, MORNING, () => 0.999).reward!;
+  const trio = winBotBattle(emptyPlayer(), { id: 'huyen-thoai', difficulty: 5 }, 3, SEED.units, economy, MORNING, () => 0.999).reward!;
+  assert.equal(solo.coins, legendary.coins[1]);
+  assert.equal(trio.coins, Math.round(legendary.coins[1] * (1 + economy.botWinBonusPerExtra * 2)));
+  assert.ok(trio.coins > solo.coins);
+});
+
+test('botBoxTier picks the chest for a difficulty, clamped to 1–5', () => {
+  assert.equal(botBoxTier(economy, 1).chest, economy.botBoxes['1'].chest);
+  assert.equal(botBoxTier(economy, 5).chest, economy.botBoxes['5'].chest);
+  assert.equal(botBoxTier(economy, 0).chest, economy.botBoxes['1'].chest);
+  assert.equal(botBoxTier(economy, 9).chest, economy.botBoxes['5'].chest);
 });
 
 test('stars scale stats by the bonus, clamped to 0–5', () => {

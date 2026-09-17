@@ -328,7 +328,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
       unlockCost: 0,
       cardPrice: 0,
       starCards: [10, 20, 30, 40, 50],
-      starCoins: [1000, 2000, 4000, 8000, 16000],
+      starCoins: [10, 20, 40, 80, 160],
     }),
   },
   weapons: {
@@ -639,6 +639,14 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
   },
 };
 
+const BOT_BOX_TIERS = [
+  ['1', 'Thưởng bot độ khó 1 (dễ)'],
+  ['2', 'Thưởng bot độ khó 2'],
+  ['3', 'Thưởng bot độ khó 3'],
+  ['4', 'Thưởng bot độ khó 4'],
+  ['5', 'Thưởng bot độ khó 5 (huyền thoại)'],
+] as const;
+
 export const SETTINGS_FIELDS: Field[] = [
   { type: 'number', key: 'maxUnitsPerSide', label: 'Số lính tối đa mỗi phe', min: 1, max: 500, step: 1 },
   { type: 'number', key: 'battleTimeLimit', label: 'Giới hạn thời gian trận (s)', min: 30, max: 3600, step: 10, help: 'hết giờ: đại chiến tính hòa, thủ thành thì phe thủ thắng' },
@@ -663,6 +671,15 @@ export const SETTINGS_FIELDS: Field[] = [
   { type: 'range2', key: 'economy.hourlyBox.coins', label: 'Hộp x giờ: coin (thấp nhất – cao nhất)', min: 0, max: 1_000_000, step: 10 },
   { type: 'number', key: 'economy.hourlyBox.cards', label: 'Hộp x giờ: tổng số thẻ', min: 0, max: 10_000, step: 1 },
   { type: 'number', key: 'economy.hourlyBox.kinds', label: 'Hộp x giờ: số loại lính', min: 1, max: 20, step: 1 },
+  { type: 'section', label: 'Thưởng đánh bot (theo độ khó 1-5 của bot)' },
+  { type: 'slider', key: 'economy.botWinBonusPerExtra', label: 'Thưởng thêm mỗi bot phụ (đấu nhiều bot cùng lúc)', min: 0, max: 2, step: 0.05, help: '0.5 = +50% coin & thẻ cho mỗi bot ngoài bot đầu tiên' },
+  { type: 'number', key: 'economy.botWinCooldown', label: 'Thời gian chờ giữa 2 lần nhận thưởng (giây)', min: 0, max: 3600, step: 5, help: 'chống cày thưởng liên tục' },
+  ...BOT_BOX_TIERS.flatMap(([i, label]) => [
+    { type: 'select' as const, key: `economy.botBoxes.${i}.chest`, label: `${label}: kiểu rương`, options: CHEST_VARIANTS },
+    { type: 'range2' as const, key: `economy.botBoxes.${i}.coins`, label: `${label}: coin (thấp nhất – cao nhất)`, min: 0, max: 1_000_000, step: 10 },
+    { type: 'number' as const, key: `economy.botBoxes.${i}.cards`, label: `${label}: tổng số thẻ`, min: 0, max: 10_000, step: 1 },
+    { type: 'number' as const, key: `economy.botBoxes.${i}.kinds`, label: `${label}: số loại lính`, min: 1, max: 20, step: 1 },
+  ]),
   { type: 'section', label: 'Thủ thành' },
   { type: 'slider', key: 'siege.defenseBudget', label: 'Ngân sách phe thủ (× ngân sách trận)', min: 0.1, max: 5, step: 0.05 },
   { type: 'slider', key: 'siege.attackBudget', label: 'Ngân sách phe công (× ngân sách trận)', min: 0.1, max: 5, step: 0.05 },

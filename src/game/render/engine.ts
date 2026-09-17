@@ -36,8 +36,7 @@ export interface PointerInfo {
 }
 
 export interface BattleStats {
-  blue: number;
-  red: number;
+  alive: Partial<Record<Side, number>>;
   time: number;
 }
 
@@ -67,7 +66,12 @@ const SUN_DUSK = new THREE.Color('#ffb070');
 const FIREWORK_COLORS: Record<Side, string[]> = {
   blue: ['#4fb3ff', '#7cf0ff', '#ffd23f', '#ffffff', '#b98cff'],
   red: ['#ff4d4d', '#ff8a3d', '#ffd23f', '#ffffff', '#ff5fd2'],
+  green: ['#4dd67a', '#a3f7bf', '#ffd23f', '#ffffff', '#8cffb9'],
+  yellow: ['#ffd23f', '#fff2a8', '#ff8a3d', '#ffffff', '#ffe98c'],
 };
+
+/** Deployment zone overlay tint per side. */
+const ZONE_COLOR: Record<Side, string> = { blue: '#2f6fe0', red: '#d8373a', green: '#2f9e44', yellow: '#e0b400' };
 
 const SKY_VERT = `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const SKY_FRAG = `uniform vec3 top; uniform vec3 bottom; varying vec3 vDir;
@@ -94,7 +98,7 @@ export class BattleEngine {
   private resultSent = false;
   private hidden: Side | null = null;
   private readonly mapGroup = new THREE.Group();
-  private zones: Record<Side, THREE.Group> | null = null;
+  private zones: Partial<Record<Side, THREE.Group>> | null = null;
   private water: Water | null = null;
   private readonly units: UnitRenderer;
   private readonly walls: WallRenderer;
@@ -206,8 +210,8 @@ export class BattleEngine {
 
   // ------------------------------------------------------------------ public API
 
-  /** `defense`: the defending side in siege mode (zones differ), null = open battle. */
-  loadMap(mapId: string, defense: Side | null = null): void {
+  /** `defense`: the defending side in siege mode (zones differ), null = open battle. `activeSides`: 2 keeps the classic layout, 3-4 deploy at corners spaced around the centre. */
+  loadMap(mapId: string, defense: Side | null = null, activeSides?: readonly Side[]): void {
     const map = this.bundle.maps.find((m) => m.id === mapId) ?? this.bundle.maps[0];
     if (!map) return;
     for (const child of [...this.mapGroup.children]) {
@@ -218,14 +222,18 @@ export class BattleEngine {
       });
     }
     this.map = map;
-    const terrain = new Terrain(map, this.bundle.assets, defense);
+    const terrain = activeSides ? new Terrain(map, this.bundle.assets, defense, activeSides) : new Terrain(map, this.bundle.assets, defense);
     this.terrain = terrain;
     this.mapGroup.add(createTerrainMesh(terrain), createSkirt(terrain));
     this.water = createWater(terrain);
     if (this.water) this.mapGroup.add(this.water.mesh);
     this.mapGroup.add(createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a]))));
-    this.zones = { blue: createZoneOverlay(terrain, 'blue', '#2f6fe0'), red: createZoneOverlay(terrain, 'red', '#d8373a') };
-    this.mapGroup.add(this.zones.blue, this.zones.red);
+    this.zones = {};
+    for (const side of terrain.activeSides) {
+      const overlay = createZoneOverlay(terrain, side, ZONE_COLOR[side]);
+      this.zones[side] = overlay;
+      this.mapGroup.add(overlay);
+    }
 
     const top = new THREE.Color(map.skyTop);
     const bottom = new THREE.Color(map.skyBottom);
@@ -263,8 +271,7 @@ export class BattleEngine {
 
   showZones(sides: readonly Side[]): void {
     if (!this.zones) return;
-    this.zones.blue.visible = sides.includes('blue');
-    this.zones.red.visible = sides.includes('red');
+    for (const [side, group] of Object.entries(this.zones) as Array<[Side, THREE.Group]>) group.visible = sides.includes(side);
   }
 
   /** Camera behind a side's deployment zone, looking at the enemy. */
@@ -272,9 +279,9 @@ export class BattleEngine {
     const t = this.terrain;
     if (!t) return;
     this.director.side = side;
-    const zone = t.zones[side];
-    this.rts.focus(((zone.x0 + zone.x1) / 2) * 0.55, 0);
-    this.rts.setView(side === 'blue' ? Math.PI : 0, 0.85, t.size * 0.42);
+    const c = this.zoneCenter(side);
+    this.rts.focus(c.x * 0.55, c.z * 0.55);
+    this.rts.setView(this.yawOf(side), 0.85, t.size * 0.42);
   }
 
   setHidden(side: Side | null): void {
@@ -316,6 +323,11 @@ export class BattleEngine {
     this.clearVictory();
   }
 
+  /** A side surrendered or disconnected: every client applies it identically at this tick. */
+  eliminate(side: Side, tick: number): void {
+    this.sim?.queueElimination(side, tick);
+  }
+
   setSpeed(speed: number): void {
     this.speed = speed;
   }
@@ -332,9 +344,9 @@ export class BattleEngine {
   playDeployIntro(side: Side, onEnd: () => void = () => {}): void {
     const t = this.terrain;
     if (!t) return onEnd();
-    const s = side === 'blue' ? -1 : 1; // own half: x·s > 0
+    const s = Math.sign(this.zoneCenter(side).x) || 1; // own half: x·s > 0
     const h = t.half;
-    const zone = t.zones[side];
+    const zone = t.zoneOf(side);
     const view = this.closeView(side, (zone.x0 + zone.x1) / 2, 0, 24);
     this.play('intro', view, onEnd, 6.5, [
       { at: 0, pos: new THREE.Vector3(-s * h, t.size * 0.5, -h * 0.95), look: this.ground(-s * h * 0.4, 0) },
@@ -349,8 +361,11 @@ export class BattleEngine {
     this.director.side = side;
     if (!this.terrain || !sim) return onEnd();
     const own = this.armyCenter(sim, side);
-    const foe = this.armyCenter(sim, side === 'blue' ? 'red' : 'blue');
-    const f = side === 'blue' ? 1 : -1; // own army advances toward x·f
+    // 1v1: look at the one opponent, exactly as before. 3-4p free-for-all: there's no single
+    // enemy, so the intro looks toward the middle of the map instead.
+    const others = this.terrain.activeSides.filter((s) => s !== side);
+    const foe = others.length === 1 ? this.armyCenter(sim, others[0]) : this.ground(0, 0, 1);
+    const f = -(Math.sign(this.zoneCenter(side).x) || 1); // own army advances toward x·f
     const view = this.closeView(side, own.x + f * 4, own.z, 20);
     const mid = this.ground((own.x + foe.x) / 2, (own.z + foe.z) / 2);
     this.play('battle', view, onEnd, 3.8, [
@@ -473,7 +488,7 @@ export class BattleEngine {
         group.add(m);
       });
     }
-    group.rotation.y = def.structure === 'wall' ? 0 : side === 'blue' ? Math.PI / 2 : -Math.PI / 2;
+    group.rotation.y = def.structure === 'wall' ? 0 : this.ghostYaw(side);
 
     // Footprint: a translucent green (red when invalid) square with a dashed outline, marking the
     // exact ground cell/spot the unit would land on — the drop-target cue during drag placement.
@@ -570,7 +585,24 @@ export class BattleEngine {
 
   /** Close RTS view behind `side`, looking toward the enemy. */
   private closeView(side: Side, x: number, z: number, distance: number): CameraView {
-    return { target: this.ground(x, z), yaw: side === 'blue' ? Math.PI : 0, pitch: basePitch(distance), distance };
+    return { target: this.ground(x, z), yaw: this.yawOf(side), pitch: basePitch(distance), distance };
+  }
+
+  private zoneCenter(side: Side): { x: number; z: number } {
+    const z = this.terrain!.zoneOf(side);
+    return { x: (z.x0 + z.x1) / 2, z: (z.z0 + z.z1) / 2 };
+  }
+
+  /** Unit model yaw facing out of the deployment zone toward the map centre (matches the sim's spawn facing). */
+  private ghostYaw(side: Side): number {
+    const c = this.zoneCenter(side);
+    return Math.atan2(-c.x, -c.z);
+  }
+
+  /** Camera yaw that sits behind a side's own deployment zone, looking back toward the map centre (exactly the old blue/red π/0 for 2 sides). */
+  private yawOf(side: Side): number {
+    const c = this.zoneCenter(side);
+    return Math.atan2(c.z, c.x);
   }
 
   private armyCenter(sim: BattleSim, side: Side): THREE.Vector3 {
@@ -584,8 +616,8 @@ export class BattleEngine {
       n++;
     }
     if (n === 0) {
-      const zone = this.terrain!.zones[side];
-      return this.ground((zone.x0 + zone.x1) / 2, 0, 1);
+      const c = this.zoneCenter(side);
+      return this.ground(c.x, c.z, 1);
     }
     return this.ground(x / n, z / n, 1);
   }
@@ -806,7 +838,9 @@ export class BattleEngine {
     this.statsTimer += dt;
     if (sim && this.statsTimer > 0.25) {
       this.statsTimer = 0;
-      this.events.onStats?.({ blue: sim.aliveCount('blue'), red: sim.aliveCount('red'), time: sim.time });
+      const alive: Partial<Record<Side, number>> = {};
+      for (const s of sim.activeSides) alive[s] = sim.aliveCount(s);
+      this.events.onStats?.({ alive, time: sim.time });
     }
     (window as unknown as { __engineFrames?: number }).__engineFrames = ((window as unknown as { __engineFrames?: number }).__engineFrames ?? 0) + 1;
   }

@@ -2,7 +2,7 @@
 // small flat map. Content is built in memory from the live bundle plus the unsaved draft.
 import type { AssetDef, ConfigBundle, MapDef, UnitDef, WeaponDef } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
-import type { Armies } from './sim/army';
+import { armies as fullArmies, type Armies } from './sim/army';
 import { clamp } from './sim/rng';
 
 export const ARENA_MAP_ID = '__arena';
@@ -73,8 +73,8 @@ export function buildArena(bundle: ConfigBundle, caster: UnitDef, abilities: Wea
   // Healers: a line of allies, each held by a sparring partner.
   const line = (unitId: string, x: number) => Array.from({ length: 6 }, (_, i) => ({ unitId, x, z: (i - 2.5) * 1.3 }));
   const armies: Armies = healer
-    ? { blue: [{ unitId: CASTER, x: -gap / 2 - 2, z: 0 }, ...line(DUMMY, -gap / 2 + 3)], red: line(SPARRER, -gap / 2 + 5.2) }
-    : { blue: [{ unitId: CASTER, x: -gap / 2, z: 0 }], red: block(DUMMY, gap / 2) };
+    ? fullArmies({ blue: [{ unitId: CASTER, x: -gap / 2 - 2, z: 0 }, ...line(DUMMY, -gap / 2 + 3)], red: line(SPARRER, -gap / 2 + 5.2) })
+    : fullArmies({ blue: [{ unitId: CASTER, x: -gap / 2, z: 0 }], red: block(DUMMY, gap / 2) });
   const sparrer: UnitDef = { ...dummy(factionId), id: SPARRER, name: 'Người tập', hp: 100000, speed: 2.5, weaponId: SPAR };
   return {
     bundle: {

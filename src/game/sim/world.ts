@@ -123,13 +123,15 @@ export class SimUnit {
     x: number,
     z: number,
     y: number,
+    /** Initial facing (re-steered every tick afterwards): the side's spawn direction toward the map centre. */
+    facing: readonly [number, number] = [1, 0],
   ) {
     this.x = this.px = x;
     this.z = this.pz = z;
     this.flyHeight = def.flying ? def.altitude : 0;
     this.y = this.py = y + this.flyHeight;
-    this.fx = side === 'blue' ? 1 : -1;
-    this.fz = 0;
+    this.fx = facing[0];
+    this.fz = facing[1];
     this.hp = def.hp;
     this.lastAction = abilities[0];
   }
@@ -268,7 +270,8 @@ export interface BattleResult {
   tick: number;
   /** `core`: the defenders' keep fell (siege mode). `surrender`: the loser conceded online. */
   reason: 'eliminated' | 'timeout' | 'core' | 'surrender';
-  survivors: Record<Side, number>;
+  /** Alive-unit count per side that fought this match (only the active sides). */
+  survivors: Partial<Record<Side, number>>;
 }
 
 type SimContent = Pick<ContentBundle, 'units' | 'weapons' | 'projectiles' | 'settings'> & Partial<Pick<ContentBundle, 'assets'>>;
@@ -299,6 +302,10 @@ export class BattleSim {
   private readonly timeLimitTicks: number;
   /** Siege mode: the defending side (null = open battle). */
   readonly defense: Side | null;
+  /** Sides fighting this match, in seat order (read from the terrain, the single source of truth). */
+  readonly activeSides: readonly Side[];
+  /** Sides eliminated (surrendered/disconnected) at a scheduled tick, applied once that tick is reached. */
+  private readonly pendingEliminations = new Map<number, Side[]>();
   /** Grid structure cells (rubble stays) by cell key. */
   readonly walls = new Map<number, WallCell>();
   private readonly unitDefs: Map<string, UnitDef>;
@@ -317,13 +324,14 @@ export class BattleSim {
   ) {
     this.rng = new Rng(seed);
     this.defense = terrain.defense;
+    this.activeSides = terrain.activeSides;
     this.stars = stars;
     this.timeLimitTicks = Math.round(content.settings.battleTimeLimit * SIM_HZ);
     this.unitDefs = new Map(content.units.map((u) => [u.id, u]));
     this.weaponDefs = new Map(content.weapons.map((w) => [w.id, w]));
     this.projectileDefs = new Map(content.projectiles.map((p) => [p.id, p]));
     const tierHeight = content.settings.siege.tierHeight;
-    for (const side of ['blue', 'red'] as const) {
+    for (const side of this.activeSides) {
       // Wall blocks placed on the same cell stack into one wall unit.
       const stacks = new Map<number, number>();
       for (const p of armies[side]) {
@@ -397,10 +405,25 @@ export class BattleSim {
       const skill = this.weaponDefs.get(skillId);
       if (skill) abilities.push(new SimAbility(strong(skill), projectileOf(skill), true, def.castSpeed, skill.initialCooldown / def.castSpeed + (id % 5) * 0.1));
     }
-    const u = new SimUnit(id, side, def, abilities, x, z, this.terrain.height(x, z));
+    const u = new SimUnit(id, side, def, abilities, x, z, this.terrain.height(x, z), this.spawnFacing(side));
     u.spawnLeft = def.spawnInterval;
     this.units.push(u);
     return u;
+  }
+
+  private readonly facingCache = new Map<Side, readonly [number, number]>();
+
+  /** A side's initial spawn facing: from its deployment zone centre toward the map's centre. */
+  private spawnFacing(side: Side): readonly [number, number] {
+    let facing = this.facingCache.get(side);
+    if (facing) return facing;
+    const zone = this.terrain.zoneOf(side);
+    const dx = -(zone.x0 + zone.x1) / 2;
+    const dz = -(zone.z0 + zone.z1) / 2;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    facing = len > 1e-6 ? [dx / len, dz / len] : [1, 0];
+    this.facingCache.set(side, facing);
+    return facing;
   }
 
   /** Grid cell (wall, watchtower or rubble) under a point. */
@@ -421,9 +444,21 @@ export class BattleSim {
 
   // ------------------------------------------------------------------ step
 
+  /** Removes a side from the fight (surrender/disconnect) at a tick every client applies identically. */
+  queueElimination(side: Side, tick: number): void {
+    const list = this.pendingEliminations.get(tick);
+    if (list) list.push(side);
+    else this.pendingEliminations.set(tick, [side]);
+  }
+
   step(): void {
     this.events.length = 0;
     this.tick++;
+    const eliminated = this.pendingEliminations.get(this.tick);
+    if (eliminated) {
+      this.pendingEliminations.delete(this.tick);
+      for (const side of eliminated) for (const u of this.units) if (u.alive && u.side === side) this.kill(u, 0, 0, 0, 0);
+    }
     for (const u of this.units) {
       u.px = u.x;
       u.py = u.y;
@@ -883,7 +918,7 @@ export class BattleSim {
 
   /** Defenders never leave their zone. */
   private leash(u: SimUnit): void {
-    const zone = this.terrain.zones[u.side];
+    const zone = this.terrain.zoneOf(u.side);
     u.x = clamp(u.x, zone.x0, zone.x1);
     u.z = clamp(u.z, zone.z0, zone.z1);
   }
@@ -1856,22 +1891,23 @@ export class BattleSim {
   // ------------------------------------------------------------------ end
 
   private checkEnd(): void {
-    const blue = this.aliveCount('blue');
-    const red = this.aliveCount('red');
-    const survivors = { blue, red };
+    const survivors: Partial<Record<Side, number>> = {};
+    for (const side of this.activeSides) survivors[side] = this.aliveCount(side);
     const defense = this.defense;
     if (defense) {
-      const attack = defense === 'blue' ? 'red' : 'blue';
+      // Siege is always exactly 2 sides.
+      const attack = this.activeSides.find((s) => s !== defense)!;
       let core = false;
       for (const u of this.units) if (u.alive && u.side === defense && u.def.structure === 'core') core = true;
-      const alive = { blue, red };
-      if (!core || alive[defense] === 0) this.result = { winner: attack, tick: this.tick, reason: core ? 'eliminated' : 'core', survivors };
-      else if (alive[attack] === 0) this.result = { winner: defense, tick: this.tick, reason: 'eliminated', survivors };
+      if (!core || survivors[defense] === 0) this.result = { winner: attack, tick: this.tick, reason: core ? 'eliminated' : 'core', survivors };
+      else if (survivors[attack] === 0) this.result = { winner: defense, tick: this.tick, reason: 'eliminated', survivors };
       else if (this.tick >= this.timeLimitTicks) this.result = { winner: defense, tick: this.tick, reason: 'timeout', survivors };
       return;
     }
-    if (blue === 0 || red === 0) {
-      this.result = { winner: blue > 0 ? 'blue' : red > 0 ? 'red' : 'draw', tick: this.tick, reason: 'eliminated', survivors };
+    // Last side standing wins; 2+ survivors when the clock runs out is a draw.
+    const alive = this.activeSides.filter((s) => (survivors[s] ?? 0) > 0);
+    if (alive.length <= 1) {
+      this.result = { winner: alive.length === 1 ? alive[0] : 'draw', tick: this.tick, reason: 'eliminated', survivors };
       return;
     }
     if (this.tick >= this.timeLimitTicks) this.result = { winner: 'draw', tick: this.tick, reason: 'timeout', survivors };

@@ -14,6 +14,11 @@ export const placementSchema = z.object({
 export type Placement = z.infer<typeof placementSchema>;
 export type Armies = Record<Side, Placement[]>;
 
+/** Builds a full 4-side army record, defaulting unfielded sides to empty. */
+export function armies(sides: Partial<Armies>): Armies {
+  return { blue: [], red: [], green: [], yellow: [], ...sides };
+}
+
 /** Units plus wall blocks (a 3-tier wall is 3 placements per cell). */
 export const armySchema = z.array(placementSchema).max(1000);
 

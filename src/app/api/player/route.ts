@@ -23,7 +23,7 @@ export async function GET() {
   }
 }
 
-/** { action: "open-box", kind } | { action: "unlock" | "upgrade", unitId } | { action: "buy-cards", unitId, count } */
+/** { action: "open-box", kind } | { action: "bot-win", botId, botCount } | { action: "unlock" | "upgrade", unitId } | { action: "buy-cards", unitId, count } */
 export async function POST(req: Request) {
   const user = await currentUser();
   if (!user) return jsonError(401, 'Cần đăng nhập');

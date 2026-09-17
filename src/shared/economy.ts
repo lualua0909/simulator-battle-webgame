@@ -2,7 +2,7 @@
 // Pure rules shared by the server — the only place coins move, inside Firestore transactions
 // (src/server/players.ts) — the browser (display, countdowns) and the tests.
 import { z } from 'zod';
-import { idSchema, STAR_MAX, type BoxConfig, type Economy, type UnitDef } from './schema';
+import { idSchema, STAR_MAX, type BotDef, type BoxConfig, type Economy, type UnitDef } from './schema';
 
 export const PLAYERS_COLLECTION = 'players';
 export const LEDGER_COLLECTION = 'ledger';
@@ -33,6 +33,8 @@ export const playerStateSchema = z.object({
   weekStart: z.string().nullable().default(null),
   /** Which of the 7 VN days (Mon…Sun) of `weekStart`'s week had the daily box claimed. */
   weekClaims: z.array(z.boolean()).length(7).default(() => Array(7).fill(false)),
+  /** Epoch ms of the last bot-win reward (anti-farm cooldown, see `economy.botWinCooldown`). */
+  lastBotWinAt: z.number().nullable().default(null),
 });
 
 export type PlayerState = z.infer<typeof playerStateSchema>;
@@ -165,7 +167,7 @@ export function rollBox(units: readonly Pick<UnitDef, 'id' | 'cost'>[], box: Box
 
 // ---------------------------------------------------------------- changes
 
-export const LEDGER_TYPES = ['daily-box', 'hourly-box', 'unlock', 'upgrade', 'buy-cards', 'admin', 'topup'] as const;
+export const LEDGER_TYPES = ['daily-box', 'hourly-box', 'bot-win', 'unlock', 'upgrade', 'buy-cards', 'admin', 'topup'] as const;
 export type LedgerType = (typeof LEDGER_TYPES)[number];
 
 /** One audit line in `players/{uid}/ledger`. */
@@ -196,6 +198,7 @@ export interface Change {
 
 export const playerActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('open-box'), kind: z.enum(['daily', 'hourly']) }),
+  z.object({ action: z.literal('bot-win'), botId: idSchema, botCount: z.number().int().min(1).max(3) }),
   z.object({ action: z.literal('unlock'), unitId: idSchema }),
   z.object({ action: z.literal('upgrade'), unitId: idSchema }),
   z.object({ action: z.literal('buy-cards'), unitId: idSchema, count: z.number().int().min(1).max(1000) }),
@@ -236,6 +239,28 @@ export function openBox(p: PlayerState, kind: BoxKind, units: readonly UnitDef[]
   }
   const state: PlayerState = { ...p, coins: p.coins + reward.coins, cards, lastBoxAt: now, dailyDay: kind === 'daily' ? vnDay(now) : p.dailyDay, weekStart, weekClaims };
   const entry: LedgerEntry = { type: kind === 'daily' ? 'daily-box' : 'hourly-box', coins: reward.coins, balance: state.coins, cards: Object.fromEntries(reward.cards.map((c) => [c.unitId, c.count])) };
+  return { state, entry, reward };
+}
+
+/** The reward box tier for a bot's difficulty (1‑5). */
+export function botBoxTier(economy: Pick<Economy, 'botBoxes'>, difficulty: number): BoxConfig {
+  return economy.botBoxes[String(Math.max(1, Math.min(5, Math.round(difficulty)))) as '1' | '2' | '3' | '4' | '5'];
+}
+
+/** Coins and cards for beating `bot` (× `botCount` bot sides), gated by `economy.botWinCooldown`. */
+export function winBotBattle(p: PlayerState, bot: Pick<BotDef, 'id' | 'difficulty'>, botCount: number, units: readonly UnitDef[], economy: Economy, now: number, random: Random): Change {
+  if (p.lastBotWinAt !== null && now - p.lastBotWinAt < economy.botWinCooldown * 1000) {
+    const wait = Math.ceil((economy.botWinCooldown * 1000 - (now - p.lastBotWinAt)) / 1000);
+    throw new EconomyError(`Đợi ${wait}s nữa để nhận thưởng trận tiếp theo`);
+  }
+  const tier = botBoxTier(economy, bot.difficulty);
+  const mult = 1 + economy.botWinBonusPerExtra * (botCount - 1);
+  const box: BoxConfig = { chest: tier.chest, coins: [Math.round(tier.coins[0] * mult), Math.round(tier.coins[1] * mult)], cards: Math.round(tier.cards * mult), kinds: tier.kinds };
+  const reward = rollBox(units, box, random);
+  const cards = { ...p.cards };
+  for (const c of reward.cards) cards[c.unitId] = (cards[c.unitId] ?? 0) + c.count;
+  const state: PlayerState = { ...p, coins: p.coins + reward.coins, cards, lastBotWinAt: now };
+  const entry: LedgerEntry = { type: 'bot-win', coins: reward.coins, balance: state.coins, cards: Object.fromEntries(reward.cards.map((c) => [c.unitId, c.count])), note: `Thắng bot ${bot.id} (độ khó ${bot.difficulty}) ×${botCount}` };
   return { state, entry, reward };
 }
 

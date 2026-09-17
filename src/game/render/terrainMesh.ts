@@ -154,7 +154,7 @@ export function createWater(terrain: Terrain): Water | null {
 }
 
 export function createZoneOverlay(terrain: Terrain, side: Side, color: string): THREE.Group {
-  const zone = terrain.zones[side];
+  const zone = terrain.zoneOf(side);
   const w = zone.x1 - zone.x0;
   const d = zone.z1 - zone.z0;
   const sx = Math.max(2, Math.round(w / 2));

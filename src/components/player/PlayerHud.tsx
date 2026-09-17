@@ -84,7 +84,7 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
 
   if (!user) {
     return (
-      <div className="pointer-events-auto flex items-center gap-2">
+      <div className="pointer-events-auto flex max-w-full items-center gap-2">
         <button className="reward-slot" onClick={() => setCollection(true)} title="Bộ sưu tập thẻ" aria-label="Bộ sưu tập thẻ">
           <span className="text-2xl">🃏</span>
         </button>
@@ -101,8 +101,8 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
   const economy = bundle?.settings.economy;
 
   return (
-    <div ref={box} className="pointer-events-auto relative flex items-center gap-3">
-      <div className="mr-4">
+    <div ref={box} className="pointer-events-auto relative flex max-w-full items-center gap-2 sm:gap-3">
+      <div className="mr-1 shrink-0 sm:mr-4">
         <CoinBar value={player?.coins ?? 0} loading={walletLoading && !player} />
       </div>
       <button className="reward-slot" onClick={() => setCollection(true)} title="Bộ sưu tập thẻ" aria-label="Bộ sưu tập thẻ">
@@ -122,7 +122,7 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
         ))}
       <button className="flex min-w-0 items-center gap-2" onClick={() => setMenu((m) => !m)} title="Tài khoản">
         <PlayerAvatar user={user} size={46} className="shrink-0 rounded-full border-[3px] border-white bg-[#bfe3ff] shadow-[0_0_0_2px_#2d3232,0_3px_0_2px_#2d3232]" />
-        <span className="text-outline max-w-[34vw] truncate text-lg sm:max-w-56">{name}</span>
+        <span className="hidden max-w-40 truncate text-lg text-outline sm:block sm:max-w-56">{name}</span>
       </button>
       {error && !player && <span className="absolute right-0 top-full mt-1 rounded bg-white/90 px-2 text-red-team">{error}</span>}
       {menu && (
@@ -151,7 +151,7 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
       {bundle && economy && opening && (
         <BoxOpening
           bundle={bundle}
-          kind={opening}
+          action={{ action: 'open-box', kind: opening }}
           title={opening === 'daily' ? 'Hộp quà hằng ngày' : `Hộp ${economy.boxHours.toLocaleString('en-US')} giờ`}
           chest={opening === 'daily' ? economy.dailyBox.chest : economy.hourlyBox.chest}
           thumbs={thumbs}

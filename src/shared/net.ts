@@ -20,6 +20,8 @@ export interface RoomState {
   /** Host setting: siege mode with this side defending (null = open battle). */
   defense: Side | null;
   players: Partial<Record<Side, NetPlayer>>;
+  /** Deployment countdown deadline (epoch ms); null before 2 players are connected or once the battle has started. */
+  deadline: number | null;
 }
 
 export interface RoomSettings {
@@ -37,6 +39,8 @@ export interface BattleStart {
   mapId: string;
   budget: number;
   armies: Armies;
+  /** Sides deploying in this match, in seat order (2 = classic 1v1, 3-4 = free-for-all). */
+  activeSides: Side[];
   useStars: boolean;
   /** Siege mode: the defending side (null = open battle). */
   defense: Side | null;
@@ -61,10 +65,12 @@ export interface ClientToServer {
   'room:settings': (req: RoomSettings) => void;
   'room:ready': (req: { army: Placement[] }, ack: (res: AckResult) => void) => void;
   'room:unready': () => void;
+  /** Live army edits while still deploying, so a 30s timeout can force-start with the latest draft. */
+  'room:draft': (req: { army: Placement[] }) => void;
   'room:leave': () => void;
   'battle:checksum': (req: { tick: number; hash: number }) => void;
   'battle:end': (req: { outcome: BattleOutcome; tick: number }) => void;
-  /** Concedes the running battle: the other side wins immediately, no matching report needed. */
+  /** Concedes the running battle: that side is eliminated, the rest keep fighting. */
   'battle:surrender': () => void;
 }
 
@@ -72,6 +78,8 @@ export interface ServerToClient {
   'room:state': (state: RoomState) => void;
   'battle:start': (start: BattleStart) => void;
   'battle:desync': (info: { tick: number }) => void;
-  /** Saved once both reports agree; otherwise the result is voided with the reason. */
+  /** A side is eliminated (surrender or disconnect) at a future tick every client applies identically. */
+  'battle:eliminate': (info: { side: Side; tick: number }) => void;
+  /** Saved once every side's report agrees; otherwise the result is voided with the reason. */
   'battle:result': (res: AckResult<{ winner: Side | 'draw' }>) => void;
 }

@@ -12,6 +12,7 @@ export interface OnlineHandlers {
   onStart(start: BattleStart): void;
   onDesync(tick: number): void;
   onResult(res: AckResult<{ winner: Side | 'draw' }>): void;
+  onEliminate(side: Side, tick: number): void;
 }
 
 export interface Seat {
@@ -55,6 +56,7 @@ export function useOnline(uid: string | null, handlers: OnlineHandlers) {
     s.on('room:state', setRoom);
     s.on('battle:start', (start) => handlersRef.current.onStart(start));
     s.on('battle:desync', ({ tick }) => handlersRef.current.onDesync(tick));
+    s.on('battle:eliminate', ({ side, tick }) => handlersRef.current.onEliminate(side, tick));
     s.on('battle:result', (res) => handlersRef.current.onResult(res));
     setSocket(s);
     return () => {
@@ -100,6 +102,8 @@ export function useOnline(uid: string | null, handlers: OnlineHandlers) {
     join,
     ready,
     unready: () => socket?.emit('room:unready'),
+    /** Live army edits while still deploying, so a 30s timeout can force-start with the latest draft. */
+    draft: (army: Placement[]) => socket?.emit('room:draft', { army }),
     settings: (next: RoomSettings) => socket?.emit('room:settings', next),
     checksum: (tick: number, hash: number) => socket?.emit('battle:checksum', { tick, hash }),
     end: (outcome: BattleOutcome, tick: number) => socket?.emit('battle:end', { outcome, tick }),

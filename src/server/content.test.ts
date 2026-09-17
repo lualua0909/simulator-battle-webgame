@@ -52,3 +52,10 @@ test('units saved with the old starCards default read at the new scale', () => {
   const old = parseDoc('units', 'old-scale', { ...base, starCards: [100, 200, 300, 400, 500] });
   assert.deepEqual(old?.starCards, [10, 20, 30, 40, 50]);
 });
+
+test('units saved with the old starCoins default read at the new scale (/100)', () => {
+  const base = JSON.parse(JSON.stringify(SEED.units[0])) as Record<string, unknown>;
+  delete base.id;
+  const old = parseDoc('units', 'old-coins', { ...base, starCoins: [1000, 2000, 4000, 8000, 16000] });
+  assert.deepEqual(old?.starCoins, [10, 20, 40, 80, 160]);
+});

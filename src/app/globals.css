@@ -11,6 +11,8 @@
   --color-parch: #efe2c2;
   --color-blue-team: #2f6fe0;
   --color-red-team: #d8373a;
+  --color-green-team: #2f9e44;
+  --color-yellow-team: #e0b400;
   --color-gold: #f2b83a;
 }
 
@@ -42,6 +44,12 @@ body {
 }
 .btn-red {
   @apply bg-red-team text-white;
+}
+.btn-green {
+  @apply bg-green-team text-white;
+}
+.btn-yellow {
+  @apply bg-yellow-team text-white;
 }
 .panel {
   @apply rounded-2xl border-2 border-ink bg-paper/95 shadow-[0_6px_0_0_rgba(31,26,20,0.85)];
@@ -273,6 +281,16 @@ button.cr-card {
     radial-gradient(circle at 50% 36%, #4586e6 0%, #24499c 48%, #11225a 100%);
 }
 
+/* Mobile collection detail: bottom-sheet popup that slides up. */
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+.sheet-in {
+  animation: sheet-in 0.25s ease-out;
+}
+
 /* The one reward-box icon next to the avatar: today's daily calendar, then the x-hour box. */
 .reward-slot {
   position: relative;
@@ -391,14 +409,12 @@ button.cr-card {
   }
 }
 
-/* Glass card (trang nạp xu): kính mờ trên nền hero tím. */
+/* Card đặc (trang nạp xu): nền đặc + shadow, không kính mờ để dễ đọc trên mobile. */
 .glass-card {
-  background: rgba(255, 255, 255, 0.06);
+  background: #211761;
   border-radius: 16px;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(12.7px);
-  -webkit-backdrop-filter: blur(12.7px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 12px 32px rgba(10, 5, 40, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 /* ============================================================

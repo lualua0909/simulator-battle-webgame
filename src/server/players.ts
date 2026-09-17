@@ -17,6 +17,7 @@ import {
   playerStateSchema,
   unlockUnit,
   upgradeUnit,
+  winBotBattle,
   type BoxReward,
   type BoxStatus,
   type Change,
@@ -77,10 +78,18 @@ function unitOf(content: ContentBundle, unitId: string) {
   return unit;
 }
 
+function botOf(content: ContentBundle, botId: string) {
+  const bot = content.bots.find((b) => b.id === botId);
+  if (!bot) throw new EconomyError('Bot không tồn tại');
+  return bot;
+}
+
 export function runPlayerAction(uid: string, action: PlayerAction): Promise<PlayerView & { reward?: BoxReward }> {
   switch (action.action) {
     case 'open-box':
       return change(uid, (p, c, now) => openBox(p, action.kind, c.units, c.settings.economy, now, random));
+    case 'bot-win':
+      return change(uid, (p, c, now) => winBotBattle(p, botOf(c, action.botId), action.botCount, c.units, c.settings.economy, now, random));
     case 'unlock':
       return change(uid, (p, c) => unlockUnit(p, unitOf(c, action.unitId)));
     case 'upgrade':

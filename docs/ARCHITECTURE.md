@@ -653,7 +653,7 @@ Xếp theo mức độ ưu tiên khuyến nghị. Đây là nhận định từ 
 | --- | --- | --- |
 | `units/{id}` (CMS, sửa ở `/models` tab 🃏 Thẻ & sao) | `unlockCost` | coin để mở khóa; `0` = miễn phí cho mọi người, kể cả khách |
 | | `cardPrice` | giá 1 thẻ; `0` = không bán |
-| | `starCards[5]`, `starCoins[5]` | thẻ và coin **dùng hết** để lên sao 1…5 (mặc định 10/20/30/40/50 thẻ, 1.000/2.000/4.000/8.000/16.000 coin) |
+| | `starCards[5]`, `starCoins[5]` | thẻ và coin **dùng hết** để lên sao 1…5 (mặc định 10/20/30/40/50 thẻ, 10/20/40/80/160 coin) |
 | `settings/global.economy` (CMS Cài đặt) | `boxHours` | x của hộp x giờ (mặc định 3) |
 | | `starBonus` | máu và sát thương tăng mỗi sao (mặc định 0,1 = +10%) |
 | | `dailyBox`, `hourlyBox` | kiểu rương, coin `[min, max]`, tổng số thẻ, số loại lính |

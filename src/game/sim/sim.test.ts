@@ -4,8 +4,8 @@ import { COLLECTIONS, COLLECTION_SCHEMAS, settingsSchema, type MapDef, type Unit
 import { SEED } from '@/shared/seed';
 import { findRefIssues } from '@/shared/validate';
 import { generateBotArmy } from '../bot/generate';
-import { armyCost, validateArmy, type Armies } from './army';
-import { Terrain } from './terrain';
+import { armies, armyCost, validateArmy, type Armies } from './army';
+import { EDGE_MARGIN, Terrain, type Side } from './terrain';
 import { BattleSim, type SimEvent } from './world';
 
 test('seed content passes schemas and reference checks', () => {
@@ -22,11 +22,11 @@ test('seed content passes schemas and reference checks', () => {
 function botArmies(mapId: string, seed: number): { terrain: Terrain; armies: Armies; budget: number } {
   const map = SEED.maps.find((m) => m.id === mapId)!;
   const terrain = new Terrain(map, SEED.assets);
-  const bot = SEED.bots.find((b) => b.id === 'chien-binh')!;
+  const bot = SEED.bots.find((b) => b.id === 'thuong')!;
   const budget = map.budget;
   const blue = generateBotArmy({ bot, content: SEED, terrain, side: 'blue', budget, seed });
-  const red = generateBotArmy({ bot: SEED.bots.find((b) => b.id === 'tuong-quan')!, content: SEED, terrain, side: 'red', budget, enemy: blue, seed: seed + 1 });
-  return { terrain, armies: { blue, red }, budget };
+  const red = generateBotArmy({ bot: SEED.bots.find((b) => b.id === 'kho')!, content: SEED, terrain, side: 'red', budget, enemy: blue, seed: seed + 1 });
+  return { terrain, armies: armies({ blue, red }), budget };
 }
 
 test('every bot builds a legal army on every map', () => {
@@ -73,7 +73,7 @@ function skillArena(caster: Partial<UnitDef>, opts: { dummies?: number; gap?: nu
   const content = { ...SEED, units: [...SEED.units, DUMMY, unit], weapons: [...SEED.weapons, NOOP] };
   const terrain = new Terrain(ARENA, []);
   const red = Array.from({ length: opts.dummies ?? 9 }, (_, i) => ({ unitId: 'dummy', x: (opts.gap ?? 10) + (i % 3) * 1.1, z: (Math.floor(i / 3) - 1) * 1.1 }));
-  const sim = new BattleSim(content, ARENA, terrain, { blue: [{ unitId: 'caster', x: 0, z: 0 }], red }, opts.seed ?? 99);
+  const sim = new BattleSim(content, ARENA, terrain, armies({ blue: [{ unitId: 'caster', x: 0, z: 0 }], red }), opts.seed ?? 99);
   const events: SimEvent[] = [];
   const run = (seconds: number, each?: () => void) => {
     for (let i = 0; i < seconds * 30 && !sim.result; i++) {
@@ -144,7 +144,7 @@ test('area skills wait for enough targets', () => {
 test('a melee unit routes around a blocking tree to reach the enemy', () => {
   const terrain = new Terrain(ARENA, []);
   terrain.obstacles.push({ kind: 'tree', assetId: 'tree', x: 0, y: 0, z: 0, radius: 2, scale: 1, yaw: 0, variant: 0 });
-  const sim = new BattleSim(SEED, ARENA, terrain, { blue: [{ unitId: 'clubber', x: -6, z: 0 }], red: [{ unitId: 'clubber', x: 6, z: 0 }] }, 1);
+  const sim = new BattleSim(SEED, ARENA, terrain, armies({ blue: [{ unitId: 'clubber', x: -6, z: 0 }], red: [{ unitId: 'clubber', x: 6, z: 0 }] }), 1);
   for (let i = 0; i < 30 * 20 && !sim.result; i++) sim.step();
   assert.ok(sim.result, 'a tree directly on the path between the two units must not deadlock the fight');
 });
@@ -195,6 +195,69 @@ test('stars raise HP and damage of one side only, deterministically', () => {
   };
   assert.deepEqual(sums(new BattleSim(SEED, terrain.map, terrain, armies, 9, stars)), sums(new BattleSim(SEED, terrain.map, terrain, armies, 9, stars)));
   assert.notDeepEqual(sums(starred), sums(base));
+});
+
+test('2-4 player deployment zones stay within map bounds and never overlap', () => {
+  const layouts: Side[][] = [
+    ['blue', 'red'],
+    ['blue', 'red', 'green'],
+    ['blue', 'red', 'green', 'yellow'],
+  ];
+  for (const map of SEED.maps) {
+    for (const sides of layouts) {
+      const terrain = new Terrain(map, SEED.assets, null, sides);
+      const usable = map.size / 2 - EDGE_MARGIN;
+      const zones = sides.map((s) => terrain.zoneOf(s));
+      for (const z of zones) {
+        assert.ok(z.x0 >= -usable - 1e-6 && z.x1 <= usable + 1e-6, `${map.id}/${sides.length}p: zone x out of bounds`);
+        assert.ok(z.z0 >= -usable - 1e-6 && z.z1 <= usable + 1e-6, `${map.id}/${sides.length}p: zone z out of bounds`);
+      }
+      for (let i = 0; i < zones.length; i++) {
+        for (let j = i + 1; j < zones.length; j++) {
+          const a = zones[i];
+          const b = zones[j];
+          const overlaps = a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a.z1;
+          assert.ok(!overlaps, `${map.id}/${sides.length}p: zones ${sides[i]}/${sides[j]} overlap`);
+        }
+      }
+    }
+  }
+});
+
+test('3-way FFA: last side standing wins the instant the other two are eliminated', () => {
+  const ARENA: MapDef = { ...SEED.maps[0], id: 'ffa-arena', size: 120, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
+  const sides: Side[] = ['blue', 'red', 'green'];
+  const terrain = new Terrain(ARENA, [], null, sides);
+  const at = (side: Side) => {
+    const z = terrain.zoneOf(side);
+    return { x: (z.x0 + z.x1) / 2, z: (z.z0 + z.z1) / 2 };
+  };
+  const army = armies({ blue: [{ unitId: 'clubber', ...at('blue') }], red: [{ unitId: 'clubber', ...at('red') }], green: [{ unitId: 'clubber', ...at('green') }] });
+  const sim = new BattleSim(SEED, ARENA, terrain, army, 1);
+  sim.queueElimination('red', 1);
+  sim.queueElimination('green', 1);
+  sim.step();
+  assert.equal(sim.result?.winner, 'blue');
+  assert.equal(sim.result?.reason, 'eliminated');
+  assert.deepEqual(sim.result?.survivors, { blue: 1, red: 0, green: 0 });
+});
+
+test('3-way FFA: 2+ survivors when the time limit hits is a draw', () => {
+  const ARENA: MapDef = { ...SEED.maps[0], id: 'ffa-arena-timeout', size: 160, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
+  const content = { ...SEED, settings: { ...SEED.settings, battleTimeLimit: 0.5 } };
+  const sides: Side[] = ['blue', 'red', 'green'];
+  const terrain = new Terrain(ARENA, [], null, sides);
+  const at = (side: Side) => {
+    const z = terrain.zoneOf(side);
+    return { x: (z.x0 + z.x1) / 2, z: (z.z0 + z.z1) / 2 };
+  };
+  // Corners are far apart and the clock is short: nobody should reach anybody else in time.
+  const army = armies({ blue: [{ unitId: 'clubber', ...at('blue') }], red: [{ unitId: 'clubber', ...at('red') }], green: [{ unitId: 'clubber', ...at('green') }] });
+  const sim = new BattleSim(content, ARENA, terrain, army, 1);
+  for (let i = 0; i < 30 * 5 && !sim.result; i++) sim.step();
+  assert.equal(sim.result?.winner, 'draw');
+  assert.equal(sim.result?.reason, 'timeout');
+  assert.deepEqual(sim.result?.survivors, { blue: 1, red: 1, green: 1 });
 });
 
 test('different seeds diverge', () => {

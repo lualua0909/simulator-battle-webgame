@@ -4,7 +4,7 @@
 // the rewards, bursts open, then the coins and unit cards pop out one by one.
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { BoxKind, BoxReward } from '@/shared/economy';
+import type { BoxReward, PlayerAction } from '@/shared/economy';
 import { formatCoins } from '@/shared/economy';
 import type { ChestVariant, ConfigBundle } from '@/shared/schema';
 import ChestStage, { type ChestMode } from './ChestStage';
@@ -15,14 +15,14 @@ import UnitCard from './UnitCard';
 
 interface Props {
   bundle: ConfigBundle;
-  kind: BoxKind;
+  action: PlayerAction;
   title: string;
   chest: ChestVariant;
   thumbs: Record<string, string>;
   onClose(): void;
 }
 
-export default function BoxOpening({ bundle, kind, title, chest, thumbs, onClose }: Props) {
+export default function BoxOpening({ bundle, action, title, chest, thumbs, onClose }: Props) {
   const { player, act } = usePlayer();
   const [mode, setMode] = useState<ChestMode>('idle');
   const [reward, setReward] = useState<BoxReward | null>(null);
@@ -40,7 +40,7 @@ export default function BoxOpening({ bundle, kind, title, chest, thumbs, onClose
     setError(null);
     setMode('shake');
     // Let the rattle read even when the server answers instantly.
-    const [result] = await Promise.allSettled([act({ action: 'open-box', kind }), new Promise((r) => setTimeout(r, 700))]);
+    const [result] = await Promise.allSettled([act(action), new Promise((r) => setTimeout(r, 700))]);
     if (result.status === 'fulfilled' && result.value.reward) {
       setReward(result.value.reward);
       setMode('open');

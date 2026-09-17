@@ -403,7 +403,8 @@ export function MapPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) 
     }
     const map = parsed.data;
     const terrain = new Terrain(map, bundle.assets);
-    setInfo(`${terrain.obstacles.length} cây/đá/bụi · vùng triển khai ${(terrain.zones.blue.x1 - terrain.zones.blue.x0).toFixed(0)}m`);
+    const blueZone = terrain.zoneOf('blue');
+    setInfo(`${terrain.obstacles.length} cây/đá/bụi · vùng triển khai ${(blueZone.x1 - blueZone.x0).toFixed(0)}m`);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
     renderer.shadowMap.enabled = true;
@@ -481,7 +482,7 @@ export function BotTester({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) {
   const counts = new Map<string, number>();
   for (const p of army) counts.set(p.unitId, (counts.get(p.unitId) ?? 0) + 1);
   const units = new Map(bundle.units.map((u) => [u.id, u]));
-  const zone = terrain?.zones.red;
+  const zone = terrain?.zoneOf('red');
   return (
     <Frame
       title="Thử bot xếp quân"

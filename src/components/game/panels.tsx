@@ -1,21 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import type { ConfigBundle } from '@/shared/schema';
+import { useEffect, useState } from 'react';
+import type { BotDef, ConfigBundle } from '@/shared/schema';
 import type { RoomSettings, RoomState } from '@/shared/net';
-import type { Side } from '@/game/sim/terrain';
+import { ALL_SIDES, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import type { BattleStats } from '@/game/render/engine';
 
-export const SIDE_NAME: Record<Side, string> = { blue: 'Xanh', red: 'Đỏ' };
+export const SIDE_NAME: Record<Side, string> = { blue: 'Xanh', red: 'Đỏ', green: 'Lục', yellow: 'Vàng' };
+export const SIDE_BG: Record<Side, string> = { blue: 'bg-blue-team', red: 'bg-red-team', green: 'bg-green-team', yellow: 'bg-yellow-team' };
+export const SIDE_TEXT: Record<Side, string> = { blue: 'text-blue-team', red: 'text-red-team', green: 'text-green-team', yellow: 'text-yellow-team' };
 
 /** Mode picker value: open battle, or siege with the given side defending. */
 export type ModeChoice = 'battle' | Side;
 
-export function ModePicker(props: { mode: 'ai' | 'local' | 'online'; value: ModeChoice; onChange(v: ModeChoice): void; disabled?: boolean }) {
+export function ModePicker(props: { mode: 'bot' | 'local' | 'online'; value: ModeChoice; onChange(v: ModeChoice): void; disabled?: boolean }) {
   const options: Array<{ value: ModeChoice; label: string; hint: string }> =
-    props.mode === 'ai'
+    props.mode === 'bot'
       ? [
           { value: 'battle', label: '⚔ Đại chiến', hint: 'hai đạo quân lao vào nhau' },
           { value: 'blue', label: '🏰 Bạn thủ thành', hint: 'xây tường, tháp; máy công thành' },
@@ -46,7 +48,7 @@ export function resultTitle(result: BattleResult, mySide?: Side): string {
 
 /** Letterbox bars + skip button while a cinematic owns the camera. */
 export function CinematicBars({ title, winner, onSkip }: { title?: string; winner?: Side | 'draw'; onSkip(): void }) {
-  const color = winner === 'blue' ? 'text-blue-team' : winner === 'red' ? 'text-red-team' : 'text-ink';
+  const color = winner && winner !== 'draw' ? SIDE_TEXT[winner] : 'text-ink';
   return (
     <div className="pointer-events-none absolute inset-0">
       <div className="cine-bar absolute inset-x-0 top-0 h-[9vh] origin-top bg-black/85" />
@@ -60,15 +62,110 @@ export function CinematicBars({ title, winner, onSkip }: { title?: string; winne
   );
 }
 
+/** Thứ tự hiển thị bắt buộc: Dễ / Thường / Khó / Huyền thoại. */
+export const BOT_ORDER = ['de', 'thuong', 'kho', 'huyen-thoai'];
+
+/** Bot sắp theo BOT_ORDER trước, bot lạ (CMS thêm tay) xếp sau theo difficulty. */
+export function orderedBots(bundle: ConfigBundle): BotDef[] {
+  return [...bundle.bots].sort((a, b) => {
+    const ia = BOT_ORDER.indexOf(a.id);
+    const ib = BOT_ORDER.indexOf(b.id);
+    if (ia !== ib) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    return a.difficulty - b.difficulty;
+  });
+}
+
+/** Huy hiệu rank cho từng cấp độ: 0 Dễ (bạc), 1 Thường (lục), 2 Khó (lam), 3 Huyền thoại (tím + cánh vàng). */
+function RankIcon({ rank }: { rank: number }) {
+  if (rank === 1)
+    return (
+      <svg viewBox="0 0 48 48" className="h-12 w-12 sm:h-16 sm:w-16" aria-hidden>
+        <defs>
+          <linearGradient id="rk-ring-1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#d6a94c" />
+            <stop offset="1" stopColor="#5c4a12" />
+          </linearGradient>
+        </defs>
+        <path d="M6 32 Q13 28 16 21 Q13 31 9 34 Z" fill="#8a6d1f" />
+        <path d="M42 32 Q35 28 32 21 Q35 31 39 34 Z" fill="#8a6d1f" />
+        <circle cx="24" cy="24" r="20" fill="url(#rk-ring-1)" stroke="#3f3308" strokeWidth="2" />
+        <circle cx="24" cy="24" r="13.5" fill="#0e2a12" />
+        <path d="M24 13 L30 24 L24 35 L18 24 Z" fill="#22c55e" stroke="#bbf7d0" strokeWidth="1.5" />
+        <circle cx="24" cy="24" r="2.5" fill="#dcfce7" />
+      </svg>
+    );
+  if (rank === 2)
+    return (
+      <svg viewBox="0 0 48 48" className="h-12 w-12 sm:h-16 sm:w-16" aria-hidden>
+        <defs>
+          <linearGradient id="rk-ring-2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#f1f5f9" />
+            <stop offset="1" stopColor="#64748b" />
+          </linearGradient>
+        </defs>
+        <path d="M4 26 L10 24 L10 30 Z" fill="#94a3b8" />
+        <path d="M44 26 L38 24 L38 30 Z" fill="#94a3b8" />
+        <circle cx="24" cy="24" r="20" fill="url(#rk-ring-2)" stroke="#334155" strokeWidth="2" />
+        <circle cx="24" cy="24" r="13.5" fill="#0c1a33" />
+        <path d="M24 12 L31 24 L24 36 L17 24 Z" fill="#38bdf8" stroke="#e0f2fe" strokeWidth="1.5" />
+        <path d="M17 24 L24 21 L31 24 L24 27 Z" fill="#bae6fd" opacity="0.85" />
+        <circle cx="24" cy="24" r="2.5" fill="#f0f9ff" />
+      </svg>
+    );
+  if (rank === 3)
+    return (
+      <svg viewBox="0 0 48 48" className="h-12 w-12 sm:h-16 sm:w-16" aria-hidden>
+        <defs>
+          <linearGradient id="rk-ring-3" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#fde68a" />
+            <stop offset="0.55" stopColor="#d97706" />
+            <stop offset="1" stopColor="#92400e" />
+          </linearGradient>
+          <radialGradient id="rk-glow-3" cx="0.5" cy="0.45" r="0.6">
+            <stop offset="0" stopColor="#e9d5ff" />
+            <stop offset="1" stopColor="#4c1d95" />
+          </radialGradient>
+        </defs>
+        <path d="M3 30 Q11 27 15 18 Q13 29 7 33 Z" fill="#b45309" />
+        <path d="M45 30 Q37 27 33 18 Q35 29 41 33 Z" fill="#b45309" />
+        <path d="M5 34 Q12 32 15 25 Q13 34 8 37 Z" fill="#f59e0b" opacity="0.8" />
+        <path d="M43 34 Q36 32 33 25 Q35 34 40 37 Z" fill="#f59e0b" opacity="0.8" />
+        <circle cx="24" cy="24" r="20" fill="url(#rk-ring-3)" stroke="#451a03" strokeWidth="2" />
+        <circle cx="24" cy="24" r="13.5" fill="url(#rk-glow-3)" />
+        <path d="M24 12 L31 24 L24 36 L17 24 Z" fill="#a855f7" stroke="#fae8ff" strokeWidth="1.5" />
+        <path d="M17 24 L24 21 L31 24 L24 27 Z" fill="#e9d5ff" opacity="0.9" />
+        <circle cx="24" cy="24" r="2.5" fill="#faf5ff" />
+        <circle cx="15" cy="10" r="1.3" fill="#fde68a" />
+        <circle cx="34" cy="9" r="1.3" fill="#fde68a" />
+      </svg>
+    );
+  return (
+    <svg viewBox="0 0 48 48" className="h-12 w-12 sm:h-16 sm:w-16" aria-hidden>
+      <defs>
+        <linearGradient id="rk-ring-0" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f3f4f6" />
+          <stop offset="1" stopColor="#6b7280" />
+        </linearGradient>
+      </defs>
+      <circle cx="24" cy="24" r="20" fill="url(#rk-ring-0)" stroke="#374151" strokeWidth="2" />
+      <circle cx="24" cy="24" r="13.5" fill="#1f2937" />
+      <path d="M24 14 L29 24 L24 34 L19 24 Z" fill="#9ca3af" stroke="#e5e7eb" strokeWidth="1.5" />
+      <circle cx="24" cy="24" r="2.5" fill="#e5e7eb" />
+    </svg>
+  );
+}
+
 export function SetupPanel(props: {
   bundle: ConfigBundle;
-  mode: 'ai' | 'local';
+  mode: 'bot' | 'local';
   mapId: string;
   setMapId(id: string): void;
   budget: number;
   setBudget(v: number): void;
   botId: string;
   setBotId(id: string): void;
+  botCount: number;
+  setBotCount(n: number): void;
   blind: boolean;
   setBlind(v: boolean): void;
   choice: ModeChoice;
@@ -77,8 +174,8 @@ export function SetupPanel(props: {
 }) {
   const { bundle, mode } = props;
   return (
-    <div className="panel pointer-events-auto mx-auto flex max-h-[88vh] w-[min(760px,94vw)] flex-col gap-3 overflow-y-auto p-4">
-      <h2 className="font-display text-2xl">{mode === 'ai' ? 'Đấu với máy' : '2 người 1 máy'}</h2>
+    <div className="panel pointer-events-auto m-auto flex w-[min(760px,94vw)] flex-col gap-2 p-3 sm:max-h-[88vh] sm:gap-3 sm:overflow-y-auto sm:overscroll-contain sm:touch-pan-y sm:p-4">
+      <h2 className="font-display text-2xl">{mode === 'bot' ? 'Đấu với máy' : '2 người 1 máy'}</h2>
       <section>
         <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">Chế độ</h3>
         <ModePicker mode={mode} value={props.choice} onChange={props.setChoice} />
@@ -105,29 +202,42 @@ export function SetupPanel(props: {
           ))}
         </div>
       </section>
-      <section className="flex flex-wrap items-center gap-3">
+      <section className="flex flex-wrap items-center gap-2 sm:gap-3">
         <h3 className="text-sm font-extrabold uppercase opacity-70">Ngân sách</h3>
-        <input type="range" min={300} max={30000} step={100} value={props.budget} onChange={(e) => props.setBudget(Number(e.target.value))} className="flex-1" />
-        <input type="number" min={100} step={100} value={props.budget} onChange={(e) => props.setBudget(Math.max(100, Number(e.target.value) || 0))} className="field w-28" />
+        <input type="range" min={300} max={30000} step={100} value={props.budget} onChange={(e) => props.setBudget(Number(e.target.value))} className="min-w-24 flex-1" />
+        <input type="number" min={100} step={100} value={props.budget} onChange={(e) => props.setBudget(Math.max(100, Number(e.target.value) || 0))} className="field w-20 sm:w-28" />
+        {mode === 'bot' && props.choice === 'battle' && (
+          <select value={props.botCount} onChange={(e) => props.setBotCount(Number(e.target.value))} className="field w-auto shrink-0" title="Số lượng bot" aria-label="Số lượng bot">
+            {[1, 2, 3].map((n) => (
+              <option key={n} value={n}>
+                {n} bot
+              </option>
+            ))}
+          </select>
+        )}
       </section>
-      {mode === 'ai' ? (
+      {mode === 'bot' ? (
         <section>
           <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">Đối thủ</h3>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {bundle.bots.map((b) => (
-              <button key={b.id} onClick={() => props.setBotId(b.id)} className={`rounded-xl border-2 p-2 text-left ${props.botId === b.id ? 'border-ink bg-gold' : 'border-ink/30 bg-white'}`}>
-                <div className="flex items-center justify-between font-bold">
-                  {b.name}
-                  <span className="text-amber-600">{'★'.repeat(b.difficulty)}</span>
-                </div>
-                <div className="text-xs opacity-75">{b.description}</div>
-                <div className="mt-1 flex gap-1 text-xs uppercase">
-                  <span className="rounded bg-ink/10 px-1">×{b.budgetMultiplier} tiền</span>
-                  {b.reactive && <span className="rounded bg-red-team/15 px-1 text-red-team">xem quân bạn</span>}
-                </div>
-              </button>
-            ))}
+          <div className="grid grid-cols-4 gap-1 sm:gap-2">
+            {orderedBots(bundle).map((b) => {
+              const active = props.botId === b.id;
+              return (
+                <button key={b.id} onClick={() => props.setBotId(b.id)} className="group flex flex-col items-center gap-1 bg-transparent p-1 text-center font-bold sm:p-2">
+                  <span
+                    className={`transition-all duration-150 group-hover:-translate-y-1 group-hover:scale-110 group-hover:opacity-100 group-hover:drop-shadow-[0_8px_14px_rgba(255,178,0,0.55)] ${
+                      active ? '-translate-y-1 scale-110 drop-shadow-[0_8px_14px_rgba(255,178,0,0.65)]' : 'opacity-70'
+                    }`}
+                  >
+                    <RankIcon rank={BOT_ORDER.indexOf(b.id)} />
+                  </span>
+                  <span className={`whitespace-nowrap text-[11px] leading-tight sm:text-base ${active ? '' : 'opacity-70 group-hover:opacity-100'}`}>{b.name}</span>
+                  <span className={`h-1 w-8 rounded-full transition-colors sm:w-10 ${active ? 'bg-gold' : 'bg-transparent group-hover:bg-ink/20'}`} />
+                </button>
+              );
+            })}
           </div>
+          {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">Thủ/công thành chỉ đấu 1 bot.</p>}
         </section>
       ) : (
         <label className="flex items-center gap-2 text-sm">
@@ -162,7 +272,7 @@ export function OnlineLobby(props: {
   const [code, setCode] = useState(props.initialCode ?? '');
   if (props.playerName === null) {
     return (
-      <div className="panel pointer-events-auto mx-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
+      <div className="panel pointer-events-auto m-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
         <h2 className="font-display text-2xl">Đấu online</h2>
         <p className="text-sm">Cần đăng nhập để đấu online. Kết quả trận được lưu theo tài khoản.</p>
         <button className="btn btn-gold" disabled={props.authLoading} onClick={props.onSignIn}>
@@ -175,7 +285,7 @@ export function OnlineLobby(props: {
     );
   }
   return (
-    <div className="panel pointer-events-auto mx-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
+    <div className="panel pointer-events-auto m-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
       <h2 className="font-display text-2xl">Đấu online</h2>
       <p className="text-sm">
         Chơi với tên <b>{props.playerName}</b>
@@ -204,6 +314,17 @@ export function OnlineLobby(props: {
   );
 }
 
+/** Live "Ns" readout of a deployment deadline (or null once it's stopped counting down). */
+function useCountdown(deadline: number | null): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (deadline === null) return;
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [deadline]);
+  return deadline === null ? null : Math.max(0, Math.ceil((deadline - now) / 1000));
+}
+
 export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: Side; onSettings(next: RoomSettings): void }) {
   const { room, mySide, bundle } = props;
   const current: RoomSettings = { mapId: room.mapId, budget: room.budget, useStars: room.useStars, defense: room.defense };
@@ -211,6 +332,9 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
   const host = mySide === 'blue';
   const link = typeof window !== 'undefined' ? `${window.location.origin}/play?mode=online&room=${room.code}` : '';
   const [copied, setCopied] = useState(false);
+  const secondsLeft = useCountdown(room.deadline);
+  /** Siege is 2-side only; an open room can seat up to 4. */
+  const slots = room.defense !== null ? (['blue', 'red'] as const) : ALL_SIDES;
   return (
     <div className="panel pointer-events-auto flex max-h-[26vh] w-52 flex-col gap-2 overflow-y-auto overscroll-contain p-2 text-sm sm:max-h-none sm:w-auto sm:overflow-visible">
       <div className="flex items-center gap-2">
@@ -226,11 +350,14 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
           {copied ? 'Đã chép!' : 'Chép link mời'}
         </button>
       </div>
-      {(['blue', 'red'] as const).map((s) => {
+      {secondsLeft !== null && (
+        <div className={`text-center font-display text-lg ${secondsLeft <= 10 ? 'text-red-team' : ''}`}>Bắt đầu sau {secondsLeft}s</div>
+      )}
+      {slots.map((s) => {
         const p = room.players[s];
         return (
           <div key={s} className="flex items-center gap-2">
-            <span className={`h-3 w-3 rounded-full ${s === 'blue' ? 'bg-blue-team' : 'bg-red-team'}`} />
+            <span className={`h-3 w-3 rounded-full ${SIDE_BG[s]}`} />
             <span className="font-bold">{p ? p.name : '— đang chờ —'}</span>
             {s === mySide && <span className="text-xs opacity-60">(bạn)</span>}
             {p && !p.connected && <span className="text-xs text-red-team">mất kết nối</span>}
@@ -280,8 +407,9 @@ export function HelpHint({ text, className = '' }: { text: string; className?: s
 }
 
 export function BattleHud(props: {
+  activeSides: Side[];
   stats: BattleStats;
-  total: Record<Side, number>;
+  total: Partial<Record<Side, number>>;
   speed: number;
   paused: boolean;
   muted: boolean;
@@ -293,21 +421,44 @@ export function BattleHud(props: {
   timeLimit: number;
   defense: Side | null;
 }) {
-  const { stats, total } = props;
+  const { stats, total, activeSides } = props;
   const left = Math.max(0, props.timeLimit - stats.time);
   const mm = Math.floor(left / 60);
   const ss = Math.floor(left % 60)
     .toString()
     .padStart(2, '0');
+  const mid = Math.ceil(activeSides.length / 2);
+  const leftSides = activeSides.slice(0, mid);
+  const rightSides = activeSides.slice(mid);
   return (
     <>
-      <div className="panel pointer-events-auto absolute left-1/2 top-2 flex -translate-x-1/2 items-center gap-2 px-2 py-1.5 sm:top-3 sm:gap-3 sm:px-4 sm:py-2">
-        <TeamBar side="blue" alive={stats.blue} total={total.blue} />
-        <span className={`flex flex-col items-center font-display text-base leading-none tabular-nums sm:text-lg ${left < 30 ? 'text-red-team' : ''}`} title="Thời gian còn lại">
-          {mm}:{ss}
-          {props.defense && <span className="hidden text-[10px] font-bold opacity-70 sm:inline">🏰 {SIDE_NAME[props.defense]} thủ</span>}
+      <div
+        className="panel pointer-events-auto absolute left-1/2 top-2 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-1.5 overflow-hidden whitespace-nowrap px-2.5 py-1.5 sm:top-3 sm:gap-2 sm:px-3.5 sm:py-1.5"
+        style={{ borderRadius: 9999 }}
+      >
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+          {leftSides.map((s) => (
+            <TeamBar key={s} side={s} alive={stats.alive[s] ?? 0} total={total[s] ?? 0} flip={false} />
+          ))}
+        </div>
+        <div className="h-5 w-px shrink-0 bg-ink/15" />
+        <span
+          className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-display tabular-nums leading-none text-white sm:px-2.5 sm:text-lg ${left < 30 ? 'bg-red-team' : 'bg-ink'}`}
+          title={props.defense ? `Thời gian còn lại · Phe ${SIDE_NAME[props.defense]} thủ thành` : 'Thời gian còn lại'}
+        >
+          ⏱ {mm}:{ss}
+          {props.defense && (
+            <span className="text-[11px] leading-none" title={`Phe ${SIDE_NAME[props.defense]} thủ`}>
+              🏰
+            </span>
+          )}
         </span>
-        <TeamBar side="red" alive={stats.red} total={total.red} />
+        <div className="h-5 w-px shrink-0 bg-ink/15" />
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+          {rightSides.map((s) => (
+            <TeamBar key={s} side={s} alive={stats.alive[s] ?? 0} total={total[s] ?? 0} flip={true} />
+          ))}
+        </div>
       </div>
       <div className="panel pointer-events-auto absolute bottom-2 right-2 flex max-w-[64vw] flex-wrap items-center justify-end gap-1 p-1.5 sm:bottom-3 sm:right-3 sm:max-w-none sm:p-2">
         <button className={`btn px-3 py-1 ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title="Bật/tắt âm thanh">
@@ -330,13 +481,14 @@ export function BattleHud(props: {
   );
 }
 
-function TeamBar({ side, alive, total }: { side: Side; alive: number; total: number }) {
-  const pct = total > 0 ? (alive / total) * 100 : 0;
+function TeamBar({ side, alive, total, flip }: { side: Side; alive: number; total: number; flip: boolean }) {
+  const pct = total > 0 ? Math.max(0, Math.min(100, (alive / total) * 100)) : 0;
   return (
-    <div className={`flex w-24 items-center gap-1.5 sm:w-40 sm:gap-2 ${side === 'red' ? 'flex-row-reverse' : ''}`}>
-      <span className={`font-display text-base sm:text-lg ${side === 'blue' ? 'text-blue-team' : 'text-red-team'}`}>{alive}</span>
-      <div className="h-3 flex-1 overflow-hidden rounded-full border-2 border-ink bg-white">
-        <div className={`h-full ${side === 'blue' ? 'bg-blue-team' : 'ml-auto bg-red-team'}`} style={{ width: `${pct}%`, marginLeft: side === 'red' ? 'auto' : undefined }} />
+    <div className={`flex shrink-0 items-center gap-1 sm:gap-1.5 ${flip ? 'flex-row-reverse' : ''}`} title={`${SIDE_NAME[side]}: còn ${alive}/${total}`}>
+      <span className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-ink/60 ${SIDE_BG[side]}`} />
+      <span className={`font-display tabular-nums sm:text-lg ${SIDE_TEXT[side]}`}>{alive}</span>
+      <div className="h-2.5 w-9 overflow-hidden rounded-full border border-ink/80 bg-black/10 sm:h-3 sm:w-20 lg:w-24">
+        <div className={`h-full rounded-full transition-[width] duration-300 ${SIDE_BG[side]}`} style={{ width: `${pct}%`, marginLeft: flip ? 'auto' : undefined }} />
       </div>
     </div>
   );
@@ -345,7 +497,8 @@ function TeamBar({ side, alive, total }: { side: Side; alive: number; total: num
 export function ResultModal(props: { result: BattleResult; mySide?: Side; siege: boolean; onRematch(): void; onEdit(): void; rematchLabel?: string }) {
   const { result } = props;
   const title = resultTitle(result, props.mySide);
-  const color = result.winner === 'blue' ? 'text-blue-team' : result.winner === 'red' ? 'text-red-team' : 'text-ink';
+  const color = result.winner !== 'draw' ? SIDE_TEXT[result.winner] : 'text-ink';
+  const survivors = ALL_SIDES.filter((s) => result.survivors[s] !== undefined);
   return (
     <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-ink/25">
       <div className="panel flex w-[min(420px,92vw)] flex-col items-center gap-3 p-6 text-center">
@@ -363,7 +516,14 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
                   : 'Hết giờ — hai bên hòa nhau.'
                 : 'Một bên đã bị tiêu diệt hoàn toàn.'}
           <br />
-          Còn sống: <b className="text-blue-team">{result.survivors.blue}</b> xanh · <b className="text-red-team">{result.survivors.red}</b> đỏ · {(result.tick / 30).toFixed(0)} giây
+          Còn sống:{' '}
+          {survivors.map((s, i) => (
+            <span key={s}>
+              {i > 0 && ' · '}
+              <b className={SIDE_TEXT[s]}>{result.survivors[s]}</b> {SIDE_NAME[s].toLowerCase()}
+            </span>
+          ))}{' '}
+          · {(result.tick / 30).toFixed(0)} giây
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <button className="btn btn-gold" onClick={props.onRematch}>

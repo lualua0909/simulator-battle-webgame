@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { SIDE_TEXT } from '@/components/game/panels';
 import type { MetricsSnapshot, StoredStats } from '@/server/metrics';
 import { api } from './api';
 
@@ -124,8 +125,7 @@ export function Monitoring() {
                   <thead>
                     <tr className="text-left">
                       <th className="px-2 py-1">Phòng</th>
-                      <th className="px-2 py-1">Xanh</th>
-                      <th className="px-2 py-1">Đỏ</th>
+                      <th className="px-2 py-1">Người chơi</th>
                       <th className="px-2 py-1">Bản đồ</th>
                       <th className="px-2 py-1">Chế độ</th>
                       <th className="px-2 py-1">Thời gian</th>
@@ -135,8 +135,14 @@ export function Monitoring() {
                     {live.rooms.battles.map((b) => (
                       <tr key={b.code} className="border-t border-ink/10">
                         <td className="px-2 py-1 font-mono">{b.code}</td>
-                        <td className="px-2 py-1 text-blue-team">{b.blue}</td>
-                        <td className="px-2 py-1 text-red-team">{b.red}</td>
+                        <td className="px-2 py-1">
+                          {b.players.map((p, i) => (
+                            <span key={p.side} className={SIDE_TEXT[p.side]}>
+                              {i > 0 && ' · '}
+                              {p.name}
+                            </span>
+                          ))}
+                        </td>
                         <td className="px-2 py-1">{b.mapId}</td>
                         <td className="px-2 py-1">{b.siege ? 'Thủ thành' : 'Dã chiến'}</td>
                         <td className="px-2 py-1">{duration(Math.round((live.now - b.startedAt) / 1000))}</td>

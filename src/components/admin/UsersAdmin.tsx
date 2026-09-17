@@ -265,6 +265,7 @@ type Wallet = { player: PlayerState; boxes: BoxStatus; ledger: Array<LedgerEntry
 const LEDGER_LABELS: Record<LedgerType, string> = {
   'daily-box': 'Hộp hằng ngày',
   'hourly-box': 'Hộp x giờ',
+  'bot-win': 'Thắng bot',
   unlock: 'Mở khóa lính',
   upgrade: 'Nâng sao',
   'buy-cards': 'Mua thẻ',

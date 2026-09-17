@@ -340,13 +340,13 @@ function CardsTab({ bundle, draft, setDraft, errors }: Pick<Props, 'bundle' | 'd
       </div>
       <label className="flex flex-col gap-1">
         <span className="font-bold">Giá mở khóa (coin)</span>
-        <input className="field" type="number" min={0} step={1000} value={String(draft.unlockCost ?? '')} onChange={(e) => setDraft({ ...draft, unlockCost: num(e.target.value) })} />
+        <input className="field" type="number" min={0} step={10} value={String(draft.unlockCost ?? '')} onChange={(e) => setDraft({ ...draft, unlockCost: num(e.target.value) })} />
         <span className="text-xs opacity-60">0 = miễn phí: ai cũng dùng được, kể cả khách chưa đăng nhập</span>
         {error('unlockCost')}
       </label>
       <label className="flex flex-col gap-1">
         <span className="font-bold">Giá 1 thẻ trong bộ sưu tập (coin)</span>
-        <input className="field" type="number" min={0} step={5} value={String(draft.cardPrice ?? '')} onChange={(e) => setDraft({ ...draft, cardPrice: num(e.target.value) })} />
+        <input className="field" type="number" min={0} step={1} value={String(draft.cardPrice ?? '')} onChange={(e) => setDraft({ ...draft, cardPrice: num(e.target.value) })} />
         <span className="text-xs opacity-60">0 = không bán, chỉ nhận từ hộp quà</span>
         {error('cardPrice')}
       </label>
@@ -368,7 +368,7 @@ function CardsTab({ bundle, draft, setDraft, errors }: Pick<Props, 'bundle' | 'd
                 {error(`starCards.${i}`)}
               </td>
               <td className="py-0.5 pr-1">
-                <input className="field" type="number" min={0} step={500} value={String(draft.starCoins[i] ?? '')} onChange={(e) => setStep('starCoins', i, e.target.value)} />
+                <input className="field" type="number" min={0} step={10} value={String(draft.starCoins[i] ?? '')} onChange={(e) => setStep('starCoins', i, e.target.value)} />
                 {error(`starCoins.${i}`)}
               </td>
               <td className="text-right">+{Math.round(bonus * (i + 1) * 100)}%</td>

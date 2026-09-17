@@ -17,7 +17,8 @@ export function wallCenter(i: number): number {
   return (i + 0.5) * WALL_CELL;
 }
 
-export type Side = 'blue' | 'red';
+export type Side = 'blue' | 'red' | 'green' | 'yellow';
+export const ALL_SIDES: readonly Side[] = ['blue', 'red', 'green', 'yellow'];
 
 export interface Zone {
   x0: number;
@@ -45,7 +46,8 @@ export interface Obstacle {
 export class Terrain {
   readonly size: number;
   readonly half: number;
-  readonly zones: Record<Side, Zone>;
+  readonly activeSides: readonly Side[];
+  readonly zones: Partial<Record<Side, Zone>>;
   readonly riverEnabled: boolean;
   readonly riverHalfWidth: number;
   readonly riverBase = 0;
@@ -64,29 +66,61 @@ export class Terrain {
   constructor(
     readonly map: MapDef,
     assets: readonly AssetDef[] = [],
-    /** Siege mode: the defending side (its zone uses map.defenseDepth); null = open battle. */
+    /** Siege mode: the defending side (its zone uses map.defenseDepth); null = open battle. Siege is 2-side only. */
     readonly defense: Side | null = null,
+    /** Sides deploying in this match, in seat order. 2 keeps the classic opposite-strip layout; 3-4 deploy at corners spaced evenly around the centre. */
+    activeSides: readonly Side[] = ['blue', 'red'],
   ) {
     this.size = map.size;
     this.half = map.size / 2;
+    this.activeSides = activeSides;
     this.seed = map.seed;
     this.heightScale = map.heightScale;
     this.freq = 0.018 * map.hilliness;
 
     const usable = this.half - EDGE_MARGIN;
     const base = Math.min(map.deployDepth, usable - 8);
-    const depthOf = (side: Side) => {
-      if (side !== defense || map.defenseDepth <= 0) return base;
-      // The defenders' zone may reach past the middle, leaving a 16 m gap to the attackers.
-      return Math.min(map.defenseDepth, usable * 2 - base - 16);
-    };
-    const blueDepth = depthOf('blue');
-    const redDepth = depthOf('red');
-    this.zones = {
-      blue: { x0: -usable, x1: -usable + blueDepth, z0: -usable, z1: usable },
-      red: { x0: usable - redDepth, x1: usable, z0: -usable, z1: usable },
-    };
-    const inner = Math.min(usable - blueDepth, usable - redDepth);
+    this.zones = {};
+    let inner: number;
+    if (activeSides.length <= 2) {
+      const depthOf = (side: Side) => {
+        if (side !== defense || map.defenseDepth <= 0) return base;
+        // The defenders' zone may reach past the middle, leaving a 16 m gap to the attackers.
+        return Math.min(map.defenseDepth, usable * 2 - base - 16);
+      };
+      const [a, b] = activeSides;
+      const aDepth = depthOf(a);
+      const bDepth = depthOf(b);
+      this.zones[a] = { x0: -usable, x1: -usable + aDepth, z0: -usable, z1: usable };
+      this.zones[b] = { x0: usable - bDepth, x1: usable, z0: -usable, z1: usable };
+      inner = Math.min(usable - aDepth, usable - bDepth);
+    } else {
+      // Corner deployment (open battle only): squares spaced evenly around the map centre,
+      // sized off the same deployDepth setting. Positions are hardcoded unit vectors, not
+      // Math.cos/sin, to avoid any cross-engine trig rounding drift.
+      const size = Math.min(base * 2, usable * 0.45);
+      const half2 = size / 2;
+      const r = usable - half2 * 1.15;
+      const corners: Array<[number, number]> =
+        activeSides.length === 3
+          ? [
+              [r, 0],
+              [-r / 2, r * 0.8660254037844387],
+              [-r / 2, -r * 0.8660254037844387],
+            ]
+          : [
+              [r, r],
+              [-r, r],
+              [-r, -r],
+              [r, -r],
+            ];
+      inner = Infinity;
+      activeSides.forEach((side, i) => {
+        const [cx, cz] = corners[i];
+        this.zones[side] = { x0: cx - half2, x1: cx + half2, z0: cz - half2, z1: cz + half2 };
+        inner = Math.min(inner, Math.abs(cx) - half2);
+      });
+    }
 
     this.riverEnabled = map.river.enabled;
     this.riverHalfWidth = map.river.width / 2;
@@ -170,9 +204,16 @@ export class Terrain {
     return this.heightScale + 7 + (this.map.rise < 0 ? -this.map.rise : this.map.rise);
   }
 
+  /** The deployment zone of an active side; throws for a side not in this match. */
+  zoneOf(side: Side): Zone {
+    const zone = this.zones[side];
+    if (!zone) throw new Error(`Không có vùng triển khai cho phe ${side}`);
+    return zone;
+  }
+
   inZone(side: Side, x: number, z: number): boolean {
     const zone = this.zones[side];
-    return x >= zone.x0 && x <= zone.x1 && z >= zone.z0 && z <= zone.z1;
+    return !!zone && x >= zone.x0 && x <= zone.x1 && z >= zone.z0 && z <= zone.z1;
   }
 
   private scatter(assets: readonly AssetDef[]): void {
@@ -194,7 +235,7 @@ export class Terrain {
         const variant = rng.int(3);
         const yaw = rng.next();
         const jitter = rng.next();
-        if ((this.inZone('blue', x, z) || this.inZone('red', x, z)) && roll > 0.12) continue;
+        if (this.activeSides.some((s) => this.inZone(s, x, z)) && roll > 0.12) continue;
         if (this.riverDistance(x, z) < this.riverHalfWidth + 1.5) continue;
         const asset = byId.get(assetId)!;
         const scale =

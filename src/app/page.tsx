@@ -9,9 +9,9 @@ import PlayerHud from '@/components/player/PlayerHud';
 // Chỉ khoác áo mới kiểu Unite: hero tím rực, dải zigzag, thẻ chế độ nổi khối.
 const MODES = [
   {
-    href: '/play?mode=ai',
+    href: '/play?mode=bot',
     title: 'Đấu với máy',
-    desc: 'Chọn đối thủ AI — từ Tân binh tới Bạo chúa biết khắc chế đội hình của bạn.',
+    desc: 'Chọn đối thủ AI — từ Dễ tới Huyền thoại biết khắc chế đội hình của bạn.',
     icon: '🤖',
     ribbon: 'PHỔ BIẾN NHẤT',
     ribbonCls: 'bg-[#ffc233] text-[#2d3232]',
@@ -49,7 +49,7 @@ const STEPS = [
   { n: '03', icon: '🏆', title: 'Xem hỗn loạn', desc: 'Wobbly ragdoll lao vào nhau, phe còn đứng vững thắng trận.' },
 ];
 
-const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 5 CẤP ĐỘ', '🌐 ONLINE REAL-TIME', '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', '🏆 BẢNG XẾP HẠNG'];
+const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 4 CẤP ĐỘ', '🌐 ONLINE REAL-TIME', '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', '🏆 BẢNG XẾP HẠNG'];
 
 export default function Home() {
   return (
@@ -96,7 +96,7 @@ export default function Home() {
               Mô phỏng đại chiến low-poly: xếp quân, bấm bắt đầu, xem hỗn loạn.
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[#2d3232]">
-              {['⚔️ 3 chế độ chơi', '🤖 AI 5 cấp độ', '🌐 Online real-time'].map((b) => (
+              {['⚔️ 3 chế độ chơi', '🤖 AI 4 cấp độ', '🌐 Online real-time'].map((b) => (
                 <span key={b} className="rounded-full border-2 border-[#2d3232] bg-white px-3 py-1 shadow-[0_3px_0_0_#2d3232]">
                   {b}
                 </span>
@@ -189,7 +189,7 @@ export default function Home() {
           <h2 className="text-outline text-4xl sm:text-5xl">SẴN SÀNG XUẤT TRẬN?</h2>
           <p className="mt-2 text-lg text-white">Triệu hồi đội quân wobbly của bạn — miễn phí, không cần cài đặt.</p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <Link href="/play?mode=ai" className="btn btn-gold px-8 py-3 text-2xl">
+            <Link href="/play?mode=bot" className="btn btn-gold px-8 py-3 text-2xl">
               ⚔️ CHƠI NGAY
             </Link>
           </div>

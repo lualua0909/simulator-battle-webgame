@@ -32,7 +32,7 @@ export function AdminNav() {
       {item('/admin/users', '👥 Người dùng')}
       {item('/admin/topups', '💳 Nạp xu')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
-      {item('/play?mode=ai', '⚔️ Mở game')}
+      {item('/play?mode=bot', '⚔️ Mở game')}
       <button
         className="mt-2 rounded-lg px-2 py-1.5 text-left text-sm font-bold hover:bg-white"
         onClick={async () => {

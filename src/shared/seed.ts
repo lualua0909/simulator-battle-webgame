@@ -207,11 +207,11 @@ const U = (u: Partial<UnitDef> & Pick<UnitDef, 'id' | 'name' | 'factionId' | 'ro
   spawnUnitId: null,
   spawnInterval: 1,
   spawnMax: 10,
-  // Units up to 150 are free starters; the rest unlock for about 20× their army cost (1 coin = 1 VND).
-  unlockCost: u.cost <= 150 ? 0 : Math.round((u.cost * 20) / 1000) * 1000,
-  cardPrice: Math.min(500, Math.max(5, Math.round(u.cost / 50) * 5)),
+  // Units up to 150 are free starters; the rest unlock for about 20× their army cost, /100.
+  unlockCost: u.cost <= 150 ? 0 : Math.round((u.cost * 20) / 1000) * 10,
+  cardPrice: Math.min(5, Math.max(1, Math.round((Math.round(u.cost / 50) * 5) / 100))),
   starCards: [10, 20, 30, 40, 50],
-  starCoins: [1000, 2000, 4000, 8000, 16000],
+  starCoins: [10, 20, 40, 80, 160],
   ...u,
 });
 
@@ -362,12 +362,10 @@ const maps: MapDef[] = [
 ];
 
 const bots: BotDef[] = [
-  { id: 'tan-binh', name: 'Tân binh', description: 'Chọn quân lộn xộn, ít tiền hơn bạn.', difficulty: 1, budgetMultiplier: 0.8, strategy: 'balanced', factionIds: [], reactive: false, formation: 'scatter', randomness: 0.8, maxUnits: 60 },
-  { id: 'chien-binh', name: 'Chiến binh', description: 'Đội hình cân bằng, ngang tiền.', difficulty: 2, budgetMultiplier: 1, strategy: 'balanced', factionIds: [], reactive: false, formation: 'line', randomness: 0.4, maxUnits: 100 },
-  { id: 'bay-dan', name: 'Bầy đàn', description: 'Tràn ngập lính rẻ.', difficulty: 3, budgetMultiplier: 1, strategy: 'swarm', factionIds: [], reactive: false, formation: 'blob', randomness: 0.3, maxUnits: 150 },
-  { id: 'xa-thu', name: 'Xạ thủ', description: 'Tường khiên phía trước, mưa tên phía sau.', difficulty: 3, budgetMultiplier: 1, strategy: 'ranged', factionIds: [], reactive: false, formation: 'line', randomness: 0.3, maxUnits: 100 },
-  { id: 'tuong-quan', name: 'Tướng quân', description: 'Xem đội hình của bạn rồi mới chọn quân khắc chế.', difficulty: 4, budgetMultiplier: 1.15, strategy: 'counter', factionIds: [], reactive: true, formation: 'wedge', randomness: 0.2, maxUnits: 120 },
-  { id: 'bao-chua', name: 'Bạo chúa', description: 'Quân tinh nhuệ, nhiều tiền hơn hẳn.', difficulty: 5, budgetMultiplier: 1.5, strategy: 'elite', factionIds: [], reactive: true, formation: 'flanks', randomness: 0.1, maxUnits: 120 },
+  { id: 'de', name: 'Dễ', description: 'Quân ít tiền, đánh lộn xộn.', difficulty: 1, budgetMultiplier: 0.8, strategy: 'balanced', factionIds: [], reactive: false, formation: 'scatter', randomness: 0.8, maxUnits: 60 },
+  { id: 'thuong', name: 'Thường', description: 'Đội hình cân bằng, ngang tiền.', difficulty: 2, budgetMultiplier: 1, strategy: 'balanced', factionIds: [], reactive: false, formation: 'line', randomness: 0.4, maxUnits: 100 },
+  { id: 'kho', name: 'Khó', description: 'Xem quân của bạn rồi chọn quân khắc chế.', difficulty: 4, budgetMultiplier: 1.15, strategy: 'counter', factionIds: [], reactive: true, formation: 'wedge', randomness: 0.2, maxUnits: 120 },
+  { id: 'huyen-thoai', name: 'Huyền thoại', description: 'Quân tinh nhuệ, nhiều tiền hơn hẳn.', difficulty: 5, budgetMultiplier: 1.5, strategy: 'elite', factionIds: [], reactive: true, formation: 'flanks', randomness: 0.1, maxUnits: 120 },
 ];
 
 const settings: Settings = {
@@ -393,8 +391,17 @@ const settings: Settings = {
   economy: {
     boxHours: 3,
     starBonus: 0.1,
-    dailyBox: { chest: 'golden', coins: [200, 500], cards: 40, kinds: 3 },
-    hourlyBox: { chest: 'silver', coins: [50, 150], cards: 12, kinds: 2 },
+    dailyBox: { chest: 'golden', coins: [2, 5], cards: 40, kinds: 3 },
+    hourlyBox: { chest: 'silver', coins: [1, 2], cards: 12, kinds: 2 },
+    botBoxes: {
+      '1': { chest: 'wooden', coins: [1, 3], cards: 8, kinds: 2 },
+      '2': { chest: 'silver', coins: [2, 5], cards: 14, kinds: 2 },
+      '3': { chest: 'golden', coins: [3, 8], cards: 20, kinds: 3 },
+      '4': { chest: 'giant', coins: [5, 12], cards: 28, kinds: 3 },
+      '5': { chest: 'magical', coins: [8, 20], cards: 40, kinds: 4 },
+    },
+    botWinBonusPerExtra: 0.5,
+    botWinCooldown: 20,
   },
   siege: {
     defenseBudget: 1,

@@ -72,10 +72,14 @@ export function parseDoc<K extends CollectionName>(collection: K, id: string, da
   // Backward compat (2026-09): starCards default was 100/200/300/400/500, now 10/20/30/40/50.
   // Units saved with the old default show /100 in the collection; map them to the new scale on read
   // so upgrades cost 10 cards without requiring a manual Firestore edit.
+  // Same for starCoins (2026-09): 1000/2000/4000/8000/16000 → 10/20/40/80/160 (/100).
   if (collection === 'units') {
-    const u = doc as unknown as { starCards?: unknown };
+    const u = doc as unknown as { starCards?: unknown; starCoins?: unknown };
     if (Array.isArray(u.starCards) && u.starCards.length === 5 && u.starCards.every((v, i) => v === [100, 200, 300, 400, 500][i])) {
       u.starCards = [10, 20, 30, 40, 50];
+    }
+    if (Array.isArray(u.starCoins) && u.starCoins.length === 5 && u.starCoins.every((v, i) => v === [1000, 2000, 4000, 8000, 16000][i])) {
+      u.starCoins = [10, 20, 40, 80, 160];
     }
   }
   return doc;

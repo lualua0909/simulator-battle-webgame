@@ -35,8 +35,8 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
   const info = hover ?? bundle.units.find((u) => u.id === selected) ?? null;
 
   return (
-    <div className="panel pointer-events-auto flex max-h-[32vh] w-full flex-col gap-1.5 overscroll-contain p-1.5 sm:max-h-[42vh] sm:gap-2 sm:p-2">
-      <div className="flex flex-wrap items-center gap-1 overflow-x-auto overscroll-contain">
+    <div className="panel pointer-events-auto flex max-h-[32vh] w-full min-h-0 flex-col gap-1.5 overflow-hidden overscroll-contain p-1.5 sm:max-h-[42vh] sm:gap-2 sm:p-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-1 overflow-x-auto overscroll-contain py-0.5">
         <Tab active={tab === 'all'} onClick={() => setTab('all')}>
           Tất cả
         </Tab>
@@ -46,8 +46,8 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
           </Tab>
         ))}
       </div>
-      <div className="flex min-h-0 gap-2">
-        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-1 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-[repeat(auto-fill,minmax(108px,1fr))] sm:gap-1.5">
+      <div className="flex min-h-0 flex-1 gap-2">
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(84px,1fr))] content-start gap-1 overflow-y-auto overscroll-contain px-0.5 pb-0.5 pt-1 sm:grid-cols-[repeat(auto-fill,minmax(108px,1fr))] sm:gap-1.5">
           {units.map((u) => {
             const faction = bundle.factions.find((f) => f.id === u.factionId);
             const locked = !isUnlocked(u, player);
@@ -63,8 +63,9 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
                 }}
                 onMouseEnter={() => setHover(u)}
                 onMouseLeave={() => setHover(null)}
-                className={`relative flex touch-pan-y flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 sm:touch-none ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive || locked ? 'opacity-50' : ''} ${draggingId === u.id ? 'opacity-40' : ''}`}
+                className={`relative flex min-w-0 touch-pan-y flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 sm:touch-none ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive || locked ? 'opacity-50' : ''} ${draggingId === u.id ? 'opacity-40' : ''}`}
                 style={{ boxShadow: `inset 0 -4px 0 ${faction?.color ?? '#999'}` }}
+                title={`${u.name} · ${u.cost}`}
               >
                 {thumbs[u.id] ? <img src={thumbs[u.id]} alt="" className={`h-10 w-10 object-contain sm:h-14 sm:w-14 ${locked ? 'grayscale' : ''}`} draggable={false} /> : <div className="h-10 w-10 animate-pulse rounded bg-parch sm:h-14 sm:w-14" />}
                 {locked && <LockIcon size={24} className="absolute right-1 top-1" />}
@@ -74,7 +75,7 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
                     {star}
                   </span>
                 )}
-                <span className="line-clamp-1 w-full text-[12px] leading-tight sm:text-sm">{u.name}</span>
+                <span className="line-clamp-2 flex min-h-[2.2em] w-full items-start justify-center break-words text-[12px] leading-tight sm:text-[13px]">{u.name}</span>
                 <span className="text-[13px] font-bold text-amber-700 sm:text-sm">{u.cost}</span>
               </button>
             );
@@ -95,12 +96,13 @@ function Tab({ active, onClick, children, color }: { active: boolean; onClick():
 }
 
 function UnitInfo({ unit, bundle, star }: { unit: UnitDef; bundle: ConfigBundle; star: number }) {
+  const ARMOR_LABEL: Record<string, string> = { unarmored: 'Không giáp', light: 'Nhẹ', heavy: 'Nặng', beast: 'Quái thú', siege: 'Công thành' };
   const weapon = bundle.weapons.find((w) => w.id === unit.weaponId);
   const skills = unit.skillIds.map((id) => bundle.weapons.find((w) => w.id === id)).filter((w) => !!w);
   const { dps } = unitPower(unit, bundle);
   const scale = starScale(star, bundle.settings.economy.starBonus);
   return (
-    <div className="hidden w-64 shrink-0 overflow-y-auto rounded-lg border-2 border-ink/30 bg-white p-2 text-xs sm:block">
+    <div className="hidden w-64 shrink-0 overflow-y-auto break-words rounded-lg border-2 border-ink/30 bg-white p-2 text-xs sm:block">
       <div className="font-display text-sm">
         {unit.name}
         {star > 0 && <span className="text-amber-700"> · {star} sao</span>}
@@ -124,7 +126,7 @@ function UnitInfo({ unit, bundle, star }: { unit: UnitDef; bundle: ConfigBundle;
           </>
         )}
         <dt>Giáp</dt>
-        <dd className="text-right font-bold">{unit.armorClass}</dd>
+        <dd className="text-right font-bold">{ARMOR_LABEL[unit.armorClass] ?? unit.armorClass}</dd>
       </dl>
       {skills.length > 0 && (
         <p className="mt-1">

@@ -4,7 +4,7 @@ import type { MapDef, UnitDef, WeaponDef } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
 import { generateBotArmy } from '../bot/generate';
 import { generateSiegeDefense, SIEGE_LAYOUTS } from '../bot/siege';
-import { snapToCell, validateArmy, type Armies, type Placement } from './army';
+import { armies as fullArmies, snapToCell, validateArmy, type Armies, type Placement } from './army';
 import { Terrain } from './terrain';
 import { BattleSim, type SimEvent } from './world';
 
@@ -14,9 +14,9 @@ const DUMMY: UnitDef = { ...SEED.units.find((u) => u.id === 'clubber')!, id: 'du
 const CONTENT = { ...SEED, units: [...SEED.units, DUMMY], weapons: [...SEED.weapons, NOOP] };
 
 /** Red defends by default. */
-function siege(armies: Armies, opts: { defense?: 'blue' | 'red' | null; seed?: number; content?: typeof CONTENT } = {}) {
+function siege(armies: Partial<Armies>, opts: { defense?: 'blue' | 'red' | null; seed?: number; content?: typeof CONTENT } = {}) {
   const terrain = new Terrain(ARENA, [], opts.defense === undefined ? 'red' : opts.defense);
-  const sim = new BattleSim(opts.content ?? CONTENT, ARENA, terrain, armies, opts.seed ?? 7);
+  const sim = new BattleSim(opts.content ?? CONTENT, ARENA, terrain, fullArmies(armies), opts.seed ?? 7);
   const events: SimEvent[] = [];
   const run = (seconds: number, each?: () => void) => {
     for (let i = 0; i < seconds * 30 && !sim.result; i++) {
@@ -106,7 +106,7 @@ test('barracks spawn one unit per second up to spawnMax alive', () => {
 
 test('defenders stay inside their zone', () => {
   const a = siege({ blue: [at('dummy', -20, 0)], red: [at('knight', 12, 0), at('knight', 14, 4), core] });
-  const zone = a.terrain.zones.red;
+  const zone = a.terrain.zoneOf('red');
   let min = Infinity;
   a.run(15, () => {
     for (const u of a.sim.units) if (u.side === 'red' && u.alive) min = Math.min(min, u.x);
@@ -197,7 +197,7 @@ test('ninja dash leaps onto an archer on the wall', () => {
 test('a deep river is crossed only at the ford', () => {
   const map: MapDef = { ...ARENA, id: 'ford', size: 120, river: { enabled: true, width: 10, meander: 0, ford: 12 } };
   const terrain = new Terrain(map, [], null);
-  const sim = new BattleSim(CONTENT, map, terrain, { blue: [at('knight', -30, 30)], red: [at('dummy', 30, 30)] }, 5);
+  const sim = new BattleSim(CONTENT, map, terrain, fullArmies({ blue: [at('knight', -30, 30)], red: [at('dummy', 30, 30)] }), 5);
   const knight = sim.units[0];
   let deep = false;
   for (let i = 0; i < 30 * 40; i++) {

@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import PlayerHud from '@/components/player/PlayerHud';
-import HeroBanner from '@/components/home/HeroBanner';
 import { formatTopupCoins, formatVnd, vietqrImageUrl, type TopupOrder, type TopupPackage } from '@/shared/topup';
 
 interface Config {
@@ -137,10 +136,9 @@ export default function TopupClient() {
         </div>
       </header>
 
-      {/* ===== HERO (giống trang chủ: gradient tím + chấm bi + mây + đồi) ===== */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#241a6e] via-[#5b2ee5] to-[#8b5cf6]">
-        <HeroBanner>
-          <div className="relative mx-auto grid max-w-6xl gap-4 px-4 pb-40 pt-8 sm:pb-48 lg:grid-cols-2">
+      {/* ===== NỘI DUNG NẠP (nền đặc, không parallax/kính mờ để dễ đọc trên mobile) ===== */}
+      <section className="bg-[#1a1446]">
+        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 lg:grid-cols-2">
         {/* ---------------- trái: gói + đơn ---------------- */}
         <section className="glass-card p-5">
           <h2 className="text-sm font-bold tracking-[0.2em] text-[#c99a4b]">GÓI NẠP</h2>
@@ -294,8 +292,7 @@ export default function TopupClient() {
           </button>
           {order && <p className="mt-2 text-center text-sm text-white/45">Đơn {order.content} đang chờ duyệt — sau khi chuyển khoản, admin sẽ cộng {formatTopupCoins(order.coins)} trong vài phút.</p>}
         </section>
-          </div>
-        </HeroBanner>
+        </div>
       </section>
 
       {/* ===== DẢI TICKER (giống trang chủ) ===== */}

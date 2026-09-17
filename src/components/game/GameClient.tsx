@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isUnlocked } from '@/shared/economy';
+import { botBoxTier, isUnlocked } from '@/shared/economy';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import { useAuth } from '@/components/auth/AuthProvider';
+import BoxOpening from '@/components/player/BoxOpening';
 import PlayerHud from '@/components/player/PlayerHud';
 import { usePlayer } from '@/components/player/PlayerProvider';
 import type { ArmyStars, BattleStart } from '@/shared/net';
@@ -13,17 +14,21 @@ import { generateSiegeDefense } from '@/game/bot/siege';
 import { useOnline } from '@/game/net/client';
 import { BattleEngine, type BattleStats, type CinematicKind, type PointerInfo } from '@/game/render/engine';
 import { unitThumbnails } from '@/game/render/thumbnails';
-import { armyCost, canField, cellKeyOf, gridCells, isGridStructure, overlapsGrid, sideBudget, snapToCell, type Armies, type Placement } from '@/game/sim/army';
-import { wallCenter, wallIndex, type Side } from '@/game/sim/terrain';
+import { armies as fullArmies, armyCost, canField, cellKeyOf, gridCells, isGridStructure, overlapsGrid, sideBudget, snapToCell, type Armies, type Placement } from '@/game/sim/army';
+import { ALL_SIDES, wallCenter, wallIndex, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import { useConfig } from '@/game/useConfig';
 import UnitPalette from './UnitPalette';
-import { BattleHud, CinematicBars, Handoff, HelpHint, OnlineLobby, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_NAME, type ModeChoice } from './panels';
+import { BattleHud, CinematicBars, Handoff, HelpHint, OnlineLobby, orderedBots, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_BG, SIDE_NAME, type ModeChoice } from './panels';
 
-export type Mode = 'ai' | 'local' | 'online';
+export type Mode = 'bot' | 'local' | 'online';
 type Phase = 'setup' | 'lobby' | 'deploy' | 'handoff' | 'battle' | 'result';
 
-const EMPTY: Armies = { blue: [], red: [] };
+const TWO_SIDES: Side[] = ['blue', 'red'];
+/** Bot mode opponent sides by chosen bot count (siege forces the 1-bot 'red' case). */
+const BOT_OPPONENT_SIDES: Record<number, Side[]> = { 1: ['red'], 2: ['red', 'green'], 3: ['red', 'green', 'yellow'] };
+const SIEGE_BOT_SIDES: Side[] = ['red'];
+const EMPTY: Armies = fullArmies({});
 const randomSeed = () => 1 + Math.floor(Math.random() * (2 ** 31 - 2));
 
 const RANDOM_FILL: BotDef = {
@@ -54,6 +59,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [mapId, setMapId] = useState('');
   const [budget, setBudget] = useState(3000);
   const [botId, setBotId] = useState('');
+  /** Bot mode: how many bot opponents (siege ignores this, always 1). */
+  const [botCount, setBotCount] = useState(1);
   const [blind, setBlind] = useState(true);
   /** Offline mode choice: open battle, or siege with that side defending. */
   const [choice, setChoice] = useState<ModeChoice>('battle');
@@ -66,7 +73,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const dragRef = useRef<{ id: string; pointerId: number } | null>(null);
   const [result, setResult] = useState<BattleResult | null>(null);
-  const [stats, setStats] = useState<BattleStats>({ blue: 0, red: 0, time: 0 });
+  /** Hides the bot-win reward chest once claimed or skipped, until the next battle. */
+  const [rewardClosed, setRewardClosed] = useState(false);
+  const [stats, setStats] = useState<BattleStats>({ alive: {}, time: 0 });
+  /** Sides fighting the current/last battle (online: from the server's battle:start; offline: always blue+red). */
+  const [matchSides, setMatchSides] = useState<Side[]>(TWO_SIDES);
   const [speed, setSpeed] = useState(1);
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -109,6 +120,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       flash(res.ok ? 'Máy chủ đã xác nhận và lưu kết quả trận.' : `Kết quả không được lưu: ${res.error}`);
       if (res.ok) endOnlineRef.current(res.winner);
     },
+    onEliminate: (side, tick) => engine?.eliminate(side, tick),
   });
 
   useEffect(() => {
@@ -120,7 +132,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     if (!bundle) return;
     setMapId((m) => m || bundle.maps[0]?.id || '');
     setBudget(bundle.maps[0]?.budget ?? 3000);
-    setBotId((b) => b || bundle.bots[1]?.id || bundle.bots[0]?.id || '');
+    setBotId((b) => b || bundle.bots.find((x) => x.id === 'thuong')?.id || orderedBots(bundle)[1]?.id || bundle.bots[0]?.id || '');
     setSelected((s) => s ?? [...bundle.units].sort((a, b) => a.cost - b.cost)[0]?.id ?? null);
     void unitThumbnails(bundle).then(setThumbs);
   }, [bundle]);
@@ -163,13 +175,27 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   /** Siege mode: the defending side (null = open battle). */
   const defense: Side | null = mode === 'online' ? net.room?.defense ?? null : choice === 'battle' ? null : choice;
+  /** Bot mode opponents: 1-3 bots on an open battle; siege is always the lone 'red'. */
+  const botSides = mode === 'bot' ? (choice === 'battle' ? BOT_OPPONENT_SIDES[botCount] ?? SIEGE_BOT_SIDES : SIEGE_BOT_SIDES) : SIEGE_BOT_SIDES;
+
+  // Seats currently occupied in the room, as a primitive key so the map only rebuilds when someone
+  // actually joins/leaves (not on every ready/draft update, which also re-broadcasts room:state).
+  const seatKey = mode === 'online' ? ALL_SIDES.map((s) => (net.room?.players[s] ? '1' : '0')).join('') : '';
+  const deploySides = useMemo<Side[] | undefined>(() => {
+    if (mode === 'online') {
+      const list = ALL_SIDES.filter((_, i) => seatKey[i] === '1');
+      return list.length >= 2 ? list : undefined;
+    }
+    if (mode === 'bot' && botSides.length > 1) return ['blue', ...botSides];
+    return undefined;
+  }, [mode, seatKey, botSides]);
 
   useEffect(() => {
     if (!engine || !mapId) return;
-    engine.loadMap(mapId, defense);
+    engine.loadMap(mapId, defense, deploySides);
     setArmies(EMPTY);
     setMapVersion((v) => v + 1);
-  }, [engine, mapId, defense, setArmies]);
+  }, [engine, mapId, defense, deploySides, setArmies]);
 
   // deployment preview
   useEffect(() => {
@@ -196,6 +222,15 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   }, [owned, selected, mySide, defense]);
   const me = mode === 'online' && net.seat ? net.room?.players[net.seat.side] : undefined;
   const locked = mode === 'online' && !!me?.ready;
+
+  // Live-sync the in-progress army while deploying, so a 30s deploy timeout can force-start with
+  // whatever was drafted so far instead of an empty army.
+  useEffect(() => {
+    if (mode !== 'online' || phase !== 'deploy' || locked) return;
+    const id = window.setTimeout(() => net.draft(myArmy), 500);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, phase, locked, myArmy]);
 
   const canPlace = useCallback(
     (x: number, z: number): boolean => {
@@ -307,7 +342,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     if (army.some((p) => units.get(p.unitId)?.structure === 'core')) return;
     const core = bundle.units.find((u) => u.structure === 'core' && canField(u, mySide, defense));
     if (!core) return;
-    const zone = t.zones[mySide];
+    const zone = t.zoneOf(mySide);
     const x = mySide === 'blue' ? zone.x0 + core.radius + 4 : zone.x1 - core.radius - 4;
     setArmies({ ...armiesRef.current, [mySide]: [{ unitId: core.id, x, z: 0 }, ...army] });
   }, [engine, phase, bundle, defense, mySide, locked, armies, units, setArmies, mapVersion]);
@@ -409,14 +444,14 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       engine.setGhost(tool === 'place' && !locked ? selected : null, mySide, canPlace);
     } else if (phase === 'setup' || phase === 'lobby') {
       engine.viewSide('blue');
-      engine.showZones(['blue', 'red']);
+      engine.showZones(mode === 'bot' ? ['blue', ...botSides] : ['blue', 'red']);
       engine.setGhost(null);
       engine.setHidden(null);
     } else {
       engine.showZones([]);
       engine.setGhost(null);
     }
-  }, [engine, phase, mySide, mode, blind, tool, selected, locked, canPlace, mapVersion]);
+  }, [engine, phase, mySide, mode, blind, tool, selected, locked, canPlace, mapVersion, botSides]);
 
   // Re-frame the camera only when the viewing side or map changes (not on every tool change).
   // A fresh entry into deployment plays the establishing flight instead — restarted if the
@@ -456,20 +491,22 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const bot = bundle?.bots.find((b) => b.id === botId);
 
   const botArmy = useCallback(
-    (enemy: Placement[]): Placement[] => {
+    (side: Side, enemy: Placement[]): Placement[] => {
       if (!bundle || !bot || !engine?.terrain) return [];
-      const redBudget = Math.round(sideBudget(bundle.settings, budget, 'red', defense) * bot.budgetMultiplier);
-      if (defense === 'red') return generateSiegeDefense({ bot, content: bundle, terrain: engine.terrain, side: 'red', budget: redBudget, seed: randomSeed() });
-      return generateBotArmy({ bot, content: bundle, terrain: engine.terrain, side: 'red', budget: redBudget, enemy, seed: randomSeed() });
+      const sideBudgetAmt = Math.round(sideBudget(bundle.settings, budget, side, defense) * bot.budgetMultiplier);
+      if (defense === side) return generateSiegeDefense({ bot, content: bundle, terrain: engine.terrain, side, budget: sideBudgetAmt, seed: randomSeed() });
+      return generateBotArmy({ bot, content: bundle, terrain: engine.terrain, side, budget: sideBudgetAmt, enemy, seed: randomSeed() });
     },
     [bundle, bot, engine, budget, defense],
   );
 
   const startBattle = useCallback(
-    (a: Armies, seed = randomSeed(), stars?: Partial<ArmyStars>) => {
+    (a: Armies, seed = randomSeed(), stars?: Partial<ArmyStars>, sides: Side[] = TWO_SIDES) => {
       if (!engine) return;
       setArmies(a);
+      setMatchSides(sides);
       setResult(null);
+      setRewardClosed(false);
       setPaused(false);
       setDesync(false);
       engine.startBattle(a, seed, stars);
@@ -495,7 +532,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   };
   endOnlineRef.current = (winner) => {
     if (phase !== 'battle') return; // already ended locally (normal finish) — this ack is just a confirmation
-    const r: BattleResult = { winner, tick: engine?.sim?.tick ?? 0, reason: 'surrender', survivors: { blue: stats.blue, red: stats.red } };
+    const r: BattleResult = { winner, tick: engine?.sim?.tick ?? 0, reason: 'surrender', survivors: stats.alive };
     setResult(r);
     const show = () => setPhase((p) => (p === 'battle' ? 'result' : p));
     if (winner === 'draw') return void window.setTimeout(show, 1200);
@@ -504,32 +541,35 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const surrenderOnline = () => net.surrender();
   onStartRef.current = (s) => {
     if (bundle && s.configVersion !== bundle.version) flash('Cảnh báo: cấu hình game khác máy chủ — hãy tải lại trang để đồng bộ.');
-    if (engine && (engine.map?.id !== s.mapId || (engine.terrain?.defense ?? null) !== s.defense)) {
-      engine.loadMap(s.mapId, s.defense);
+    const loaded = engine?.terrain?.activeSides;
+    const sameSides = !!loaded && loaded.length === s.activeSides.length && loaded.every((v, i) => v === s.activeSides[i]);
+    if (engine && (engine.map?.id !== s.mapId || (engine.terrain?.defense ?? null) !== s.defense || !sameSides)) {
+      engine.loadMap(s.mapId, s.defense, s.activeSides);
       setMapVersion((v) => v + 1);
     }
-    startBattle(s.armies, s.seed, s.stars);
+    startBattle(s.armies, s.seed, s.stars, s.activeSides);
   };
 
   const enterDeploy = () => {
     setSide('blue');
     setResult(null);
-    const next: Armies = { blue: [], red: [] };
-    if (mode === 'ai' && bot && !bot.reactive) next.red = botArmy([]);
+    const next: Armies = fullArmies({});
+    if (mode === 'bot' && bot && !bot.reactive) for (const s of botSides) next[s] = botArmy(s, []);
     setArmies(next);
     introPending.current = true;
     setPhase('deploy');
   };
 
-  /** Against the AI the player's upgraded units fight with their stars (local 2-player: none). */
-  const aiStars = useMemo<Partial<ArmyStars>>(() => ({ blue: player?.stars ?? {} }), [player]);
+  /** Against the bot the player's upgraded units fight with their stars (local 2-player: none). */
+  const botStars = useMemo<Partial<ArmyStars>>(() => ({ blue: player?.stars ?? {} }), [player]);
 
   const primaryAction = async () => {
     if (!bundle) return;
     if (myArmy.length === 0) return flash('Hãy đặt ít nhất 1 lính');
-    if (mode === 'ai') {
-      const red = bot?.reactive ? botArmy(armiesRef.current.blue) : armiesRef.current.red;
-      startBattle({ blue: armiesRef.current.blue, red }, randomSeed(), aiStars);
+    if (mode === 'bot') {
+      const next = fullArmies({ blue: armiesRef.current.blue });
+      for (const s of botSides) next[s] = bot?.reactive ? botArmy(s, armiesRef.current.blue) : armiesRef.current[s];
+      startBattle(next, randomSeed(), botStars, ['blue', ...botSides]);
     } else if (mode === 'local') {
       if (side === 'blue') setPhase('handoff');
       else startBattle(armiesRef.current);
@@ -593,9 +633,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   const totals = useMemo(() => {
     const count = (army: Placement[]) => army.filter((p) => units.get(p.unitId)?.structure !== 'wall').length;
-    return { blue: count(armies.blue), red: count(armies.red) };
-  }, [armies, units]);
-  const resultSide: Side | undefined = mode === 'online' ? net.seat?.side : mode === 'ai' ? 'blue' : undefined;
+    const out: Partial<Record<Side, number>> = {};
+    for (const s of matchSides) out[s] = count(armies[s]);
+    return out;
+  }, [armies, units, matchSides]);
+  const resultSide: Side | undefined = mode === 'online' ? net.seat?.side : mode === 'bot' ? 'blue' : undefined;
 
   // ------------------------------------------------------------------ render
   return (
@@ -611,13 +653,13 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         )}
 
         {bundle && phase === 'setup' && mode !== 'online' && (
-          <div className="my-auto">
-            <SetupPanel bundle={bundle} mode={mode} mapId={mapId} setMapId={setMapId} budget={budget} setBudget={setBudget} botId={botId} setBotId={setBotId} blind={blind} setBlind={setBlind} choice={choice} setChoice={setChoice} onStart={enterDeploy} />
+          <div className="pointer-events-auto m-auto flex max-h-full min-h-0 w-full justify-center overflow-y-auto overscroll-contain touch-pan-y">
+            <SetupPanel bundle={bundle} mode={mode} mapId={mapId} setMapId={setMapId} budget={budget} setBudget={setBudget} botId={botId} setBotId={setBotId} botCount={botCount} setBotCount={setBotCount} blind={blind} setBlind={setBlind} choice={choice} setChoice={setChoice} onStart={enterDeploy} />
           </div>
         )}
 
         {bundle && phase === 'lobby' && (
-          <div className="my-auto">
+          <div className="pointer-events-auto m-auto flex max-h-full min-h-0 w-full justify-center overflow-y-auto overscroll-contain touch-pan-y">
             <OnlineLobby
               playerName={user ? user.displayName || user.email || '' : null}
               authLoading={authLoading}
@@ -650,20 +692,20 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
         {bundle && phase === 'deploy' && !cine && (
           <>
-            <div className="flex items-start gap-1.5 sm:gap-2">
-              <div className="panel pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-y-auto overscroll-contain p-1.5 sm:max-h-none sm:flex-none sm:gap-2 sm:overflow-visible sm:p-2 max-h-[30vh]">
+            <div className="flex flex-wrap items-start gap-1.5 sm:gap-2">
+              <div className="panel pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-y-auto overscroll-contain p-1.5 sm:gap-2 sm:overflow-visible sm:p-2 max-h-[30vh] sm:max-h-none">
                 <Link href="/" className="btn px-2 py-1 text-sm" aria-label="Về menu">
                   ←
                 </Link>
-                <span className={`rounded-lg px-1.5 py-1 font-display text-white sm:px-2 ${mySide === 'blue' ? 'bg-blue-team' : 'bg-red-team'}`}>
+                <span className={`rounded-lg px-1.5 py-1 font-display text-white sm:px-2 ${SIDE_BG[mySide]}`}>
                   <span className="hidden sm:inline">Phe </span>
                   {SIDE_NAME[mySide]}
                   {defense && <span className="hidden sm:inline">{defense === mySide ? ' · 🏰 Thủ thành' : ' · 🔥 Công thành'}</span>}
                 </span>
-                <div className="w-28 sm:w-44">
-                  <div className="flex justify-between text-xs font-bold">
-                    <span>Ngân sách</span>
-                    <span className={spent > myBudget ? 'text-red-team' : ''}>
+                <div className="w-36 shrink-0 sm:w-52">
+                  <div className="flex items-baseline justify-between gap-2 text-xs font-bold">
+                    <span className="whitespace-nowrap">Ngân sách</span>
+                    <span className={`whitespace-nowrap tabular-nums ${spent > myBudget ? 'text-red-team' : ''}`}>
                       {spent}/{myBudget}
                     </span>
                   </div>
@@ -700,12 +742,12 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   🗑<span className="hidden sm:inline"> Xóa hết</span>
                 </button>
               </div>
-              <div className="ml-auto flex shrink-0 flex-col items-end gap-2">
-                <div className="hidden sm:block">
+              <div className="ml-auto flex min-w-0 max-w-full shrink-0 flex-col items-end gap-2">
+                <div className="hidden max-w-full sm:block">
                   <PlayerHud bundle={bundle} />
                 </div>
-                <button className={`btn pointer-events-auto px-2 py-1 text-base sm:px-4 sm:py-2 sm:text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
-                  {mode === 'ai' ? (
+                <button className={`btn pointer-events-auto max-w-full px-2 py-1 text-base sm:px-4 sm:py-2 sm:text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
+                  {mode === 'bot' ? (
                     <>
                       ⚔<span className="hidden sm:inline"> Bắt đầu!</span>
                     </>
@@ -730,9 +772,13 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   )}
                 </button>
                 {mode === 'online' && net.room && net.seat && <RoomBar bundle={bundle} room={net.room} mySide={net.seat.side} onSettings={net.settings} />}
-                {mode === 'ai' && bot && (
-                  <div className="panel pointer-events-auto hidden p-2 text-xs sm:block">
-                    Đối thủ: <b>{bot.name}</b> · {bot.reactive ? 'sẽ chọn quân sau khi xem đội hình của bạn' : `${totals.red} lính (${armyCost(bundle, armies.red)})`}
+                {mode === 'bot' && bot && (
+                  <div className="panel pointer-events-auto hidden max-w-[calc(100vw-1.5rem)] p-2 text-xs sm:block">
+                    Đối thủ: <b>{bot.name}</b>
+                    {botSides.length > 1 ? ` ×${botSides.length}` : ''} ·{' '}
+                    {bot.reactive
+                      ? 'sẽ chọn quân sau khi xem đội hình của bạn'
+                      : `${botSides.reduce((n, s) => n + (totals[s] ?? 0), 0)} lính (${botSides.reduce((n, s) => n + armyCost(bundle, armies[s]), 0)})`}
                   </div>
                 )}
               </div>
@@ -754,7 +800,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   budgetLeft={myBudget - spent}
                   available={(u) => canField(u, mySide, defense)}
                   player={player}
-                  stars={mode === 'ai' || (mode === 'online' && net.room?.useStars) ? player?.stars : undefined}
+                  stars={mode === 'bot' || (mode === 'online' && net.room?.useStars) ? player?.stars : undefined}
                 />
               </div>
             </div>
@@ -763,6 +809,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
         {bundle && (phase === 'battle' || phase === 'result') && !cine && (
           <BattleHud
+            activeSides={matchSides}
             stats={stats}
             total={totals}
             speed={speed}
@@ -785,9 +832,19 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           result={result}
           mySide={resultSide}
           siege={!!(engine?.sim?.defense ?? defense)}
-          onRematch={mode === 'online' ? backToDeploy : () => startBattle(armiesRef.current, randomSeed(), mode === 'ai' ? aiStars : undefined)}
+          onRematch={mode === 'online' ? backToDeploy : () => startBattle(armiesRef.current, randomSeed(), mode === 'bot' ? botStars : undefined, mode === 'bot' ? ['blue', ...botSides] : TWO_SIDES)}
           rematchLabel={mode === 'online' ? 'Trận mới' : 'Đấu lại'}
           onEdit={backToDeploy}
+        />
+      )}
+      {bundle && user && mode === 'bot' && bot && phase === 'result' && result && result.winner === 'blue' && !rewardClosed && (
+        <BoxOpening
+          bundle={bundle}
+          action={{ action: 'bot-win', botId: bot.id, botCount: botSides.length }}
+          title={`Chiến lợi phẩm: ${bot.name}`}
+          chest={botBoxTier(bundle.settings.economy, bot.difficulty).chest}
+          thumbs={thumbs}
+          onClose={() => setRewardClosed(true)}
         />
       )}
       {phase === 'handoff' && (

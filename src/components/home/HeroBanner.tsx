@@ -109,7 +109,7 @@ function useSunsetParallax(
 // Bọc trong <section className="relative overflow-hidden ..."> ở page.tsx.
 // `children` = nội dung core (badge + tiêu đề + mô tả), luôn render trừ khi
 // mode 'replace' và ảnh load thành công. Ảnh lỗi/missing → tự rớt về hero CSS cũ.
-export default function HeroBanner({ children }: { children: React.ReactNode }) {
+export default function HeroBanner({ children, parallax = true }: { children: React.ReactNode; parallax?: boolean }) {
   const [missing, setMissing] = useState(false);
   // Mỏ neo để tìm <section> hero chứa banner (đo chiều cao tính parallax).
   const anchorRef = useRef<HTMLDivElement | null>(null);
@@ -120,7 +120,8 @@ export default function HeroBanner({ children }: { children: React.ReactNode }) 
 
   // Decor CSS (có mặt trời) chỉ tồn tại khi ảnh nền missing; chạy lại hook
   // khi `missing` đổi để gán đúng transform cho node vừa mount giữa chừng.
-  const parallaxOn = HERO_BANNER_MODE !== 'replace' || missing;
+  // Trang dài (vd: nạp xu) truyền parallax={false} để tắt hiệu ứng mờ khi cuộn.
+  const parallaxOn = parallax && (HERO_BANNER_MODE !== 'replace' || missing);
   useSunsetParallax(anchorRef, sunRef, cloudsRef, hillsRef, contentRef, parallaxOn, String(missing));
 
   if (HERO_BANNER_MODE === 'replace') {
