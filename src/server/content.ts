@@ -64,9 +64,21 @@ export function parseDoc<K extends CollectionName>(collection: K, id: string, da
     }
   }
   const parsed = COLLECTION_SCHEMAS[collection].safeParse(raw);
-  if (parsed.success) return parsed.data as CollectionDocs[K];
-  console.error(`Nội dung ${collection}/${id} không hợp lệ, bỏ qua:`, parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-  return null;
+  if (!parsed.success) {
+    console.error(`Nội dung ${collection}/${id} không hợp lệ, bỏ qua:`, parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
+    return null;
+  }
+  const doc = parsed.data as CollectionDocs[K];
+  // Backward compat (2026-09): starCards default was 100/200/300/400/500, now 10/20/30/40/50.
+  // Units saved with the old default show /100 in the collection; map them to the new scale on read
+  // so upgrades cost 10 cards without requiring a manual Firestore edit.
+  if (collection === 'units') {
+    const u = doc as unknown as { starCards?: unknown };
+    if (Array.isArray(u.starCards) && u.starCards.length === 5 && u.starCards.every((v, i) => v === [100, 200, 300, 400, 500][i])) {
+      u.starCards = [10, 20, 30, 40, 50];
+    }
+  }
+  return doc;
 }
 
 function parseSettings(data: DocumentData): Settings | null {

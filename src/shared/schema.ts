@@ -104,7 +104,7 @@ export const unitSchema = z.object({
   starCards: z
     .array(z.number().int().min(1).max(100_000))
     .length(STAR_MAX)
-    .default(() => [100, 200, 300, 400, 500]),
+    .default(() => [10, 20, 30, 40, 50]),
   /** Coins paid to reach star 1…5. */
   starCoins: z
     .array(z.number().int().min(0).max(100_000_000))

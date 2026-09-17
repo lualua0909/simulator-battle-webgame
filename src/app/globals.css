@@ -14,6 +14,10 @@
   --color-gold: #f2b83a;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
   height: 100%;
@@ -278,19 +282,16 @@ button.cr-card {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  border: 2px solid #16181b;
-  background: linear-gradient(180deg, rgba(52, 94, 170, 0.94), rgba(28, 52, 108, 0.94));
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.2),
-    0 3px 0 #16181b;
+  background: transparent;
+  border: none;
+  box-shadow: none;
   transition: transform 0.15s;
 }
 .reward-slot:hover {
   transform: translateY(-2px);
 }
 .reward-slot-ready {
-  background: linear-gradient(180deg, rgba(255, 200, 70, 0.96), rgba(224, 140, 26, 0.96));
+  background: transparent;
 }
 .reward-badge {
   position: absolute;
@@ -387,5 +388,263 @@ button.cr-card {
   .chest-wobble,
   .reward-pop {
     animation: none;
+  }
+}
+
+/* Glass card (trang nạp xu): kính mờ trên nền hero tím. */
+.glass-card {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(12.7px);
+  -webkit-backdrop-filter: blur(12.7px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ============================================================
+   HOME — game title 3D nổi khối + Unite-style hero
+   ============================================================ */
+
+/* Khung cảnh tiêu đề: giữ chỗ cho hào quang + tia lấp lánh */
+.title-scene {
+  position: relative;
+  padding: 1.5rem 1rem 1rem;
+}
+
+.title-glow {
+  position: absolute;
+  inset: -6% -10%;
+  background: radial-gradient(ellipse at 50% 55%, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.12) 45%, transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+  animation: glow-pulse 3.2s ease-in-out infinite;
+}
+
+.title-tilt {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.25s ease-out;
+  will-change: transform;
+}
+
+/* Xuất hiện: nảy lên kiểu logo game */
+.title-pop {
+  animation: title-pop-in 0.7s cubic-bezier(0.2, 1.6, 0.35, 1) both;
+}
+
+/* Chữ khối 3D: viền dày + nhiều lớp shadow xếp chồng tạo chiều sâu extrude */
+.title-3d {
+  position: relative;
+  display: inline-block;
+  font-family: var(--font-display), 'Clash', ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(2.6rem, 9vw, 5.5rem);
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  -webkit-text-stroke: 3px #2d3232;
+  paint-order: stroke fill;
+}
+
+.title-3d-white {
+  color: #fff;
+  text-shadow:
+    0 1px 0 #2d3232,
+    0 2px 0 #2d3232,
+    0 3px 0 #2d3232,
+    0 4px 0 #2d3232,
+    0 5px 0 #2d3232,
+    0 6px 0 #2d3232,
+    0 7px 0 #2d3232,
+    0 8px 0 #2d3232,
+    0 14px 0 rgba(45, 50, 50, 0.18),
+    0 18px 28px rgba(20, 30, 60, 0.45);
+}
+
+.title-3d-gold {
+  color: #ffc233;
+  -webkit-text-stroke: 3px #2d3232;
+  text-shadow:
+    0 1px 0 #2d3232,
+    0 2px 0 #2d3232,
+    0 3px 0 #7a4a00,
+    0 4px 0 #7a4a00,
+    0 5px 0 #7a4a00,
+    0 6px 0 #7a4a00,
+    0 7px 0 #7a4a00,
+    0 8px 0 #7a4a00,
+    0 14px 0 rgba(122, 74, 0, 0.25),
+    0 18px 28px rgba(120, 60, 0, 0.5);
+}
+
+/* Vệt sáng quét ngang qua chữ */
+.title-3d::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.95) 50%, transparent 58%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: title-shine 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Nổi lơ lửng: 2 dòng lệch pha nhau */
+.title-float {
+  animation: title-float 3.4s ease-in-out infinite;
+}
+.title-float-delayed {
+  animation: title-float 3.4s ease-in-out -1.7s infinite;
+}
+
+/* Tia lấp lánh quanh tiêu đề */
+.title-spark {
+  position: absolute;
+  color: #fff;
+  text-shadow: 0 0 8px #ffd23f, 0 0 18px #ffd23f;
+  animation: spark-twinkle 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes title-pop-in {
+  0% { opacity: 0; transform: scale(0.4) translateY(50px) rotate(-4deg); }
+  60% { opacity: 1; transform: scale(1.08) translateY(-6px) rotate(1.5deg); }
+  80% { transform: scale(0.97) translateY(2px) rotate(0deg); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes title-float {
+  0%, 100% { transform: translateY(0) rotate(-0.6deg); }
+  50% { transform: translateY(-10px) rotate(0.6deg); }
+}
+@keyframes title-shine {
+  0%, 55% { background-position: 120% 0; }
+  85%, 100% { background-position: -120% 0; }
+}
+@keyframes spark-twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.6) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.25) rotate(25deg); }
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+/* --- Hero Unite-style: mây trôi, nền chấm bi, dải zigzag --- */
+@keyframes cloud-drift {
+  from { transform: translateX(-15%); }
+  to { transform: translateX(115%); }
+}
+.cloud {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  filter: blur(1px);
+  animation: cloud-drift linear infinite;
+  pointer-events: none;
+}
+.cloud::before,
+.cloud::after {
+  content: '';
+  position: absolute;
+  background: inherit;
+  border-radius: 999px;
+}
+
+.hero-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.35) 2px, transparent 2.5px);
+  background-size: 26px 26px;
+}
+
+.zigzag {
+  height: 22px;
+  background:
+    linear-gradient(-45deg, transparent 16px, var(--zz, #fff) 0),
+    linear-gradient(45deg, transparent 16px, var(--zz, #fff) 0);
+  background-size: 32px 32px;
+  background-position: 0 0;
+}
+
+/* Thẻ chế độ chơi: nhấc lên + đổ bóng khi hover (chỉ khi có hover thật) */
+.mode-card {
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease-out, filter 0.18s ease-out;
+}
+@media (hover: hover) {
+  .mode-card:hover {
+    transform: translateY(-8px) rotate(-0.5deg) scale(1.02);
+    filter: saturate(1.08);
+  }
+  .mode-card:hover .mode-cta {
+    transform: translateX(4px);
+  }
+}
+.mode-card:active {
+  transform: translateY(-2px) scale(0.99);
+}
+.mode-cta {
+  transition: transform 0.18s ease-out;
+}
+
+/* Dải badge chạy kiểu Unite */
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-x 22s linear infinite;
+}
+
+@keyframes bounce-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.bounce-soft {
+  animation: bounce-soft 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-pop, .title-float, .title-float-delayed,
+  .title-3d::after, .title-spark, .title-glow,
+  .cloud, .marquee-track, .bounce-soft {
+    animation: none;
+  }
+  .title-tilt { transition: none; }
+}
+
+/* ============================================================
+   SCROLL REVEAL — hiện dần khối nội dung khi cuộn tới.
+   Dùng kèm <Reveal variant="up|left|right|zoom|fade" delay={ms}>.
+   ============================================================ */
+.reveal {
+  opacity: 0;
+  will-change: opacity, transform;
+  transition:
+    opacity 0.65s ease-out,
+    transform 0.65s cubic-bezier(0.2, 1.1, 0.35, 1);
+}
+.reveal-up { transform: translateY(30px) scale(0.985); }
+.reveal-left { transform: translateX(-42px); }
+.reveal-right { transform: translateX(42px); }
+.reveal-zoom { transform: scale(0.88); }
+.reveal-fade { transform: none; }
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+/* Neo anchor khỏi bị header sticky che khi bấm nav */
+#choi-ngay, #cach-choi, #tinh-nang {
+  scroll-margin-top: 72px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }

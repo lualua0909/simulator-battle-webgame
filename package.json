@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "db:reset": "tsx scripts/db-reset.ts",
+    "db:migrate-star-cards": "tsx scripts/migrate-star-cards.ts",
     "shots": "tsx scripts/screenshots.ts"
   },
   "dependencies": {

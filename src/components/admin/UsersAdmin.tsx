@@ -269,6 +269,7 @@ const LEDGER_LABELS: Record<LedgerType, string> = {
   upgrade: 'Nâng sao',
   'buy-cards': 'Mua thẻ',
   admin: 'Admin cộng/trừ',
+  topup: 'Nạp xu (duyệt đơn)',
 };
 
 /** Coins, collection summary and ledger of one player; root/admin who manage the user can add or remove coins. */

@@ -22,10 +22,10 @@ import WeeklyReward from './WeeklyReward';
 
 export function CoinBar({ value, loading }: { value: number; loading?: boolean }) {
   return (
-    <div className="coin-bar" title="Coin (1 coin = 1 VNĐ)">
+    <Link href="/nap-xu" className="coin-bar" title="Nạp xu (bấm để nạp)">
       <span className="text-outline ml-auto text-xl leading-none tabular-nums">{loading ? '…' : formatCoins(value)}</span>
       <CoinIcon size={42} className="absolute -right-4 top-1/2 -translate-y-1/2 drop-shadow" />
-    </div>
+    </Link>
   );
 }
 
@@ -115,7 +115,7 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
             <ChestThumb variant={economy.dailyBox.chest} wobble size={46} />
           </button>
         ) : (
-          <button className={`reward-slot ${status.hourly.ready ? 'reward-slot-ready' : ''}`} onClick={() => status.hourly.ready && setOpening('hourly')} title={`Hộp ${economy.boxHours.toLocaleString('vi-VN')} giờ`}>
+          <button className={`reward-slot ${status.hourly.ready ? 'reward-slot-ready' : ''}`} onClick={() => status.hourly.ready && setOpening('hourly')} title={`Hộp ${economy.boxHours.toLocaleString('en-US')} giờ`}>
             <ChestThumb variant={economy.hourlyBox.chest} wobble={status.hourly.ready} size={46} />
             {!status.hourly.ready && <span className="reward-badge">{countdown((status.hourly.readyAt ?? 0) - now())}</span>}
           </button>
@@ -152,7 +152,7 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
         <BoxOpening
           bundle={bundle}
           kind={opening}
-          title={opening === 'daily' ? 'Hộp quà hằng ngày' : `Hộp ${economy.boxHours.toLocaleString('vi-VN')} giờ`}
+          title={opening === 'daily' ? 'Hộp quà hằng ngày' : `Hộp ${economy.boxHours.toLocaleString('en-US')} giờ`}
           chest={opening === 'daily' ? economy.dailyBox.chest : economy.hourlyBox.chest}
           thumbs={thumbs}
           onClose={() => setOpening(null)}

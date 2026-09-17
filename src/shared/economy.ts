@@ -57,7 +57,7 @@ export function starScale(star: number, bonus: number): number {
 }
 
 export function formatCoins(n: number): string {
-  return n.toLocaleString('vi-VN');
+  return n.toLocaleString('en-US');
 }
 
 // ---------------------------------------------------------------- boxes
@@ -165,7 +165,7 @@ export function rollBox(units: readonly Pick<UnitDef, 'id' | 'cost'>[], box: Box
 
 // ---------------------------------------------------------------- changes
 
-export const LEDGER_TYPES = ['daily-box', 'hourly-box', 'unlock', 'upgrade', 'buy-cards', 'admin'] as const;
+export const LEDGER_TYPES = ['daily-box', 'hourly-box', 'unlock', 'upgrade', 'buy-cards', 'admin', 'topup'] as const;
 export type LedgerType = (typeof LEDGER_TYPES)[number];
 
 /** One audit line in `players/{uid}/ledger`. */
@@ -273,4 +273,11 @@ export function adjustCoins(p: PlayerState, delta: number, note: string, by: str
   if (p.coins + delta < 0) throw new EconomyError(`Không trừ được ${formatCoins(-delta)} coin: ví chỉ có ${formatCoins(p.coins)}`);
   const coins = p.coins + delta;
   return { state: { ...p, coins }, entry: { type: 'admin', coins: delta, balance: coins, note, by } };
+}
+
+/** Cộng xu khi admin duyệt đơn nạp (ghi sổ loại `topup` để phân biệt với cộng tay). */
+export function creditTopup(p: PlayerState, coins: number, content: string, amountVnd: number, by: string): Change {
+  if (!Number.isInteger(coins) || coins <= 0) throw new EconomyError('Số xu nạp không hợp lệ');
+  const next = p.coins + coins;
+  return { state: { ...p, coins: next }, entry: { type: 'topup', coins, balance: next, note: `Nạp ${amountVnd.toLocaleString('en-US')}đ (${content})`, by } };
 }

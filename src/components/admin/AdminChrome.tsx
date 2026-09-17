@@ -30,6 +30,7 @@ export function AdminNav() {
       {COLLECTIONS.filter((c) => c !== 'units').map((c) => item(`/admin/c/${c}`, `${COLLECTION_SPECS[c].icon} ${COLLECTION_SPECS[c].label}`))}
       {item('/admin/settings', '⚙️ Cài đặt & khắc chế')}
       {item('/admin/users', '👥 Người dùng')}
+      {item('/admin/topups', '💳 Nạp xu')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
       {item('/play?mode=ai', '⚔️ Mở game')}
       <button

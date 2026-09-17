@@ -1,0 +1,316 @@
+'use client';
+
+// Trang nạp xu: chọn gói → tạo đơn → quét QR VietQR động (số tiền + nội dung CK của đơn).
+// Giao diện bám ảnh mẫu: nền tối, 2 thẻ (trái: gói + thông tin CK, phải: hướng dẫn + QR).
+import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
+import { useAuth } from '@/components/auth/AuthProvider';
+import PlayerHud from '@/components/player/PlayerHud';
+import HeroBanner from '@/components/home/HeroBanner';
+import { formatTopupCoins, formatVnd, vietqrImageUrl, type TopupOrder, type TopupPackage } from '@/shared/topup';
+
+interface Config {
+  bank: { bankId: string; bankName: string; accountNo: string; accountName: string };
+  packages: TopupPackage[];
+  pending: TopupOrder | null;
+  orders: TopupOrder[];
+}
+
+const STATUS_CLS: Record<string, string> = {
+  pending: 'bg-amber-400/15 text-amber-300 border-amber-300/30',
+  confirmed: 'bg-emerald-400/15 text-emerald-300 border-emerald-300/30',
+  cancelled: 'bg-white/5 text-white/40 border-white/15',
+};
+const STATUS_TXT: Record<string, string> = { pending: 'Đang chờ duyệt', confirmed: 'Đã cộng xu', cancelled: 'Đã huỷ' };
+
+const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 5 CẤP ĐỘ', '🌐 ONLINE REAL-TIME', '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', '🏆 BẢNG XẾP HẠNG'];
+
+async function copy(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export default function TopupClient() {
+  const { user, loading: authLoading, openAuth } = useAuth();
+  const [cfg, setCfg] = useState<Config | null>(null);
+  const [pkg, setPkg] = useState(0);
+  const [order, setOrder] = useState<TopupOrder | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [qrOk, setQrOk] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/topup', { cache: 'no-store' });
+      const data = (await res.json()) as Config & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? 'Không tải được');
+      setCfg(data);
+      if (data.pending) {
+        setOrder(data.pending);
+        const idx = data.packages.findIndex((p) => p.vnd === data.pending!.amountVnd && p.coins === data.pending!.coins);
+        if (idx >= 0) setPkg(idx);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+  useEffect(() => setQrOk(true), [order?.id]);
+
+  const create = async () => {
+    if (!user) return openAuth('signin');
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/topup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ packageIndex: pkg }) });
+      const data = (await res.json()) as { order?: TopupOrder; error?: string };
+      if (!res.ok || !data.order) throw new Error(data.error ?? 'Chưa tạo được đơn');
+      setOrder(data.order);
+      void load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadQr = async () => {
+    if (!order) return;
+    const url = vietqrImageUrl(order);
+    try {
+      const r = await fetch(url);
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `nap-xu-${order.content}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
+
+  const onCopy = async (key: string, text: string) => {
+    if (await copy(text)) {
+      setCopied(key);
+      setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500);
+    }
+  };
+
+  const packages = cfg?.packages ?? [];
+  const selected = packages[pkg];
+  const bank = order?.bank ?? cfg?.bank;
+  const qr = order ? vietqrImageUrl(order) : null;
+
+  return (
+    <main className="game-ui relative min-h-screen bg-[#1a1446]">
+      {/* ===== NAV BAR (giống trang chủ) ===== */}
+      <header className="sticky top-0 z-20 border-b-[3px] border-[#2d3232] bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#2d3232] bg-gradient-to-b from-[#ffd76a] to-[#f59e0b] text-2xl">⚔️</span>
+            <span className="leading-none">
+              <span className="block text-lg tracking-wide">MINI BATTLE</span>
+              <span className="block text-sm text-[#b25b00]">NẠP XU</span>
+            </span>
+          </Link>
+          <nav className="hidden items-center gap-4 md:flex" aria-label="Điều hướng">
+            <Link href="/#choi-ngay" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+              Chơi ngay
+            </Link>
+            <Link href="/#cach-choi" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+              Cách chơi
+            </Link>
+            <Link href="/#tinh-nang" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+              Tính năng
+            </Link>
+          </nav>
+          <PlayerHud />
+        </div>
+      </header>
+
+      {/* ===== HERO (giống trang chủ: gradient tím + chấm bi + mây + đồi) ===== */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-[#241a6e] via-[#5b2ee5] to-[#8b5cf6]">
+        <HeroBanner>
+          <div className="relative mx-auto grid max-w-6xl gap-4 px-4 pb-40 pt-8 sm:pb-48 lg:grid-cols-2">
+        {/* ---------------- trái: gói + đơn ---------------- */}
+        <section className="glass-card p-5">
+          <h2 className="text-sm font-bold tracking-[0.2em] text-[#c99a4b]">GÓI NẠP</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {packages.map((p, i) => (
+              <button
+                key={p.vnd}
+                onClick={() => setPkg(i)}
+                className={`rounded-xl border px-4 py-3 text-left transition ${i === pkg ? 'border-[#e8b34a] bg-white/[0.06] shadow-[0_0_0_1px_#e8b34a]' : 'border-white/10 bg-white/[0.02] hover:border-white/25'}`}
+              >
+                <span className="text-base text-white">{formatVnd(p.vnd)} = {p.coins} xu</span>
+              </button>
+            ))}
+            {packages.length === 0 && <p className="col-span-2 text-white/50">Đang tải gói nạp…</p>}
+          </div>
+
+          <h2 className="mt-6 text-sm font-bold tracking-[0.2em] text-[#c99a4b]">TẠO ĐƠN & QUÉT MÃ QR</h2>
+          <p className="mt-1 text-white/55">Giữ nguyên số tiền và nội dung chuyển khoản để hệ thống khớp lệnh nhanh.</p>
+
+          {bank && (
+            <div className="mt-4 rounded-xl bg-white/[0.05] p-4">
+              <dl className="flex flex-col gap-2 text-[15px]">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-white/50">Ngân hàng</dt>
+                  <dd className="font-bold text-white">{bank.bankName}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-white/50">Chủ tài khoản</dt>
+                  <dd className="font-bold text-white">{bank.accountName}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-white/50">Số tài khoản</dt>
+                  <dd className="flex items-center gap-2 font-bold tracking-wider text-white">
+                    {bank.accountNo}
+                    <button onClick={() => void onCopy('stk', bank.accountNo)} className="rounded-md border border-white/15 px-1.5 py-0.5 text-xs text-white/70 hover:bg-white/10" title="Sao chép STK">
+                      {copied === 'stk' ? 'Đã chép ✓' : 'Chép'}
+                    </button>
+                  </dd>
+                </div>
+                {order && (
+                  <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-2">
+                    <dt className="text-white/50">Nội dung CK</dt>
+                    <dd className="flex items-center gap-2 font-bold tracking-widest text-[#ffd76a]">
+                      {order.content}
+                      <button onClick={() => void onCopy('content', order.content)} className="rounded-md border border-[#e8b34a]/40 px-1.5 py-0.5 text-xs text-[#ffd76a] hover:bg-[#e8b34a]/10" title="Sao chép nội dung">
+                        {copied === 'content' ? 'Đã chép ✓' : 'Chép'}
+                      </button>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          )}
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <div className="text-sm text-white/45">Số tiền</div>
+              <div className="text-right text-lg text-white">{selected ? formatVnd(selected.vnd) : '—'}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <div className="text-sm text-white/45">Xu nhận được</div>
+              <div className="text-right text-lg text-white">{selected ? formatTopupCoins(selected.coins) : '—'}</div>
+            </div>
+          </div>
+
+          {error && <p className="mt-3 rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p>}
+
+          {!user && !authLoading && (
+            <button onClick={() => openAuth('signin')} className="mt-4 w-full rounded-xl bg-gradient-to-b from-[#f5c86a] to-[#d99a2b] px-4 py-3 font-bold text-[#3a2500]">
+              Đăng nhập để nạp xu
+            </button>
+          )}
+
+          <Link href="/" className="mt-4 block text-center font-bold text-[#d9a441] hover:underline">
+            Quay lại trang chính
+          </Link>
+
+          {cfg && cfg.orders.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-bold tracking-wider text-white/60">ĐƠN GẦN ĐÂY</h3>
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {cfg.orders.slice(0, 5).map((o) => (
+                  <li key={o.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
+                    <span className="font-bold text-white">{formatVnd(o.amountVnd)}</span>
+                    <span className="text-white/45">→ {formatTopupCoins(o.coins)}</span>
+                    <span className="font-mono text-xs text-white/60">{o.content}</span>
+                    <span className={`ml-auto rounded-full border px-2 py-0.5 text-xs ${STATUS_CLS[o.status]}`}>{STATUS_TXT[o.status]}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        {/* ---------------- phải: hướng dẫn + QR ---------------- */}
+        <section className="glass-card flex flex-col p-5">
+          <h2 className="text-sm font-bold tracking-[0.2em] text-[#c99a4b]">HƯỚNG DẪN NHANH</h2>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-white/60">
+            <li>Nhấn “Tạo đơn”, mở app ngân hàng và quét QR.</li>
+            <li>Hệ thống đối chiếu & admin duyệt chỉ vài phút.</li>
+          </ol>
+          <p className="mt-2 text-white/45">Bạn có thể tải QR hoặc chuyển khoản thủ công, miễn giữ đúng nội dung.</p>
+
+          <div className="mt-4 flex-1 rounded-xl bg-[#f2f2f4] p-3 text-center text-[#222]">
+            {order && qr ? (
+              <div className="flex h-full flex-col">
+                <div className="text-4xl font-black tracking-tight">
+                  <span className="text-[#d11f2d]">V</span>
+                  <span className="text-[#d11f2d]">IET</span>
+                  <span className="text-[#1e3a8a]">QR</span>
+                </div>
+                {qrOk ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={qr} alt={`QR nạp ${order.content}`} onError={() => setQrOk(false)} className="mx-auto mt-2 max-h-80 w-full max-w-80 rounded-lg border border-[#1e3a8a]/40 bg-white object-contain" />
+                ) : (
+                  <div className="mx-auto mt-2 max-w-80 rounded-lg border border-dashed border-[#1e3a8a]/40 bg-white p-6 text-sm">
+                    Không tải được ảnh QR tự động. Hãy chuyển khoản thủ công theo thông tin bên trái, giữ đúng số tiền và nội dung <b>{order.content}</b>.
+                  </div>
+                )}
+                <div className="mt-2 flex items-center justify-center gap-2 text-sm font-bold">
+                  <span className="italic text-[#1e3a8a]">napas 247</span>
+                  <span className="text-gray-300">|</span>
+                  <span className="text-xs uppercase tracking-wide text-[#d11f2d]">{order.bank.bankName} ◆</span>
+                </div>
+                <div className="mt-1 text-sm font-bold uppercase">{order.bank.accountName}</div>
+                <div className="text-sm tracking-widest">{order.bank.accountNo}</div>
+                <div className="text-sm">Số tiền: {formatVnd(order.amountVnd).replace(' đ', '')} VND</div>
+                <div className="text-sm font-bold">Nội dung: {order.content}</div>
+                <button onClick={() => void downloadQr()} className="mx-auto mt-2 rounded-lg border border-[#d9a441]/60 bg-white px-4 py-1.5 text-sm font-bold text-[#8a5a00] hover:bg-[#fff7e6]">
+                  Tải QR
+                </button>
+              </div>
+            ) : (
+              <div className="flex h-full min-h-72 flex-col items-center justify-center gap-2 p-6 text-[#666]">
+                <div className="text-4xl font-black tracking-tight">
+                  <span className="text-[#d11f2d]">V</span>
+                  <span className="text-[#d11f2d]">IET</span>
+                  <span className="text-[#1e3a8a]">QR</span>
+                </div>
+                <p className="max-w-72 text-sm">Chưa có đơn nạp. Chọn gói bên trái rồi nhấn “Tạo đơn và hiển thị QR” — mã QR động theo đúng số tiền và nội dung của bạn sẽ hiện ở đây.</p>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => void create()}
+            disabled={busy || (!user && !!authLoading)}
+            className="mt-4 w-full rounded-xl bg-gradient-to-b from-[#f5c86a] to-[#d99a2b] px-4 py-3 font-bold text-[#3a2500] shadow-[0_4px_0_0_#7a5200] transition active:translate-y-[2px] active:shadow-none disabled:opacity-60"
+          >
+            {busy ? 'Đang tạo đơn…' : order ? 'Tạo đơn mới và hiển thị QR' : 'Tạo đơn và hiển thị QR'}
+          </button>
+          {order && <p className="mt-2 text-center text-sm text-white/45">Đơn {order.content} đang chờ duyệt — sau khi chuyển khoản, admin sẽ cộng {formatTopupCoins(order.coins)} trong vài phút.</p>}
+        </section>
+          </div>
+        </HeroBanner>
+      </section>
+
+      {/* ===== DẢI TICKER (giống trang chủ) ===== */}
+      <div className="overflow-hidden border-y-[3px] border-[#2d3232] bg-[#ffc233] py-2" aria-hidden>
+        <div className="marquee-track gap-8 pr-8">
+          {[...TICKER, ...TICKER].map((t, i) => (
+            <span key={i} className="whitespace-nowrap text-xl text-[#2d3232]">
+              {t} <span className="ml-6">•</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      <footer className="border-t-[3px] border-[#2d3232] bg-[#14102e] py-5 text-center text-white/80">
+        <p>⚔️ MINI BATTLE SIMULATOR — xếp quân • mô phỏng • hỗn loạn vui vẻ</p>
+      </footer>
+    </main>
+  );
+}
