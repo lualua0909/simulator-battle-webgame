@@ -2,6 +2,7 @@
 
 // Unit card in the style of the Clash Royale cards the user referenced: blue striped frame, cost drop,
 // portrait, wooden name plank, pennant tail; plus the collection state (stars, cards, lock).
+import { useId } from 'react';
 import type { Faction, UnitDef } from '@/shared/schema';
 import { formatCoins } from '@/shared/economy';
 import { CoinIcon, LockIcon, Stars } from './icons';
@@ -26,8 +27,10 @@ interface Props {
 export default function UnitCard({ unit, thumb, faction, star, progress, locked, count, width = 140, selected, onClick, className }: Props) {
   const ready = progress && progress.need !== null && progress.have >= progress.need;
   const Tag = onClick ? 'button' : 'div';
+  // useId contains colons that break svg url(#…) references, so strip them.
+  const dropId = `cr-drop-${useId().replace(/:/g, '')}`;
   return (
-    <Tag type={onClick ? 'button' : undefined} onClick={onClick} className={`cr-card ${selected ? 'cr-card-selected' : ''} ${className ?? ''}`} style={{ width }}>
+    <Tag type={onClick ? 'button' : undefined} onClick={onClick} className={`cr-card ${selected ? 'cr-card-selected' : ''} ${className ?? ''}`} style={{ width, maxWidth: '100%' }}>
       {progress && (
         <div className={`cr-progress ${ready ? 'cr-progress-ready' : ''}`}>
           <div className="cr-progress-fill" style={{ width: `${progress.need === null ? 100 : Math.min(100, (progress.have / Math.max(1, progress.need)) * 100)}%` }} />
@@ -57,13 +60,13 @@ export default function UnitCard({ unit, thumb, faction, star, progress, locked,
       <div className="cr-cost" title="Giá trong ngân sách trận">
         <svg viewBox="0 0 36 44" className="absolute inset-0 h-full w-full" aria-hidden>
           <defs>
-            <radialGradient id="cr-drop" cx="40%" cy="55%" r="65%">
+            <radialGradient id={dropId} cx="40%" cy="55%" r="65%">
               <stop offset="0%" stopColor="#ffb3f1" />
               <stop offset="55%" stopColor="#d24fc4" />
               <stop offset="100%" stopColor="#7a1f86" />
             </radialGradient>
           </defs>
-          <path d="M18 2.5C14 8.5 4.5 18 4.5 27.5a13.5 13.5 0 0 0 27 0C31.5 18 22 8.5 18 2.5z" fill="url(#cr-drop)" stroke="#3c0a45" strokeWidth="2.4" strokeLinejoin="round" />
+          <path d="M18 2.5C14 8.5 4.5 18 4.5 27.5a13.5 13.5 0 0 0 27 0C31.5 18 22 8.5 18 2.5z" fill={`url(#${dropId})`} stroke="#3c0a45" strokeWidth="2.4" strokeLinejoin="round" />
           <ellipse cx="13" cy="24" rx="3" ry="5" fill="#ffffff" opacity="0.45" />
         </svg>
         <span className="text-outline relative mt-2">{unit.cost}</span>

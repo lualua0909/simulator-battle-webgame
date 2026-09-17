@@ -619,8 +619,10 @@ export class BattleSim {
         const water = !u.flying && this.terrain.inWater(u.x, u.z) ? this.content.settings.waterSlow : 1;
         const rubble = !u.flying && !u.onWall && this.cellAt(u.x, u.z)?.unit.alive === false ? this.content.settings.siege.rubbleSlow : 1;
         const sp = u.def.speed * water * rubble * want;
-        dvx = nx * sp;
-        dvz = nz * sp;
+        // Closing on the target: bend around a blocking tree/rock instead of jamming into it.
+        const move = want > 0 && !u.flying ? this.avoidObstacles(u, nx, nz) : { x: nx, z: nz };
+        dvx = move.x * sp;
+        dvz = move.z * sp;
         this.turnTowards(u, nx, nz);
       }
       if (u.flying) {
@@ -647,6 +649,37 @@ export class BattleSim {
     }
     u.fx = fx / len;
     u.fz = fz / len;
+  }
+
+  /** Nearest obstacle blocking the straight line ahead: bend travel around its near side. */
+  private avoidObstacles(u: SimUnit, nx: number, nz: number): { x: number; z: number } {
+    const lookahead = u.radius + 6;
+    const cx = Math.floor(u.x / CELL);
+    const cz = Math.floor(u.z / CELL);
+    let bestProj = Infinity;
+    let side = 0;
+    for (let ix = cx - 2; ix <= cx + 2; ix++) {
+      for (let iz = cz - 2; iz <= cz + 2; iz++) {
+        const list = this.obstacleGrid.get(cellKey(ix, iz));
+        if (!list) continue;
+        for (const o of list) {
+          const ox = o.x - u.x;
+          const oz = o.z - u.z;
+          const proj = ox * nx + oz * nz;
+          if (proj <= 0 || proj >= lookahead || proj >= bestProj) continue;
+          const lat = nx * oz - nz * ox;
+          const clear = o.radius + u.radius + 0.5;
+          if (lat >= clear || lat <= -clear) continue;
+          bestProj = proj;
+          side = lat > 1e-4 ? 1 : lat < -1e-4 ? -1 : u.id % 2 === 0 ? 1 : -1;
+        }
+      }
+    }
+    if (side === 0) return { x: nx, z: nz };
+    const x = nx + nz * side * 1.3;
+    const z = nz - nx * side * 1.3;
+    const len = Math.sqrt(x * x + z * z) || 1;
+    return { x: x / len, z: z / len };
   }
 
   private integrate(u: SimUnit): void {

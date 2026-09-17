@@ -212,7 +212,7 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
   const link = typeof window !== 'undefined' ? `${window.location.origin}/play?mode=online&room=${room.code}` : '';
   const [copied, setCopied] = useState(false);
   return (
-    <div className="panel pointer-events-auto flex flex-col gap-2 p-2 text-sm">
+    <div className="panel pointer-events-auto flex max-h-[26vh] w-52 flex-col gap-2 overflow-y-auto overscroll-contain p-2 text-sm sm:max-h-none sm:w-auto sm:overflow-visible">
       <div className="flex items-center gap-2">
         <span className="font-display">Phòng {room.code}</span>
         <button
@@ -301,15 +301,15 @@ export function BattleHud(props: {
     .padStart(2, '0');
   return (
     <>
-      <div className="panel pointer-events-auto absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-3 px-4 py-2">
+      <div className="panel pointer-events-auto absolute left-1/2 top-2 flex -translate-x-1/2 items-center gap-2 px-2 py-1.5 sm:top-3 sm:gap-3 sm:px-4 sm:py-2">
         <TeamBar side="blue" alive={stats.blue} total={total.blue} />
-        <span className={`flex flex-col items-center font-display text-lg leading-none tabular-nums ${left < 30 ? 'text-red-team' : ''}`} title="Thời gian còn lại">
+        <span className={`flex flex-col items-center font-display text-base leading-none tabular-nums sm:text-lg ${left < 30 ? 'text-red-team' : ''}`} title="Thời gian còn lại">
           {mm}:{ss}
-          {props.defense && <span className="text-[10px] font-bold opacity-70">🏰 {SIDE_NAME[props.defense]} thủ</span>}
+          {props.defense && <span className="hidden text-[10px] font-bold opacity-70 sm:inline">🏰 {SIDE_NAME[props.defense]} thủ</span>}
         </span>
         <TeamBar side="red" alive={stats.red} total={total.red} />
       </div>
-      <div className="panel pointer-events-auto absolute bottom-3 right-3 flex items-center gap-1 p-2">
+      <div className="panel pointer-events-auto absolute bottom-2 right-2 flex max-w-[64vw] flex-wrap items-center justify-end gap-1 p-1.5 sm:bottom-3 sm:right-3 sm:max-w-none sm:p-2">
         <button className={`btn px-3 py-1 ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title="Bật/tắt âm thanh">
           {props.muted ? '🔇' : '🔊'}
         </button>
@@ -333,8 +333,8 @@ export function BattleHud(props: {
 function TeamBar({ side, alive, total }: { side: Side; alive: number; total: number }) {
   const pct = total > 0 ? (alive / total) * 100 : 0;
   return (
-    <div className={`flex w-40 items-center gap-2 ${side === 'red' ? 'flex-row-reverse' : ''}`}>
-      <span className={`font-display text-lg ${side === 'blue' ? 'text-blue-team' : 'text-red-team'}`}>{alive}</span>
+    <div className={`flex w-24 items-center gap-1.5 sm:w-40 sm:gap-2 ${side === 'red' ? 'flex-row-reverse' : ''}`}>
+      <span className={`font-display text-base sm:text-lg ${side === 'blue' ? 'text-blue-team' : 'text-red-team'}`}>{alive}</span>
       <div className="h-3 flex-1 overflow-hidden rounded-full border-2 border-ink bg-white">
         <div className={`h-full ${side === 'blue' ? 'bg-blue-team' : 'ml-auto bg-red-team'}`} style={{ width: `${pct}%`, marginLeft: side === 'red' ? 'auto' : undefined }} />
       </div>

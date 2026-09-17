@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import WorldChat from '@/components/chat/WorldChat';
 import PlayerHud from '@/components/player/PlayerHud';
+import WorkshopButton from './WorkshopButton';
 
 const MODES = [
   { href: '/play?mode=ai', title: 'Đấu với máy', desc: 'Chọn đối thủ AI — từ Tân binh tới Bạo chúa biết khắc chế đội hình của bạn.', icon: '🤖', cls: 'btn-gold' },
@@ -36,9 +37,7 @@ export default function Home() {
             </Link>
           ))}
         </div>
-        <Link href="/models" className="btn">
-          🧱 Xưởng mô hình
-        </Link>
+        <WorkshopButton />
       </div>
       <WorldChat />
     </main>

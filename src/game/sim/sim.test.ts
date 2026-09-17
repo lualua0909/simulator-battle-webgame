@@ -139,6 +139,16 @@ test('area skills wait for enough targets', () => {
   assert.equal(a.events.filter((e) => e.type === 'warn').length, 0);
 });
 
+// ------------------------------------------------------------------ movement
+
+test('a melee unit routes around a blocking tree to reach the enemy', () => {
+  const terrain = new Terrain(ARENA, []);
+  terrain.obstacles.push({ kind: 'tree', assetId: 'tree', x: 0, y: 0, z: 0, radius: 2, scale: 1, yaw: 0, variant: 0 });
+  const sim = new BattleSim(SEED, ARENA, terrain, { blue: [{ unitId: 'clubber', x: -6, z: 0 }], red: [{ unitId: 'clubber', x: 6, z: 0 }] }, 1);
+  for (let i = 0; i < 30 * 20 && !sim.result; i++) sim.step();
+  assert.ok(sim.result, 'a tree directly on the path between the two units must not deadlock the fight');
+});
+
 test('attack speed and cast speed scale how often abilities fire', () => {
   const count = (caster: Partial<UnitDef>, id: string) => {
     const a = skillArena({ speed: 3.5, ...caster }, { gap: 1.2 });

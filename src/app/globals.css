@@ -107,6 +107,7 @@ body {
   display: flex;
   align-items: center;
   height: 2.5rem;
+  max-width: 100%;
   min-width: 9.5rem;
   padding: 0 1.9rem 0 0.9rem;
   border-radius: 0.55rem;
@@ -123,14 +124,24 @@ body {
   position: relative;
   display: block;
   flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
   padding-top: 1.7rem;
   text-align: left;
   transition: transform 0.15s, filter 0.15s;
 }
-.cr-card:hover {
-  transform: scale(1.1);
-  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.45));
-  z-index: 1;
+button.cr-card {
+  cursor: pointer;
+  background: transparent;
+}
+/* Hover zoom only where a real hover exists: on touch screens a tap would otherwise
+   leave the card stuck scaled up (and overlapping its neighbours). */
+@media (hover: hover) {
+  .cr-card:hover {
+    transform: scale(1.1);
+    filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.45));
+    z-index: 1;
+  }
 }
 .cr-card-selected .cr-frame {
   outline: 4px solid #ffd23f;
@@ -240,6 +251,14 @@ body {
   justify-content: center;
   letter-spacing: -0.03em;
   --outline: 3px;
+}
+
+/* Compact coin bar on narrow phones so it shares one header row with the title. */
+@media (max-width: 480px) {
+  .coin-bar {
+    min-width: 7rem;
+    height: 2.25rem;
+  }
 }
 
 /* Box and collection screens: deep blue with the diamond pattern of the reference. */

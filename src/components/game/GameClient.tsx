@@ -650,16 +650,17 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
         {bundle && phase === 'deploy' && !cine && (
           <>
-            <div className="flex items-start gap-2">
-              <div className="panel pointer-events-auto flex flex-wrap items-center gap-2 p-2">
-                <Link href="/" className="btn px-2 py-1 text-sm">
+            <div className="flex items-start gap-1.5 sm:gap-2">
+              <div className="panel pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-y-auto overscroll-contain p-1.5 sm:max-h-none sm:flex-none sm:gap-2 sm:overflow-visible sm:p-2 max-h-[30vh]">
+                <Link href="/" className="btn px-2 py-1 text-sm" aria-label="Về menu">
                   ←
                 </Link>
-                <span className={`rounded-lg px-2 py-1 font-display text-white ${mySide === 'blue' ? 'bg-blue-team' : 'bg-red-team'}`}>
-                  Phe {SIDE_NAME[mySide]}
-                  {defense && (defense === mySide ? ' · 🏰 Thủ thành' : ' · 🔥 Công thành')}
+                <span className={`rounded-lg px-1.5 py-1 font-display text-white sm:px-2 ${mySide === 'blue' ? 'bg-blue-team' : 'bg-red-team'}`}>
+                  <span className="hidden sm:inline">Phe </span>
+                  {SIDE_NAME[mySide]}
+                  {defense && <span className="hidden sm:inline">{defense === mySide ? ' · 🏰 Thủ thành' : ' · 🔥 Công thành'}</span>}
                 </span>
-                <div className="w-44">
+                <div className="w-28 sm:w-44">
                   <div className="flex justify-between text-xs font-bold">
                     <span>Ngân sách</span>
                     <span className={spent > myBudget ? 'text-red-team' : ''}>
@@ -674,17 +675,17 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   {myArmy.length - wallBlocks}/{maxUnits} lính
                   {wallBlocks > 0 && ` · ${wallBlocks} khối tường`}
                 </span>
-                <button className={`btn px-2 py-1 text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')}>
-                  ✚ Đặt
+                <button className={`btn px-2 py-1 text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')} title="Đặt" aria-label="Đặt quân">
+                  ✚<span className="hidden sm:inline"> Đặt</span>
                 </button>
-                <button className={`btn px-2 py-1 text-sm ${tool === 'erase' ? 'btn-gold' : ''}`} onClick={() => setTool('erase')} title="X">
-                  ✖ Xóa
+                <button className={`btn px-2 py-1 text-sm ${tool === 'erase' ? 'btn-gold' : ''}`} onClick={() => setTool('erase')} title="Xóa (X)" aria-label="Xóa quân">
+                  ✖<span className="hidden sm:inline"> Xóa</span>
                 </button>
-                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={fillRandom}>
-                  🎲 Ngẫu nhiên
+                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={fillRandom} title="Ngẫu nhiên" aria-label="Xếp quân ngẫu nhiên">
+                  🎲<span className="hidden sm:inline"> Ngẫu nhiên</span>
                 </button>
-                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={undo} title="Ctrl/⌘+Z">
-                  ↶ Hoàn tác
+                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={undo} title="Hoàn tác (Ctrl/⌘+Z)" aria-label="Hoàn tác">
+                  ↶<span className="hidden sm:inline"> Hoàn tác</span>
                 </button>
                 <button
                   className="btn px-2 py-1 text-sm"
@@ -693,26 +694,52 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                     snapshot();
                     setArmies({ ...armiesRef.current, [mySide]: [] });
                   }}
+                  title="Xóa hết"
+                  aria-label="Xóa hết quân"
                 >
-                  Xóa hết
+                  🗑<span className="hidden sm:inline"> Xóa hết</span>
                 </button>
               </div>
-              <div className="ml-auto flex flex-col items-end gap-2">
-                <PlayerHud bundle={bundle} />
-                <button className={`btn pointer-events-auto text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
-                  {mode === 'ai' ? '⚔ Bắt đầu!' : mode === 'local' ? (side === 'blue' ? 'Xong → Người chơi 2' : '⚔ Bắt đầu!') : locked ? 'Hủy sẵn sàng' : '✔ Sẵn sàng'}
+              <div className="ml-auto flex shrink-0 flex-col items-end gap-2">
+                <div className="hidden sm:block">
+                  <PlayerHud bundle={bundle} />
+                </div>
+                <button className={`btn pointer-events-auto px-2 py-1 text-base sm:px-4 sm:py-2 sm:text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
+                  {mode === 'ai' ? (
+                    <>
+                      ⚔<span className="hidden sm:inline"> Bắt đầu!</span>
+                    </>
+                  ) : mode === 'local' ? (
+                    side === 'blue' ? (
+                      <>
+                        →<span className="hidden sm:inline"> Xong → Người chơi 2</span>
+                      </>
+                    ) : (
+                      <>
+                        ⚔<span className="hidden sm:inline"> Bắt đầu!</span>
+                      </>
+                    )
+                  ) : locked ? (
+                    <>
+                      ✖<span className="hidden sm:inline"> Hủy sẵn sàng</span>
+                    </>
+                  ) : (
+                    <>
+                      ✔<span className="hidden sm:inline"> Sẵn sàng</span>
+                    </>
+                  )}
                 </button>
                 {mode === 'online' && net.room && net.seat && <RoomBar bundle={bundle} room={net.room} mySide={net.seat.side} onSettings={net.settings} />}
                 {mode === 'ai' && bot && (
-                  <div className="panel pointer-events-auto p-2 text-xs">
+                  <div className="panel pointer-events-auto hidden p-2 text-xs sm:block">
                     Đối thủ: <b>{bot.name}</b> · {bot.reactive ? 'sẽ chọn quân sau khi xem đội hình của bạn' : `${totals.red} lính (${armyCost(bundle, armies.red)})`}
                   </div>
                 )}
               </div>
             </div>
-            <div className="mt-auto flex items-end gap-2">
-              <HelpHint text="Chuột trái: đặt · Shift+kéo: rải · Tường: kéo để xây dãy, bấm lên tường để chồng tầng · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE" />
-              <div className="flex-1">
+            <div className="mt-auto flex items-end gap-1.5 sm:gap-2">
+              <HelpHint className="hidden sm:block" text="Chuột trái: đặt · Shift+kéo: rải · Tường: kéo để xây dãy, bấm lên tường để chồng tầng · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE" />
+              <div className="min-w-0 flex-1">
                 <UnitPalette
                   bundle={bundle}
                   thumbs={thumbs}

@@ -35,19 +35,19 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
   const info = hover ?? bundle.units.find((u) => u.id === selected) ?? null;
 
   return (
-    <div className="panel pointer-events-auto flex max-h-[42vh] w-full flex-col gap-2 p-2">
-      <div className="flex flex-wrap items-center gap-1">
+    <div className="panel pointer-events-auto flex max-h-[32vh] w-full flex-col gap-1.5 overscroll-contain p-1.5 sm:max-h-[42vh] sm:gap-2 sm:p-2">
+      <div className="flex flex-wrap items-center gap-1 overflow-x-auto overscroll-contain">
         <Tab active={tab === 'all'} onClick={() => setTab('all')}>
           Tất cả
         </Tab>
         {factions.map((f) => (
           <Tab key={f.id} active={tab === f.id} onClick={() => setTab(f.id)} color={f.color}>
-            {f.icon} {f.name}
+            {f.icon} <span className="hidden sm:inline">{f.name}</span>
           </Tab>
         ))}
       </div>
-      <div className="flex gap-2">
-        <div className="grid flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(108px,1fr))] gap-1.5 overflow-y-auto pr-1">
+      <div className="flex min-h-0 gap-2">
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-1 overflow-y-auto overscroll-contain pr-1 sm:grid-cols-[repeat(auto-fill,minmax(108px,1fr))] sm:gap-1.5">
           {units.map((u) => {
             const faction = bundle.factions.find((f) => f.id === u.factionId);
             const locked = !isUnlocked(u, player);
@@ -63,10 +63,10 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
                 }}
                 onMouseEnter={() => setHover(u)}
                 onMouseLeave={() => setHover(null)}
-                className={`relative flex touch-none flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive || locked ? 'opacity-50' : ''} ${draggingId === u.id ? 'opacity-40' : ''}`}
+                className={`relative flex touch-pan-y flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 sm:touch-none ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive || locked ? 'opacity-50' : ''} ${draggingId === u.id ? 'opacity-40' : ''}`}
                 style={{ boxShadow: `inset 0 -4px 0 ${faction?.color ?? '#999'}` }}
               >
-                {thumbs[u.id] ? <img src={thumbs[u.id]} alt="" className={`h-14 w-14 object-contain ${locked ? 'grayscale' : ''}`} draggable={false} /> : <div className="h-14 w-14 animate-pulse rounded bg-parch" />}
+                {thumbs[u.id] ? <img src={thumbs[u.id]} alt="" className={`h-10 w-10 object-contain sm:h-14 sm:w-14 ${locked ? 'grayscale' : ''}`} draggable={false} /> : <div className="h-10 w-10 animate-pulse rounded bg-parch sm:h-14 sm:w-14" />}
                 {locked && <LockIcon size={24} className="absolute right-1 top-1" />}
                 {star > 0 && (
                   <span className="text-outline absolute left-1 top-0.5 flex items-center gap-0.5 leading-none">
@@ -74,8 +74,8 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
                     {star}
                   </span>
                 )}
-                <span className="line-clamp-1 w-full leading-tight">{u.name}</span>
-                <span className="text-amber-700">{u.cost}</span>
+                <span className="line-clamp-1 w-full text-[12px] leading-tight sm:text-sm">{u.name}</span>
+                <span className="text-[13px] font-bold text-amber-700 sm:text-sm">{u.cost}</span>
               </button>
             );
           })}
@@ -88,7 +88,7 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
 
 function Tab({ active, onClick, children, color }: { active: boolean; onClick(): void; children: React.ReactNode; color?: string }) {
   return (
-    <button onClick={onClick} className={`rounded-full border-2 px-3 py-0.5 text-xs font-bold ${active ? 'border-ink bg-ink text-white' : 'border-ink/40 bg-white'}`} style={active && color ? { background: color, borderColor: '#1f1a14' } : undefined}>
+    <button onClick={onClick} className={`whitespace-nowrap rounded-full border-2 px-2 py-0.5 text-[11px] font-bold sm:px-3 sm:text-xs ${active ? 'border-ink bg-ink text-white' : 'border-ink/40 bg-white'}`} style={active && color ? { background: color, borderColor: '#1f1a14' } : undefined}>
       {children}
     </button>
   );

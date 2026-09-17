@@ -42,26 +42,35 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Lock the page behind the full-screen modal so only the collection scrolls on mobile.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   return createPortal(
-    <div className="game-ui box-backdrop fixed inset-0 z-40 flex flex-col">
-      <header className="flex flex-wrap items-center gap-3 px-4 pt-3">
-        <h2 className="text-outline text-3xl">Bộ sưu tập thẻ</h2>
-        <div className="flex flex-wrap gap-1">
+    <div className="game-ui box-backdrop fixed inset-0 z-40 flex flex-col overflow-hidden">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3 pt-3 sm:px-4">
+        <h2 className="text-outline min-w-0 text-xl sm:text-2xl md:text-3xl">Bộ sưu tập thẻ</h2>
+        <div className="order-1 ml-auto mr-4 flex min-w-0 shrink-0 items-center gap-3">
+          {user && <CoinBar value={player?.coins ?? 0} />}
+        </div>
+        <button className="btn order-2 shrink-0 px-2.5 py-1 text-xl" onClick={onClose} aria-label="Đóng">
+          ✕
+        </button>
+        <div className="order-3 flex max-w-full basis-full flex-nowrap gap-1 overflow-x-auto pb-1 md:order-none md:basis-auto md:flex-1 md:flex-wrap md:overflow-visible md:pb-0">
           {[{ id: 'all', name: 'Tất cả', icon: '', color: '' }, ...factions].map((f) => (
-            <button key={f.id} className={`rounded-full border-2 border-[#16181b] px-3 py-0.5 ${tab === f.id ? 'bg-gold' : 'bg-white/85'}`} onClick={() => setTab(f.id)}>
+            <button key={f.id} className={`shrink-0 rounded-full border-2 border-[#16181b] px-3 py-0.5 ${tab === f.id ? 'bg-gold' : 'bg-white/85'}`} onClick={() => setTab(f.id)}>
               {f.icon} {f.name}
             </button>
           ))}
         </div>
-        <div className="ml-auto mr-4 flex items-center gap-3">
-          {user && <CoinBar value={player?.coins ?? 0} />}
-        </div>
-        <button className="btn px-3 py-1 text-xl" onClick={onClose} aria-label="Đóng">
-          ✕
-        </button>
       </header>
-      <div className="flex min-h-0 flex-1 gap-4 p-4 max-md:flex-col max-md:overflow-y-auto">
-        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(136px,1fr))] justify-items-center gap-x-3 gap-y-5 overflow-y-auto p-2 max-md:overflow-visible">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-3 sm:p-4 md:flex-row md:overflow-hidden">
+        <div className="grid w-full flex-none auto-rows-auto grid-cols-2 justify-items-center gap-x-3 gap-y-5 p-2 min-[480px]:grid-cols-3 md:min-h-0 md:flex-1 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:overflow-y-auto">
           {units.map((u) => {
             const star = player?.stars[u.id] ?? 0;
             const next = nextStar(u, star);
@@ -81,7 +90,7 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
           })}
         </div>
         {selected && (
-          <aside className="panel w-full shrink-0 overflow-y-auto p-4 md:w-[24rem]">
+          <aside className="panel w-full flex-none p-4 md:w-[24rem] md:shrink-0 md:overflow-y-auto">
             {user ? <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} /> : <GuestDetail unit={selected} onSignIn={() => openAuth('signin')} />}
           </aside>
         )}
