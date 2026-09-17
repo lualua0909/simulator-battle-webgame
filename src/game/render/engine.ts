@@ -722,6 +722,15 @@ export class BattleEngine {
             const alongX = [...(this.sim?.walls.values() ?? [])].some((c) => c.kind === 'wall' && c.iz === iz && (c.ix === ix + 1 || c.ix === ix - 1));
             this.ghost.group.rotation.y = alongX ? 0 : Math.PI / 2;
           }
+        } else {
+          // Riders hovered over a wall/tower snap to the cell centre on the highest top,
+          // matching where BattleSim will actually place them.
+          const cell = this.sim?.cellAt(p.x, p.z);
+          if (cell && (cell.kind === 'wall' || cell.kind === 'platform')) {
+            const ix = Math.floor(p.x / WALL_CELL);
+            const iz = Math.floor(p.z / WALL_CELL);
+            this.ghost.group.position.set((ix + 0.5) * WALL_CELL, cell.top, (iz + 0.5) * WALL_CELL);
+          }
         }
         const good = this.ghost.valid(p.x, p.z);
         const [ok, bad] = this.ghost.mats;
@@ -865,9 +874,8 @@ export class BattleEngine {
           const cell = u.wall;
           if (!cell) break;
           const blockH = cell.blockHeight || settings.siege.tierHeight;
-          const wparams = (this.bundle.assets.find((a) => a.id === u.def.modelId)?.params ?? {}) as Record<string, unknown>;
-          const wL = typeof wparams.wallLength === 'number' ? Math.min(8, Math.max(1, wparams.wallLength)) : WALL_CELL;
-          const wD = typeof wparams.wallDepth === 'number' ? Math.min(8, Math.max(1, wparams.wallDepth)) : WALL_CELL;
+          const wL = WALL_CELL;
+          const wD = WALL_CELL;
           const colors = this.walls.colors(cell);
           for (let k = 0; k < e.lost; k++) {
             const y = u.y + (e.tiers + k + 0.5) * blockH;

@@ -30,11 +30,9 @@ export function createStructureModel(p: StructureParams, seed = 1): THREE.Group 
 
 // ---------------------------------------------------------------- wall pieces
 
-/** Kích thước khối tường chữ nhật (m), cấu hình trong CMS (asset params). */
-export function wallFootprint(p: StructureParams): { L: number; D: number } {
-  const L = Math.min(8, Math.max(1, Number(p.wallLength) || 4));
-  const D = Math.min(8, Math.max(1, Number(p.wallDepth) || 2));
-  return { L, D };
+/** Kích thước khối tường chữ nhật (m): luôn khớp ô lưới 2×2 m để các bức tường xếp cạnh nhau không chồng lấn. */
+export function wallFootprint(_p: StructureParams): { L: number; D: number } {
+  return { L: 2, D: 2 };
 }
 
 /**

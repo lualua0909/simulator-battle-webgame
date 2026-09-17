@@ -18,7 +18,7 @@ import { wallCenter, wallIndex, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import { useConfig } from '@/game/useConfig';
 import UnitPalette from './UnitPalette';
-import { BattleHud, CinematicBars, Handoff, OnlineLobby, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_NAME, type ModeChoice } from './panels';
+import { BattleHud, CinematicBars, Handoff, HelpHint, OnlineLobby, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_NAME, type ModeChoice } from './panels';
 
 export type Mode = 'ai' | 'local' | 'online';
 type Phase = 'setup' | 'lobby' | 'deploy' | 'handoff' | 'battle' | 'result';
@@ -205,6 +205,12 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       const army = armiesRef.current[mySide];
       const siege = bundle.settings.siege;
       if (isGridStructure(u)) ({ x, z } = snapToCell(x, z));
+      else {
+        // Riders placed on a wall/tower snap to the cell centre (stand on the highest top,
+        // in the middle of the walkway) — validate the snapped spot, not the raw click.
+        const pre = gridCells(units, army).get(cellKeyOf(x, z));
+        if (pre && (pre.kind === 'wall' || pre.kind === 'platform')) ({ x, z } = snapToCell(x, z));
+      }
       if (!t.inZone(mySide, x, z)) return false;
       if (armyCost(bundle, army) + u.cost > myBudget) return false;
       const cells = gridCells(units, army);
@@ -253,6 +259,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       if (!selected || !canPlace(x, z)) return false;
       const u = units.get(selected);
       if (u && isGridStructure(u)) ({ x, z } = snapToCell(x, z));
+      else if (u && u.structure === 'none') {
+        const cells = gridCells(units, armiesRef.current[mySide]);
+        const cell = cells.get(cellKeyOf(x, z));
+        if (cell && (cell.kind === 'wall' || cell.kind === 'platform')) ({ x, z } = snapToCell(x, z));
+      }
       const cur = armiesRef.current;
       setArmies({ ...cur, [mySide]: [...cur[mySide], { unitId: selected, x, z }] });
       return true;
@@ -700,9 +711,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
               </div>
             </div>
             <div className="mt-auto flex items-end gap-2">
-              <div className="pointer-events-none hidden max-w-60 text-xs leading-tight text-ink/80 drop-shadow lg:block">
-                Chuột trái: đặt · Shift+kéo: rải · Tường: kéo để xây dãy, bấm lên tường để chồng tầng · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE
-              </div>
+              <HelpHint text="Chuột trái: đặt · Shift+kéo: rải · Tường: kéo để xây dãy, bấm lên tường để chồng tầng · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE" />
               <div className="flex-1">
                 <UnitPalette
                   bundle={bundle}

@@ -354,12 +354,16 @@ export class BattleSim {
         this.walls.set(key, u.wall);
       }
     }
-    // Units placed on a wall or watchtower start on top of it.
+    // Units placed on a wall or watchtower start centered on top of it (highest tier).
     for (const u of this.units) {
       if (u.structure || u.flying) continue;
       const cell = this.cellAt(u.x, u.z);
       if (cell && cell.unit.side === u.side) {
         u.onWall = cell;
+        // Snap to the cell centre so riders stand in the middle of the walkway (fully visible),
+        // not at the click edge where legs clip into merlons or the neighbouring cell.
+        u.x = u.px = cell.x0 + WALL_CELL / 2;
+        u.z = u.pz = cell.z0 + WALL_CELL / 2;
         u.y = u.py = cell.top;
       }
     }

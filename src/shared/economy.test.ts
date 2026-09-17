@@ -114,13 +114,13 @@ test('a star uses up cards and coins, up to 5 stars', () => {
   assert.ok(isUnlocked(archer, null), 'starter units are free');
   for (let star = 1; star <= 5; star++) p = upgradeUnit(p, archer).state;
   assert.equal(p.stars.archer, 5);
-  assert.equal(p.cards.archer, 1600 - 1500);
+  assert.equal(p.cards.archer, 1600 - 150);
   assert.equal(p.coins, 100_000 - 31_000);
   assert.throws(() => upgradeUnit(p, archer), /5 sao/);
-  assert.throws(() => upgradeUnit({ ...emptyPlayer(), coins: 5000, cards: { archer: 99 } }, archer), /Cần 100 thẻ/);
-  assert.throws(() => upgradeUnit({ ...emptyPlayer(), coins: 999, cards: { archer: 100 } }, archer), /Không đủ coin/);
-  const upgrade = upgradeUnit({ ...emptyPlayer(), coins: 1000, cards: { archer: 100 } }, archer);
-  assert.deepEqual(upgrade.entry, { type: 'upgrade', coins: -1000, balance: 0, cards: { archer: -100 }, unitId: 'archer', star: 1 });
+  assert.throws(() => upgradeUnit({ ...emptyPlayer(), coins: 5000, cards: { archer: 9 } }, archer), /Cần 10 thẻ/);
+  assert.throws(() => upgradeUnit({ ...emptyPlayer(), coins: 999, cards: { archer: 10 } }, archer), /Không đủ coin/);
+  const upgrade = upgradeUnit({ ...emptyPlayer(), coins: 1000, cards: { archer: 10 } }, archer);
+  assert.deepEqual(upgrade.entry, { type: 'upgrade', coins: -1000, balance: 0, cards: { archer: -10 }, unitId: 'archer', star: 1 });
 });
 
 test('locked units must be bought before their cards are bought or upgraded', () => {

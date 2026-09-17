@@ -726,7 +726,7 @@ Font: mọi màn game (không gồm `/admin` và `/models`) dùng lớp `.game-u
 | POST | `/api/auth/fcm` | user đăng nhập | lưu FCM token của thiết bị |
 | GET | `/api/player` | công khai (`player: null` khi chưa đăng nhập) | ví của mình + trạng thái hộp quà + giờ server |
 | POST | `/api/player` | user đăng nhập | `{action:"open-box", kind}` / `{action:"unlock"\|"upgrade", unitId}` / `{action:"buy-cards", unitId, count}`; trả ví mới (+ `reward` khi mở hộp) |
-| GET | `/api/fonts/clash` | công khai | file font `data/Clash_Regular.otf.ttf` (404 khi thiếu) |
+| GET | `/api/fonts/clash` | công khai | file font `data/Clash_Regular.otf.ttf` (204 khi thiếu — font tùy chọn, không tính là lỗi) |
 | GET / POST | `/api/admin/{collection}` | root/admin | liệt kê / tạo tài liệu |
 | GET / PUT / DELETE | `/api/admin/{collection}/{id}` | root/admin | đọc / sửa / xóa (chặn khi còn phụ thuộc) |
 | GET / PUT | `/api/admin/settings` | root/admin | cài đặt game |

@@ -262,6 +262,23 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
   );
 }
 
+export function HelpHint({ text, className = '' }: { text: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`pointer-events-auto relative shrink-0 ${className}`}>
+      <button
+        className="panel flex h-7 w-7 items-center justify-center rounded-full text-sm opacity-70 hover:opacity-100"
+        onClick={() => setOpen((o) => !o)}
+        title="Hướng dẫn điều khiển"
+        aria-label="Hướng dẫn điều khiển"
+      >
+        ?
+      </button>
+      {open && <div className="panel absolute bottom-9 left-0 z-10 w-60 p-2 text-xs leading-tight">{text}</div>}
+    </div>
+  );
+}
+
 export function BattleHud(props: {
   stats: BattleStats;
   total: Record<Side, number>;
@@ -308,9 +325,7 @@ export function BattleHud(props: {
           {props.stopLabel}
         </button>
       </div>
-      <div className="pointer-events-none absolute bottom-3 left-3 hidden max-w-60 text-xs leading-tight text-ink/80 drop-shadow lg:block">
-        Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE
-      </div>
+      <HelpHint className="absolute bottom-3 left-3" text="Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE" />
     </>
   );
 }

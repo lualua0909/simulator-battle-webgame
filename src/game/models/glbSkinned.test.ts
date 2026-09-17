@@ -283,8 +283,8 @@ test('seed fire-archer weapon, asset and unit validate, arsenal hidden', async (
   assert.equal(asset.glb?.url, '/models/hoa-tien-thu.glb');
   assert.equal(unit.modelId, 'm-fire-archer');
   assert.equal(unit.weaponId, 'fire-bow');
-  // Every rigid attachment in the file (the pack's weapon arsenal) must be on the hide
-  // list, or the archer marches in holding a gun rack.
+  // Every rigid attachment in the file (the pack's spare weapon arsenal) must be on the hide
+  // list, except the RocketLauncher the Hỏa tiễn thủ actually holds.
   const file = path.join(process.cwd(), 'public', 'models', 'hoa-tien-thu.glb');
   const buf = readFileSync(file);
   const gltf = await new GLTFLoader().parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, '');
@@ -294,5 +294,10 @@ test('seed fire-archer weapon, asset and unit validate, arsenal hidden', async (
     if (n.mesh !== undefined && n.skin === undefined && n.name) rigid.push(n.name);
   });
   assert.ok(rigid.length > 0, 'expected rigid attachments in hoa-tien-thu.glb');
-  for (const name of rigid) assert.ok(hidden.has(name), `rigid mesh ${name} not hidden`);
+  assert.ok(rigid.includes('RocketLauncher'), 'expected RocketLauncher in hoa-tien-thu.glb');
+  assert.ok(!hidden.has('RocketLauncher'), 'RocketLauncher is the held weapon and must stay visible');
+  for (const name of rigid) {
+    if (name === 'RocketLauncher') continue;
+    assert.ok(hidden.has(name), `rigid mesh ${name} not hidden`);
+  }
 });

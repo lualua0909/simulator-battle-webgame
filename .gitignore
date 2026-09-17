@@ -12,3 +12,4 @@ data/*.db-*
 
 # Firebase service account keys
 *-firebase-adminsdk-*.json
+publish-app.log

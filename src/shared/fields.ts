@@ -327,7 +327,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
       spawnMax: 10,
       unlockCost: 0,
       cardPrice: 0,
-      starCards: [100, 200, 300, 400, 500],
+      starCards: [10, 20, 30, 40, 50],
       starCoins: [1000, 2000, 4000, 8000, 16000],
     }),
   },

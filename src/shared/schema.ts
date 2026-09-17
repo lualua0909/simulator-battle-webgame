@@ -293,8 +293,8 @@ export const structureParamsSchema = z.object({
   wood: hex.default('#7a5230'),
   roof: hex.default('#9a3a2a'),
   accent: hex.default('#d8b04a'),
-  /** Khối tường chữ nhật vẽ bằng Three.js (nhẹ, không dùng glb): dài × cao × dày (m). */
-  wallLength: z.number().min(1).max(8).default(4),
+  /** Khối tường chữ nhật vẽ bằng Three.js (nhẹ, không dùng glb): dài × cao × dày (m). Dài/dày luôn khớp ô lưới 2 m. */
+  wallLength: z.number().min(1).max(8).default(2),
   wallHeight: z.number().min(0.5).max(4).default(2),
   wallDepth: z.number().min(1).max(8).default(2),
 });
