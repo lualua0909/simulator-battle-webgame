@@ -202,12 +202,12 @@ export function SetupPanel(props: {
           ))}
         </div>
       </section>
-      <section className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <h3 className="text-sm font-extrabold uppercase opacity-70">Ngân sách</h3>
-        <input type="range" min={300} max={30000} step={100} value={props.budget} onChange={(e) => props.setBudget(Number(e.target.value))} className="min-w-24 flex-1" />
-        <input type="number" min={100} step={100} value={props.budget} onChange={(e) => props.setBudget(Math.max(100, Number(e.target.value) || 0))} className="field w-20 sm:w-28" />
+      <section className="flex items-center gap-2 sm:gap-3">
+        <h3 className="shrink-0 text-sm font-extrabold uppercase opacity-70">Ngân sách</h3>
+        <input type="range" min={300} max={30000} step={100} value={props.budget} onChange={(e) => props.setBudget(Number(e.target.value))} className="min-w-0 flex-1" />
+        <input type="number" min={100} step={100} value={props.budget} onChange={(e) => props.setBudget(Math.max(100, Number(e.target.value) || 0))} className="field flex-none shrink-0" style={{ width: '5.5rem' }} />
         {mode === 'bot' && props.choice === 'battle' && (
-          <select value={props.botCount} onChange={(e) => props.setBotCount(Number(e.target.value))} className="field w-auto shrink-0" title="Số lượng bot" aria-label="Số lượng bot">
+          <select value={props.botCount} onChange={(e) => props.setBotCount(Number(e.target.value))} className="field flex-none shrink-0" style={{ width: 'auto' }} title="Số lượng bot" aria-label="Số lượng bot">
             {[1, 2, 3].map((n) => (
               <option key={n} value={n}>
                 {n} bot

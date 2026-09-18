@@ -110,7 +110,7 @@ export default function TopupClient() {
   const qr = order ? vietqrImageUrl(order) : null;
 
   return (
-    <main className="game-ui relative min-h-screen bg-[#1a1446]">
+    <main className="game-ui relative min-h-screen bg-gradient-to-b from-[#ff8717] to-[#ffbe45]">
       {/* ===== NAV BAR (giống trang chủ) ===== */}
       <header className="sticky top-0 z-20 border-b-[3px] border-[#2d3232] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2">
@@ -137,7 +137,7 @@ export default function TopupClient() {
       </header>
 
       {/* ===== NỘI DUNG NẠP (nền đặc, không parallax/kính mờ để dễ đọc trên mobile) ===== */}
-      <section className="bg-[#1a1446]">
+      <section className="bg-transparent">
         <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 lg:grid-cols-2">
         {/* ---------------- trái: gói + đơn ---------------- */}
         <section className="glass-card p-5">

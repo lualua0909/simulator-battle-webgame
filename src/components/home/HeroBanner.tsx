@@ -14,8 +14,43 @@ export const HERO_BANNER_SRC = '/images/hero-banner.png';
 // - 'replace': ảnh THAY TOÀN BỘ hero (ảnh đã gồm chữ + nền), ẩn hết nội dung cũ.
 const HERO_BANNER_MODE: 'background' | 'replace' = 'background';
 
+// Sao lớn trang trí rải khắp bầu trời hero: sao 5 cánh viền dày
+// fill gradient vàng y hệt mặt trăng, dùng chung animation glow-pulse.
+// duration/delay lệch pha nhau để nhấp nháy tự nhiên.
+const HERO_STARS: { left: string; top: string; size: number; dur: string; delay: string }[] = [
+  { left: '29%', top: '48%', size: 40, dur: '3.4s', delay: '0.8s' },
+  { left: '52%', top: '66%', size: 30, dur: '2.8s', delay: '0.4s' },
+  { left: '59%', top: '52%', size: 46, dur: '3.2s', delay: '1.9s' },
+  { left: '72%', top: '14%', size: 36, dur: '3s', delay: '0.7s' },
+  { left: '87%', top: '55%', size: 50, dur: '3.7s', delay: '1s' },
+  { left: '15%', top: '72%', size: 32, dur: '3s', delay: '1.5s' },
+];
+
+// Sao 5 cánh style cartoon: viền #2d3232 dày + fill gradient vàng-cam
+// giống hệt mặt trăng (gradient định nghĩa một lần ở HeroDecorations).
+function HeroBigStar({ left, top, size, dur, delay }: { left: string; top: string; size: number; dur: string; delay: string }) {
+  return (
+    <span
+      className="hero-big-star"
+      style={{ left, top, width: size, height: size, animationDuration: dur, animationDelay: delay }}
+    >
+      <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden>
+        <path
+          d="M50 4 L61 35 L94 36 L68 56 L77 87 L50 69 L23 87 L32 56 L6 36 L39 35 Z"
+          fill="url(#hero-star-grad)"
+          stroke="#2d3232"
+          strokeWidth="6"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
 // Decor nền vẽ bằng CSS hiện tại — chỉ hiện khi chưa có ảnh (fallback).
 // Mặt trời (sunRef) lặn xuống sau núi khi cuộn: xem useSunsetParallax.
+// Lớp bọc ngoài (sunRef) giữ transform parallax, lớp trong .hero-moon
+// pulse phát sáng — tách 2 lớp để animation scale không đè translate.
 function HeroDecorations({
   sunRef,
   cloudsRef,
@@ -27,15 +62,29 @@ function HeroDecorations({
     <>
       <div className="hero-dots absolute inset-0 z-[1] opacity-60" aria-hidden />
       <div ref={cloudsRef} className="absolute inset-0 z-[2] will-change-transform" aria-hidden>
+        {/* Gradient dùng chung cho mặt trăng + mọi sao lớn */}
+        <svg width="0" height="0" className="absolute" aria-hidden>
+          <defs>
+            <linearGradient id="hero-star-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#ffe57a" />
+              <stop offset="1" stopColor="#ff9d2e" />
+            </linearGradient>
+          </defs>
+        </svg>
+        {HERO_STARS.map((s, i) => (
+          <HeroBigStar key={i} left={s.left} top={s.top} size={s.size} dur={s.dur} delay={s.delay} />
+        ))}
         <div className="cloud left-0 top-10 h-8 w-40" style={{ animationDuration: '38s' }} />
         <div className="cloud left-0 top-28 h-6 w-28 opacity-80" style={{ animationDuration: '55s', animationDelay: '-20s' }} />
         <div className="cloud left-0 top-52 h-7 w-52 opacity-60" style={{ animationDuration: '70s', animationDelay: '-40s' }} />
       </div>
       <div
         ref={sunRef}
-        className="absolute -left-10 top-8 z-[3] h-36 w-36 rounded-full border-4 border-[#2d3232] bg-gradient-to-b from-[#ffe57a] to-[#ff9d2e] shadow-[0_6px_0_0_#2d3232,0_0_60px_rgba(255,200,60,.8)] will-change-transform sm:left-10"
+        className="absolute -left-10 top-8 z-[3] h-36 w-36 will-change-transform sm:left-10"
         aria-hidden
-      />
+      >
+        <div className="hero-moon border-4 border-[#2d3232] bg-gradient-to-b from-[#ffe57a] to-[#ff9d2e] shadow-[0_6px_0_0_#2d3232,0_0_60px_rgba(255,200,60,.8)]" />
+      </div>
     </>
   );
 }

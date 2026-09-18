@@ -574,6 +574,25 @@ button.cr-card {
   background-size: 26px 26px;
 }
 
+/* Sao lớn hero: SVG 5 cánh fill gradient vàng + viền #2d3232 + đổ bóng khối
+   y hệt mặt trăng, dùng chung animation glow-pulse (phát sáng nhịp nhàng). */
+.hero-big-star {
+  position: absolute;
+  animation: glow-pulse 3.2s ease-in-out infinite;
+  filter:
+    drop-shadow(0 3px 0 #2d3232)
+    drop-shadow(0 0 12px rgba(255, 200, 60, 0.75));
+  pointer-events: none;
+}
+/* Mặt trăng/mặt trời: pulse phát sáng (đặt ở lớp trong để không
+   xung đột transform parallax của lớp bọc ngoài). */
+.hero-moon {
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  animation: glow-pulse 3.2s ease-in-out infinite;
+}
+
 .zigzag {
   height: 22px;
   background:
@@ -625,7 +644,8 @@ button.cr-card {
 @media (prefers-reduced-motion: reduce) {
   .title-pop, .title-float, .title-float-delayed,
   .title-3d::after, .title-spark, .title-glow,
-  .cloud, .marquee-track, .bounce-soft {
+  .cloud, .marquee-track, .bounce-soft,
+  .hero-big-star, .hero-moon {
     animation: none;
   }
   .title-tilt { transition: none; }
