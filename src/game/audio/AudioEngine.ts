@@ -40,6 +40,9 @@ interface Hum {
   src: AudioBufferSourceNode;
   gain: GainNode;
   pan: StereoPannerNode | null;
+  /** Last gain and pan targets sent: the params are only rescheduled when these move. */
+  level: number;
+  side: number;
 }
 
 interface NoiseOpts {
@@ -73,6 +76,7 @@ export class AudioEngine {
   private readonly weapons: Map<string, WeaponDef>;
   private readonly projectiles: Map<string, ProjectileDef>;
   private readonly whirlHum = new Map<number, Hum>();
+  private readonly seenHum = new Set<number>();
   private readonly v1 = new THREE.Vector3();
 
   constructor(bundle: ConfigBundle) {
@@ -291,7 +295,8 @@ export class AudioEngine {
       }
       return;
     }
-    const seen = new Set<number>();
+    const seen = this.seenHum;
+    seen.clear();
     for (const zn of sim.zones) {
       if (zn.weapon.attack !== 'vortex') continue;
       seen.add(zn.id);
@@ -307,11 +312,21 @@ export class AudioEngine {
       const dist = Math.hypot(dx, dz);
       const atten = dist > MAX_DIST ? 0 : (1 - dist / MAX_DIST) ** 1.6;
       const t = this.ctx.currentTime;
-      hum.gain.gain.linearRampToValueAtTime(this.muted ? 0 : 0.22 * atten, t + 0.08);
+      // Glide from the current value (a ramp would start from the previous event, however old) and
+      // only when the target moved: scheduling every frame piles up automation events.
+      const level = this.muted ? 0 : 0.22 * atten;
+      if (Math.abs(level - hum.level) > 0.004) {
+        hum.gain.gain.setTargetAtTime(level, t, 0.03);
+        hum.level = level;
+      }
       if (hum.pan && dist > 0.6) {
         const rightX = -Math.sin(this.listenerYaw);
         const rightZ = Math.cos(this.listenerYaw);
-        hum.pan.pan.linearRampToValueAtTime(THREE.MathUtils.clamp((dx / dist) * rightX + (dz / dist) * rightZ, -1, 1), t + 0.08);
+        const side = THREE.MathUtils.clamp((dx / dist) * rightX + (dz / dist) * rightZ, -1, 1);
+        if (Math.abs(side - hum.side) > 0.02) {
+          hum.pan.pan.setTargetAtTime(side, t, 0.03);
+          hum.side = side;
+        }
       }
     }
     for (const [id, hum] of this.whirlHum) {
@@ -344,12 +359,12 @@ export class AudioEngine {
       gain.connect(master);
     }
     src.start();
-    return { src, gain, pan };
+    return { src, gain, pan, level: 0, side: 0 };
   }
 
   private stopHum(hum: Hum): void {
     const ctx = this.ctx!;
-    hum.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.25);
+    hum.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.06);
     hum.src.stop(ctx.currentTime + 0.3);
   }
 

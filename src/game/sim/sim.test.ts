@@ -242,6 +242,23 @@ test('3-way FFA: last side standing wins the instant the other two are eliminate
   assert.deepEqual(sim.result?.survivors, { blue: 1, red: 0, green: 0 });
 });
 
+test('an elimination for a tick already simulated applies on the next step', () => {
+  const ARENA: MapDef = { ...SEED.maps[0], id: 'late-elimination', size: 120, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
+  const sides: Side[] = ['blue', 'red', 'green'];
+  const terrain = new Terrain(ARENA, [], null, sides);
+  const at = (side: Side) => {
+    const z = terrain.zoneOf(side);
+    return { x: (z.x0 + z.x1) / 2, z: (z.z0 + z.z1) / 2 };
+  };
+  const army = armies({ blue: [{ unitId: 'clubber', ...at('blue') }], red: [{ unitId: 'clubber', ...at('red') }], green: [{ unitId: 'clubber', ...at('green') }] });
+  const sim = new BattleSim(SEED, ARENA, terrain, army, 1);
+  for (let i = 0; i < 10; i++) sim.step();
+  sim.queueElimination('green', 4);
+  sim.step();
+  assert.equal(sim.aliveCount('green'), 0);
+  assert.equal(sim.aliveCount('red'), 1);
+});
+
 test('3-way FFA: 2+ survivors when the time limit hits is a draw', () => {
   const ARENA: MapDef = { ...SEED.maps[0], id: 'ffa-arena-timeout', size: 160, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
   const content = { ...SEED, settings: { ...SEED.settings, battleTimeLimit: 0.5 } };

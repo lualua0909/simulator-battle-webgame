@@ -2,6 +2,7 @@
 // Sparks are unlit and not tone-mapped so the colours stay vivid even against a day sky;
 // they fade by shrinking (darkening would read as black specks on a bright sky).
 import * as THREE from 'three';
+import { commitInstances } from './instancing';
 
 const CAP = 4000;
 const SPARK_GRAVITY = 3.2;
@@ -120,9 +121,7 @@ export class Fireworks {
       colors[P + 2] = this.col[P + 2];
       i++;
     }
-    this.mesh.count = this.count;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.mesh.instanceColor!.needsUpdate = true;
+    commitInstances(this.mesh, this.count);
   }
 
   dispose(): void {

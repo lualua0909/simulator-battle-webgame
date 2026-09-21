@@ -44,6 +44,24 @@ const ease = (t: number) => {
 };
 const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
 
+// Part names built once: posing runs for every unit every frame, so no arrays or template strings there.
+const LIMBS = [
+  { out: 1, arm: 'armL', forearm: 'forearmL', thigh: 'thighL', shin: 'shinL' },
+  { out: -1, arm: 'armR', forearm: 'forearmR', thigh: 'thighR', shin: 'shinR' },
+] as const;
+const QUAD_LEGS: ReadonlyArray<readonly [string, string, number, boolean]> = [
+  ['legFL', 'shinFL', 0, true],
+  ['legBR', 'shinBR', 0.15, false],
+  ['legFR', 'shinFR', Math.PI, true],
+  ['legBL', 'shinBL', Math.PI + 0.15, false],
+];
+const DRAGON_TAIL = ['tail1', 'tail2', 'tail3', 'tail4'] as const;
+const DRAGON_LEGS = [
+  { legF: 'legFL', shinF: 'shinFL', legB: 'legBL', shinB: 'shinBL' },
+  { legF: 'legFR', shinF: 'shinFR', legB: 'legBR', shinB: 'shinBR' },
+] as const;
+const WHEELS = ['wheelFL', 'wheelFR', 'wheelBL', 'wheelBR'] as const;
+
 export function attackStyleFor(template: ModelTemplate, weapon: WeaponDef | undefined): AttackStyle {
   if (!weapon) return 'none';
   const humanoid = template.segments.find((s) => s.rig === 'humanoid');
@@ -301,10 +319,9 @@ export class Poser {
         // Both hands up to the sky, then flung down toward the target.
         const up = wind * (1 - strike);
         const release = strike * (1 - settle);
-        for (const s of ['L', 'R'] as const) {
-          const out = s === 'L' ? 1 : -1;
-          this.r(seg, `arm${s}`, -2.6 * up - 1.5 * release, 0, (0.45 * up + 0.15 * release) * out);
-          this.r(seg, `forearm${s}`, -0.25 * up + 0.4 * release);
+        for (const l of LIMBS) {
+          this.r(seg, l.arm, -2.6 * up - 1.5 * release, 0, (0.45 * up + 0.15 * release) * l.out);
+          this.r(seg, l.forearm, -0.25 * up + 0.4 * release);
         }
         this.r(seg, 'torso', -0.22 * up + 0.3 * release, 0, 0);
         this.r(seg, 'head', -0.45 * up + 0.15 * release, 0, 0);
@@ -324,12 +341,11 @@ export class Poser {
         // Fists overhead, then a crouching smash into the ground.
         const lift = wind * (1 - strike);
         const smash = strike * (1 - settle);
-        for (const s of ['L', 'R'] as const) {
-          const out = s === 'L' ? 1 : -1;
-          this.r(seg, `arm${s}`, -2.7 * lift - 0.7 * smash, 0, 0.25 * lift * out);
-          this.r(seg, `forearm${s}`, -0.4 * lift);
-          this.r(seg, `thigh${s}`, -0.55 * smash, 0, 0.1 * smash * out);
-          this.r(seg, `shin${s}`, 0.9 * smash);
+        for (const l of LIMBS) {
+          this.r(seg, l.arm, -2.7 * lift - 0.7 * smash, 0, 0.25 * lift * l.out);
+          this.r(seg, l.forearm, -0.4 * lift);
+          this.r(seg, l.thigh, -0.55 * smash, 0, 0.1 * smash * l.out);
+          this.r(seg, l.shin, 0.9 * smash);
         }
         this.r(seg, 'torso', -0.25 * lift + 0.65 * smash, 0, 0);
         this.o(seg, 'hips', 0, -0.16 * smash, 0);
@@ -400,15 +416,8 @@ export class Poser {
     const t = a.time + a.seed * 10;
     const amp = a.airborne ? 0 : Math.min(1.2, a.speed / Math.max(0.5, a.refSpeed));
     const p = a.phase;
-    const legs: Array<[string, string, number]> = [
-      ['legFL', 'shinFL', 0],
-      ['legBR', 'shinBR', 0.15],
-      ['legFR', 'shinFR', Math.PI],
-      ['legBL', 'shinBL', Math.PI + 0.15],
-    ];
-    for (const [leg, shin, off] of legs) {
+    for (const [leg, shin, off, front] of QUAD_LEGS) {
       this.r(seg, leg, -Math.sin(p + off) * 0.5 * amp);
-      const front = leg.includes('F');
       const bend = Math.max(0, Math.cos(p + off)) * 0.7 * amp;
       this.r(seg, shin, front ? bend : -bend * 0.2 + bend);
     }
@@ -447,12 +456,12 @@ export class Poser {
     this.r(seg, 'wingTipR', 0, 0, -beatTip * 0.45);
     this.o(seg, 'body', 0, -beat * 0.18, 0);
     this.r(seg, 'body', -0.08 + a.leanX * 0.3, 0, a.leanZ * 0.4);
-    for (let i = 1; i <= 4; i++) this.r(seg, `tail${i}`, 0.06, Math.sin(t * 2 - i * 0.7) * 0.16, 0);
-    for (const side of ['L', 'R']) {
-      this.r(seg, `legF${side}`, 0.7);
-      this.r(seg, `shinF${side}`, 0.9);
-      this.r(seg, `legB${side}`, 0.9);
-      this.r(seg, `shinB${side}`, 0.6);
+    for (let i = 0; i < DRAGON_TAIL.length; i++) this.r(seg, DRAGON_TAIL[i], 0.06, Math.sin(t * 2 - (i + 1) * 0.7) * 0.16, 0);
+    for (const l of DRAGON_LEGS) {
+      this.r(seg, l.legF, 0.7);
+      this.r(seg, l.shinF, 0.9);
+      this.r(seg, l.legB, 0.9);
+      this.r(seg, l.shinB, 0.6);
     }
     const breathing = a.attack >= 0 ? 1 : 0;
     this.r(seg, 'neck1', -0.1 + Math.sin(t * 1.3) * 0.05 + 0.35 * breathing);
@@ -483,7 +492,7 @@ export class Poser {
 
   private catapult(seg: SegmentTemplate, a: AnimInput): void {
     const roll = a.phase * 1.4;
-    for (const w of ['wheelFL', 'wheelFR', 'wheelBL', 'wheelBR']) this.r(seg, w, roll);
+    for (const w of WHEELS) this.r(seg, w, roll);
     const k = a.attack;
     if (k < 0) return;
     if (k <= 1) {

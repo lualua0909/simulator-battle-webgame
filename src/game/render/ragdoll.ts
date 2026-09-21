@@ -22,6 +22,10 @@ export function loadRapier(): Promise<Rapier> {
 // membership << 16 | filter: ground and ragdoll parts only touch each other.
 const GROUND_GROUPS = (0x0001 << 16) | 0x0002;
 const PART_GROUPS = (0x0002 << 16) | 0x0001;
+/** Fixed physics step: a variable one makes the joints jitter, and one clamped step per frame ran ragdolls in slow motion at 2-4× speed or low frame rates. */
+const STEP = 1 / 60;
+/** Steps per frame at most; time beyond that is dropped (4× speed at 60 fps still fits). */
+const MAX_STEPS = 4;
 
 export interface Ragdoll {
   template: ModelTemplate;
@@ -40,6 +44,7 @@ const one = new THREE.Vector3(1, 1, 1);
 export class RagdollWorld {
   private readonly world: RAPIER_NS.World;
   readonly active = new Set<Ragdoll>();
+  private acc = 0;
 
   static async create(terrain: Terrain): Promise<RagdollWorld> {
     return new RagdollWorld(await loadRapier(), terrain);
@@ -50,6 +55,7 @@ export class RagdollWorld {
     terrain: Terrain,
   ) {
     this.world = new R.World({ x: 0, y: -9.81, z: 0 });
+    this.world.timestep = STEP;
     const step = 2;
     const n = Math.ceil(terrain.size / step) + 1;
     const verts = new Float32Array(n * n * 3);
@@ -135,9 +141,17 @@ export class RagdollWorld {
   }
 
   step(dt: number): void {
-    if (this.active.size === 0 || dt <= 0) return;
-    this.world.timestep = Math.min(dt, 1 / 30);
-    this.world.step();
+    if (this.active.size === 0) {
+      this.acc = 0;
+      return;
+    }
+    if (dt <= 0) return;
+    this.acc = Math.min(this.acc + dt, STEP * MAX_STEPS);
+    // A little slack: frame times jitter around 1/60, and 0-then-2 steps would stutter (the debt carries over).
+    while (this.acc >= STEP * 0.9) {
+      this.world.step();
+      this.acc -= STEP;
+    }
     for (const r of this.active) r.age += dt;
   }
 

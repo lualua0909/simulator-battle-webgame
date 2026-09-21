@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react';
 import { botBoxTier, isUnlocked } from '@/shared/economy';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -75,7 +75,9 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [result, setResult] = useState<BattleResult | null>(null);
   /** Hides the bot-win reward chest once claimed or skipped, until the next battle. */
   const [rewardClosed, setRewardClosed] = useState(false);
-  const [stats, setStats] = useState<BattleStats>({ alive: {}, time: 0 });
+  // The engine reports 4×/s: only the HUD subscribes, so the whole game UI does not re-render with it.
+  const [stats] = useState(createStatsFeed);
+  const [contextLost, setContextLost] = useState(false);
   /** Sides fighting the current/last battle (online: from the server's battle:start; offline: always blue+red). */
   const [matchSides, setMatchSides] = useState<Side[]>(TWO_SIDES);
   const [speed, setSpeed] = useState(1);
@@ -147,7 +149,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       onPointer: (p) => pointerRef.current(p),
       onResult: (r) => resultRef.current(r),
       onChecksum: (t, h) => checksumRef.current(t, h),
-      onStats: setStats,
+      onStats: stats.set,
+      onContextLost: setContextLost,
       onCinematic: (k) => {
         cineRef.current = k;
         setCine(k);
@@ -401,13 +404,27 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     // treat a release on top of a card or button as "over the map" too — hit-test the actual
     // topmost element instead.
     const overMap = (x: number, y: number) => document.elementFromPoint(x, y) === engine.renderer.domElement;
-    const onMove = (e: PointerEvent) => {
-      if (!dragRef.current || e.pointerId !== dragRef.current.pointerId) return;
+    // Moves outpace frames on high-rate touch screens: hit-test and place the ghost once per frame.
+    let raf = 0;
+    let last: PointerEvent | null = null;
+    const moveNow = () => {
+      raf = 0;
+      const e = last;
+      last = null;
+      if (!e || !dragRef.current) return;
       if (overMap(e.clientX, e.clientY)) engine.dispatchPointer('move', e.clientX, e.clientY, e);
       else engine.hideGhost();
     };
+    const onMove = (e: PointerEvent) => {
+      if (!dragRef.current || e.pointerId !== dragRef.current.pointerId) return;
+      last = e;
+      raf ||= requestAnimationFrame(moveNow);
+    };
     const onUp = (e: PointerEvent) => {
       if (!dragRef.current || e.pointerId !== dragRef.current.pointerId) return;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      last = null;
       if (overMap(e.clientX, e.clientY)) {
         engine.dispatchPointer('down', e.clientX, e.clientY, e);
         engine.dispatchPointer('up', e.clientX, e.clientY, e);
@@ -419,6 +436,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
@@ -469,6 +487,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     if (engine) engine.rts.leftPan = phase !== 'deploy' || locked;
   }, [engine, phase, locked]);
 
+  // Only deployment and the battle need every display frame; menus and the result screen run at 30 fps.
+  useEffect(() => engine?.setFrameCap(phase === 'deploy' || phase === 'battle' ? null : 30), [engine, phase]);
   useEffect(() => engine?.setSpeed(speed), [engine, speed]);
   useEffect(() => engine?.setPaused(paused), [engine, paused]);
   useEffect(() => engine?.setMuted(muted), [engine, muted]);
@@ -532,7 +552,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   };
   endOnlineRef.current = (winner) => {
     if (phase !== 'battle') return; // already ended locally (normal finish) — this ack is just a confirmation
-    const r: BattleResult = { winner, tick: engine?.sim?.tick ?? 0, reason: 'surrender', survivors: stats.alive };
+    const r: BattleResult = { winner, tick: engine?.sim?.tick ?? 0, reason: 'surrender', survivors: stats.get().alive };
     setResult(r);
     const show = () => setPhase((p) => (p === 'battle' ? 'result' : p));
     if (winner === 'draw') return void window.setTimeout(show, 1200);
@@ -808,7 +828,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         )}
 
         {bundle && (phase === 'battle' || phase === 'result') && !cine && (
-          <BattleHud
+          <LiveBattleHud
             activeSides={matchSides}
             stats={stats}
             total={totals}
@@ -864,6 +884,44 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         />
       )}
       {toast && <div className="panel pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 px-4 py-2 font-bold">{toast}</div>}
+      {contextLost && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="panel max-w-sm p-4 text-center">
+            <p className="font-bold">Máy đã thu hồi bộ nhớ đồ họa của trận đấu.</p>
+            <p className="mt-1 text-sm">Đang thử khôi phục… Nếu màn hình vẫn đen, hãy tải lại trang.</p>
+            <button className="btn btn-gold pointer-events-auto mt-3 px-4 py-1" onClick={() => window.location.reload()}>
+              Tải lại trang
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+interface StatsFeed {
+  get(): BattleStats;
+  set(s: BattleStats): void;
+  subscribe(listener: () => void): () => void;
+}
+
+function createStatsFeed(): StatsFeed {
+  let value: BattleStats = { alive: {}, time: 0 };
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (s) => {
+      value = s;
+      for (const l of listeners) l();
+    },
+    subscribe: (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+  };
+}
+
+function LiveBattleHud({ stats, ...props }: Omit<ComponentProps<typeof BattleHud>, 'stats'> & { stats: StatsFeed }) {
+  const live = useSyncExternalStore(stats.subscribe, stats.get, stats.get);
+  return <BattleHud {...props} stats={live} />;
 }

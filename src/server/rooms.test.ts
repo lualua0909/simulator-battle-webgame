@@ -354,6 +354,32 @@ test('a 30s deploy timeout force-starts the battle with whatever was drafted, ev
   close(alice, bob);
 });
 
+test('an elimination tick lands ahead of the fastest simulation, not just the verified ones', async () => {
+  const alice = open('cookie-alice');
+  const bob = open('cookie-bob');
+  const carol = open('cookie-carol');
+  await Promise.all([connected(alice), connected(bob), connected(carol)]);
+  const room = await create(alice);
+  assert.ok(room.ok);
+  await join(bob, room.code);
+  await join(carol, room.code);
+  const sides: Side[] = ['blue', 'red', 'green'];
+  const started = Promise.all([once(alice, 'battle:start'), once(bob, 'battle:start'), once(carol, 'battle:start')]);
+  assert.deepEqual(await ready(alice, 'blue', undefined, sides), { ok: true });
+  assert.deepEqual(await ready(bob, 'red', undefined, sides), { ok: true });
+  assert.deepEqual(await ready(carol, 'green', 'knight', sides), { ok: true });
+  await started;
+  // Everyone verified tick 30; alice skipped the intro and sped up, already reporting tick 300.
+  for (const c of [alice, bob, carol]) c.emit('battle:checksum', { tick: 30, hash: 1 });
+  for (let tick = 60; tick <= 300; tick += 30) alice.emit('battle:checksum', { tick, hash: tick });
+  const eliminated = once(bob, 'battle:eliminate');
+  carol.emit('battle:surrender');
+  const e = (await eliminated) as { side: Side; tick: number };
+  assert.equal(e.side, 'green');
+  assert.ok(e.tick > 300, `tick ${e.tick} is behind alice's simulation (300): she could never apply it`);
+  close(alice, bob, carol);
+});
+
 test('3-4 player free-for-all: one surrendering does not end the match for the rest', async () => {
   const alice = open('cookie-alice');
   const bob = open('cookie-bob');

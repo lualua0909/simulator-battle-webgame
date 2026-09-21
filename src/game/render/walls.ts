@@ -6,6 +6,7 @@ import { parseAssetParams, type ConfigBundle, type StructureParams } from '@/sha
 import { wallBlockGeometry, wallCrackGeometry, wallCrownGeometry, wallRubbleGeometry } from '../models/structures';
 import type { Side } from '../sim/terrain';
 import type { BattleSim, WallCell } from '../sim/world';
+import { commitInstances } from './instancing';
 
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
 const crackMaterial = new THREE.MeshBasicMaterial({ color: '#1b1612', side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
@@ -19,6 +20,8 @@ interface Look {
   crowns: THREE.InstancedMesh;
   rubble: THREE.InstancedMesh;
   cracks: THREE.InstancedMesh;
+  /** Instances written this frame. */
+  used: { blocks: number[]; crowns: number; rubble: number; cracks: number };
 }
 
 /** Chiều cao 1 khối tường: ưu tiên asset params (CMS), fallback siege.tierHeight. */
@@ -39,6 +42,8 @@ export class WallRenderer {
   private readonly p = new THREE.Vector3();
   private readonly s = new THREE.Vector3();
   private readonly c = new THREE.Color();
+  /** Generated wall geometry per model, reused across builds (deployment rebuilds on every placement). */
+  private readonly geometry = new Map<string, { blocks: THREE.BufferGeometry[]; crown: THREE.BufferGeometry; rubble: THREE.BufferGeometry; crack: THREE.BufferGeometry }>();
 
   constructor(private readonly bundle: ConfigBundle) {
     this.group.name = 'walls';
@@ -52,7 +57,7 @@ export class WallRenderer {
   }
 
   build(sim: BattleSim): void {
-    this.clear();
+    this.release();
     const tierHeight = this.bundle.settings.siege.tierHeight;
     this.cells = [...sim.walls.values()].filter((c) => c.kind === 'wall');
     this.orient.clear();
@@ -73,8 +78,19 @@ export class WallRenderer {
       const asset = this.bundle.assets.find((a) => a.id === modelId);
       const params = parseAssetParams('structure', asset?.params ?? {});
       const blockH = wallBlockHeight(params, tierHeight);
-      const inst = (geo: THREE.BufferGeometry, count: number, mat: THREE.Material = material) => {
-        const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, count));
+      let geo = this.geometry.get(modelId);
+      if (!geo) {
+        const seed = (asset?.seed ?? 1) * 10;
+        geo = {
+          blocks: Array.from({ length: VARIANTS }, (_, v) => wallBlockGeometry(params, blockH, seed + v)),
+          crown: wallCrownGeometry(params, 3),
+          rubble: wallRubbleGeometry(params, 5),
+          crack: wallCrackGeometry(params, blockH, 7),
+        };
+        this.geometry.set(modelId, geo);
+      }
+      const inst = (g: THREE.BufferGeometry, count: number, mat: THREE.Material = material) => {
+        const mesh = new THREE.InstancedMesh(g, mat, Math.max(1, count));
         mesh.count = 0;
         mesh.castShadow = mat === material;
         mesh.receiveShadow = true;
@@ -82,8 +98,8 @@ export class WallRenderer {
         this.group.add(mesh);
         return mesh;
       };
-      const blocks = Array.from({ length: VARIANTS }, (_, v) => {
-        const mesh = inst(wallBlockGeometry(params, blockH, (asset?.seed ?? 1) * 10 + v), n.blocks);
+      const blocks = geo.blocks.map((g) => {
+        const mesh = inst(g, n.blocks);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, n.blocks) * 3).fill(1), 3);
         return mesh;
       });
@@ -91,9 +107,10 @@ export class WallRenderer {
         params,
         blockH,
         blocks,
-        crowns: inst(wallCrownGeometry(params, 3), n.cells),
-        rubble: inst(wallRubbleGeometry(params, 5), n.cells),
-        cracks: inst(wallCrackGeometry(params, blockH, 7), n.cells, crackMaterial),
+        crowns: inst(geo.crown, n.cells),
+        rubble: inst(geo.rubble, n.cells),
+        cracks: inst(geo.crack, n.cells, crackMaterial),
+        used: { blocks: geo.blocks.map(() => 0), crowns: 0, rubble: 0, cracks: 0 },
       });
     }
   }
@@ -104,14 +121,17 @@ export class WallRenderer {
 
   update(dt: number, hidden: Side | null): void {
     if (this.cells.length === 0) return;
-    const used = new Map<Look, { blocks: number[]; crowns: number; rubble: number; cracks: number }>();
-    for (const look of this.looks.values()) used.set(look, { blocks: Array(VARIANTS).fill(0), crowns: 0, rubble: 0, cracks: 0 });
+    for (const look of this.looks.values()) {
+      const u = look.used;
+      u.blocks.fill(0);
+      u.crowns = u.rubble = u.cracks = 0;
+    }
     for (const cell of this.cells) {
       const u = cell.unit;
       const look = this.looks.get(u.def.modelId);
       if (!look || (hidden && u.side === hidden)) continue;
       const blockH = look.blockH;
-      const n = used.get(look)!;
+      const n = look.used;
       const x = u.x;
       const z = u.z;
       if (!u.alive) {
@@ -153,33 +173,31 @@ export class WallRenderer {
       this.m.compose(this.p.set(x + jx, u.y + cell.tiers * blockH, z + jz), this.q, this.s.set(1, 1, 1));
       look.crowns.setMatrixAt(n.crowns++, this.m);
     }
-    for (const [look, n] of used) {
-      look.blocks.forEach((b, v) => {
-        b.count = n.blocks[v];
-        b.instanceMatrix.needsUpdate = true;
-        if (b.instanceColor) b.instanceColor.needsUpdate = true;
-      });
-      for (const [mesh, count] of [
-        [look.crowns, n.crowns],
-        [look.rubble, n.rubble],
-        [look.cracks, n.cracks],
-      ] as const) {
-        mesh.count = count;
-        mesh.instanceMatrix.needsUpdate = true;
-      }
+    for (const look of this.looks.values()) {
+      const n = look.used;
+      look.blocks.forEach((b, v) => commitInstances(b, n.blocks[v]));
+      commitInstances(look.crowns, n.crowns);
+      commitInstances(look.rubble, n.rubble);
+      commitInstances(look.cracks, n.cracks);
     }
   }
 
-  clear(): void {
+  /** Drops the instanced meshes of the last build (the geometry cache stays). */
+  private release(): void {
     for (const look of this.looks.values()) {
       for (const mesh of [...look.blocks, look.crowns, look.rubble, look.cracks]) {
         this.group.remove(mesh);
-        mesh.geometry.dispose();
         mesh.dispose();
       }
     }
     this.looks.clear();
     this.cells = [];
     this.shudder.clear();
+  }
+
+  clear(): void {
+    this.release();
+    for (const g of this.geometry.values()) for (const geo of [...g.blocks, g.crown, g.rubble, g.crack]) geo.dispose();
+    this.geometry.clear();
   }
 }

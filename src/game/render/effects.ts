@@ -8,6 +8,7 @@ import { createTornadoModel } from '../models/effects';
 import { createProjectileModel } from '../models/projectiles';
 import type { Terrain } from '../sim/terrain';
 import type { BattleSim, SimEvent } from '../sim/world';
+import { commitInstances } from './instancing';
 import type { ParticleSystem } from './particles';
 
 export interface EffectHost {
@@ -39,6 +40,7 @@ interface Bolt {
   width: number;
   rough: number;
   sky: boolean;
+  /** Forks in use (`fork` may hold more: bolts are pooled). */
   forks: number;
   flickerAt: number;
   pts: THREE.Vector3[];
@@ -105,10 +107,16 @@ export class EffectRenderer {
   private burnDef: ParticleDef | null;
 
   private readonly bolts: Bolt[] = [];
+  /** Finished bolts reused by the next ones (casters crackle many short bolts per second). */
+  private readonly boltPool: Bolt[] = [];
   private readonly core: THREE.InstancedMesh;
   private readonly glow: THREE.InstancedMesh;
+  /** Instance colour arrays: [core, glow]. */
+  private readonly boltColors: Float32Array[];
   private readonly rings: Ring[] = [];
-  private readonly flashes: Flash[] = [];
+  private readonly flashPool: Flash[] = [];
+  /** The pooled lights in the scene (quality tier); flashes are dropped when there are none. */
+  private flashes: Flash[] = [];
   private flashNext = 0;
   private readonly meteors: Meteor[] = [];
   private readonly meteorGeo = new Map<string, THREE.BufferGeometry>();
@@ -144,12 +152,27 @@ export class EffectRenderer {
       mesh.renderOrder = 3;
       this.group.add(mesh);
     }
+    this.boltColors = [this.core.instanceColor!.array as Float32Array, this.glow.instanceColor!.array as Float32Array];
     for (let i = 0; i < 4; i++) {
       const light = new THREE.PointLight('#ffffff', 0, 34, 1.6);
       light.visible = true;
-      this.flashes.push({ light, age: 1, life: 1, peak: 0 });
-      this.group.add(light);
+      this.flashPool.push({ light, age: 1, life: 1, peak: 0 });
     }
+    this.setFlashLights(this.flashPool.length);
+  }
+
+  /** How many flash lights stay in the scene. A fixed count: changing it recompiles lit materials once. */
+  setFlashLights(n: number): void {
+    const count = Math.max(0, Math.min(n, this.flashPool.length));
+    if (count === this.flashes.length) return;
+    for (const f of this.flashPool) {
+      f.age = f.life;
+      f.light.intensity = 0;
+      this.group.remove(f.light);
+    }
+    this.flashes = this.flashPool.slice(0, count);
+    for (const f of this.flashes) this.group.add(f.light);
+    this.flashNext = 0;
   }
 
   setTerrain(terrain: Terrain): void {
@@ -306,28 +329,42 @@ export class EffectRenderer {
     host: EffectHost,
   ): void {
     if (this.bolts.length > 160) return;
-    const bolt: Bolt = {
+    const bolt: Bolt = this.boltPool.pop() ?? {
       a: new THREE.Vector3(),
       b: new THREE.Vector3(),
-      fromUnit: 'fromUnit' in ends ? ends.fromUnit : -1,
-      fromChest: 'fromUnit' in ends && ends.fromChest,
-      toUnit: 'toUnit' in ends ? ends.toUnit : -1,
+      fromUnit: -1,
+      fromChest: false,
+      toUnit: -1,
       age: 0,
-      life,
-      color: new THREE.Color(color),
-      width,
-      rough: sky ? 0.22 : 0.3,
-      sky,
-      forks: sky ? 3 : width > 0.04 ? 1 : 0,
+      life: 0,
+      color: new THREE.Color(),
+      width: 0,
+      rough: 0,
+      sky: false,
+      forks: 0,
       flickerAt: 0,
       pts: Array.from({ length: (1 << BOLT_LEVELS) + 1 }, () => new THREE.Vector3()),
       fork: [],
     };
-    for (let i = 0; i < bolt.forks; i++) bolt.fork.push(Array.from({ length: (1 << FORK_LEVELS) + 1 }, () => new THREE.Vector3()));
+    bolt.fromUnit = 'fromUnit' in ends ? ends.fromUnit : -1;
+    bolt.fromChest = 'fromUnit' in ends && ends.fromChest;
+    bolt.toUnit = 'toUnit' in ends ? ends.toUnit : -1;
+    bolt.age = 0;
+    bolt.life = life;
+    bolt.color.set(color);
+    bolt.width = width;
+    bolt.rough = sky ? 0.22 : 0.3;
+    bolt.sky = sky;
+    bolt.forks = sky ? 3 : width > 0.04 ? 1 : 0;
+    bolt.flickerAt = 0;
+    while (bolt.fork.length < bolt.forks) bolt.fork.push(Array.from({ length: (1 << FORK_LEVELS) + 1 }, () => new THREE.Vector3()));
     if ('a' in ends) {
       bolt.a.copy(ends.a);
       bolt.b.copy(ends.b);
-    } else if (!this.boltEnds(bolt, host)) return;
+    } else if (!this.boltEnds(bolt, host)) {
+      this.boltPool.push(bolt);
+      return;
+    }
     this.bolts.push(bolt);
   }
 
@@ -344,18 +381,20 @@ export class EffectRenderer {
 
   private updateBolts(dt: number, host: EffectHost): void {
     let n = 0;
-    const colors = [this.core.instanceColor!.array as Float32Array, this.glow.instanceColor!.array as Float32Array];
+    const colors = this.boltColors;
     for (let i = this.bolts.length - 1; i >= 0; i--) {
       const bolt = this.bolts[i];
       bolt.age += dt;
       if (bolt.age >= bolt.life) {
         this.bolts.splice(i, 1);
+        this.boltPool.push(bolt);
         continue;
       }
       this.boltEnds(bolt, host);
       if (bolt.age >= bolt.flickerAt || dt === 0) {
         this.jag(bolt.a, bolt.b, bolt.pts, BOLT_LEVELS, bolt.rough);
-        for (const fork of bolt.fork) {
+        for (let f = 0; f < bolt.forks; f++) {
+          const fork = bolt.fork[f];
           const from = bolt.pts[4 + Math.floor(Math.random() * ((1 << BOLT_LEVELS) - 7))];
           const len = bolt.a.distanceTo(bolt.b) * (bolt.sky ? 0.22 : 0.3);
           this.v3.set(Math.random() - 0.5, bolt.sky ? -0.9 : Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(len).add(from);
@@ -368,14 +407,10 @@ export class EffectRenderer {
       const pulse = bolt.sky ? (t < 0.15 ? 1 : t < 0.3 ? 0.35 : t < 0.45 ? 1 : 1 - (t - 0.45) / 0.55) : 1 - t * t;
       const k = pulse * (0.8 + Math.random() * 0.2);
       n = this.drawPolyline(bolt.pts, bolt.width, bolt.color, k, n, colors);
-      for (const fork of bolt.fork) n = this.drawPolyline(fork, bolt.width * 0.5, bolt.color, k * 0.7, n, colors);
+      for (let f = 0; f < bolt.forks; f++) n = this.drawPolyline(bolt.fork[f], bolt.width * 0.5, bolt.color, k * 0.7, n, colors);
     }
-    this.core.count = n;
-    this.glow.count = n;
-    this.core.instanceMatrix.needsUpdate = true;
-    this.glow.instanceMatrix.needsUpdate = true;
-    this.core.instanceColor!.needsUpdate = true;
-    this.glow.instanceColor!.needsUpdate = true;
+    commitInstances(this.core, n);
+    commitInstances(this.glow, n);
   }
 
   /** Midpoint displacement between a and b into pts (2^levels + 1 points). */
@@ -414,8 +449,13 @@ export class EffectRenderer {
       this.m.compose(mid, this.q, this.s.set(halo, halo, len + halo * 0.6));
       this.glow.setMatrixAt(n, this.m);
       this.c1.copy(color).lerp(WHITE, 0.65);
-      colors[0].set([this.c1.r, this.c1.g, this.c1.b], n * 3);
-      colors[1].set([color.r, color.g, color.b], n * 3);
+      const c = n * 3;
+      colors[0][c] = this.c1.r;
+      colors[0][c + 1] = this.c1.g;
+      colors[0][c + 2] = this.c1.b;
+      colors[1][c] = color.r;
+      colors[1][c + 1] = color.g;
+      colors[1][c + 2] = color.b;
       n++;
     }
     return n;
@@ -559,6 +599,7 @@ export class EffectRenderer {
   // ------------------------------------------------------------------ flashes
 
   private flash(at: THREE.Vector3, color: string, intensity: number, life: number): void {
+    if (this.flashes.length === 0) return;
     const f = this.flashes[this.flashNext];
     this.flashNext = (this.flashNext + 1) % this.flashes.length;
     f.light.position.copy(at);
@@ -717,6 +758,7 @@ export class EffectRenderer {
   // ------------------------------------------------------------------ lifecycle
 
   clear(): void {
+    this.boltPool.push(...this.bolts);
     this.bolts.length = 0;
     this.core.count = 0;
     this.glow.count = 0;

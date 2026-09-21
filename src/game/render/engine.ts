@@ -2,11 +2,11 @@
 // interpolates visuals, and turns sim events into particles, ragdolls and stuck arrows.
 import * as THREE from 'three';
 import type { ArmyStars } from '@/shared/net';
-import type { ConfigBundle, MapDef, ParticleDef, ProjectileDef, WeaponDef } from '@/shared/schema';
+import type { ConfigBundle, MapDef, ParticleDef, ProjectileDef, Settings, WeaponDef } from '@/shared/schema';
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
 import { AudioEngine } from '../audio/AudioEngine';
 import { getUnitTemplate } from '../models';
-import { cloneSkinned } from '../models/glbSkinned';
+import { cloneSkinned, releaseSkinned, type SkinnedInstance } from '../models/glbSkinned';
 import type { Armies } from '../sim/army';
 import { Terrain, WALL_CELL, type Side } from '../sim/terrain';
 import { BattleSim, SIM_DT, type BattleResult, type SimEvent } from '../sim/world';
@@ -16,9 +16,11 @@ import { Cinematic, type Shot } from './cinematic';
 import { CameraDirector } from './director';
 import { EffectRenderer, type EffectHost } from './effects';
 import { Fireworks } from './fireworks';
+import { HeightField } from './heightField';
 import { ParticleSystem } from './particles';
 import { ProjectileRenderer } from './projectiles';
-import { RagdollWorld } from './ragdoll';
+import { FrameRateGovernor, LOWER_TIER, QUALITY, type QualityTier } from './quality';
+import { loadRapier, RagdollWorld } from './ragdoll';
 import { createScenery } from './scenery';
 import { DebrisSystem } from './debris';
 import { WallRenderer } from './walls';
@@ -47,6 +49,8 @@ export interface EngineEvents {
   onStats?(s: BattleStats): void;
   /** Which cinematic owns the camera (null = player control). */
   onCinematic?(kind: CinematicKind | null): void;
+  /** The browser took the WebGL context away (true) or gave it back (false). */
+  onContextLost?(lost: boolean): void;
 }
 
 export type CinematicKind = 'intro' | 'battle' | 'victory';
@@ -126,6 +130,8 @@ export class BattleEngine {
   private ghost:
     | {
         group: THREE.Group;
+        /** Skeletal clone shown by a skinned unit's ghost. */
+        skin: SkinnedInstance | null;
         side: Side;
         valid: (x: number, z: number) => boolean;
         mats: THREE.MeshStandardMaterial[];
@@ -142,7 +148,30 @@ export class BattleEngine {
   private readonly weapons: Map<string, WeaponDef>;
   private readonly projectileDefs: Map<string, ProjectileDef>;
   private readonly raycaster = new THREE.Raycaster();
+  private readonly ndc = new THREE.Vector2();
   private readonly tmp = new THREE.Vector3();
+  private heights: HeightField | null = null;
+  /** Newest pointer move not resolved yet: moves outpace frames (120 Hz+ touch), one per frame is enough. */
+  private pendingMove: { x: number; y: number; e: PointerEvent } | null = null;
+  private tier: QualityTier = 'high';
+  private readonly governor = new FrameRateGovernor();
+  private frameNo = 0;
+  /** Settings with the quality tier's ragdoll and corpse caps applied. */
+  private unitSettings: Settings;
+  private contextLost = false;
+  /** Frame-rate cap while nothing needs full rate (menus, lobby, result screen); null = every display frame. */
+  private frameCap: number | null = null;
+  private lastFrameAt = 0;
+  private readonly onContextLost = (e: Event) => {
+    e.preventDefault();
+    this.contextLost = true;
+    this.events.onContextLost?.(true);
+  };
+  private readonly onContextRestored = () => {
+    this.contextLost = false;
+    this.governor.hold();
+    this.events.onContextLost?.(false);
+  };
 
   constructor(
     private readonly host: HTMLElement,
@@ -152,7 +181,6 @@ export class BattleEngine {
     // Phones draw fewer pixels and a smaller shadow map; the low-poly look survives both.
     const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
     this.renderer = new THREE.WebGLRenderer({ antialias: !coarse });
-    this.renderer.setPixelRatio(Math.min(coarse ? 1.25 : 1.75, window.devicePixelRatio));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -160,6 +188,8 @@ export class BattleEngine {
     this.timer.connect(document);
     this.renderer.domElement.style.display = 'block';
     this.renderer.domElement.style.touchAction = 'none';
+    this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored);
     host.appendChild(this.renderer.domElement);
 
     this.particleDefs = new Map(bundle.particles.map((p) => [p.id, p]));
@@ -171,8 +201,6 @@ export class BattleEngine {
       new THREE.ShaderMaterial({ uniforms: { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } }, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, fog: false }),
     );
     this.sky.frustumCulled = false;
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
     this.units = new UnitRenderer(bundle);
@@ -180,6 +208,8 @@ export class BattleEngine {
     this.projectiles = new ProjectileRenderer(bundle);
     this.effects = new EffectRenderer(bundle);
     this.audio = new AudioEngine(bundle);
+    this.unitSettings = bundle.settings;
+    this.setQuality(coarse ? 'medium' : 'high');
     this.effectHost = {
       particles: this.particles,
       emitPoint: (id, out) => this.units.emitPoint(id, out),
@@ -214,16 +244,12 @@ export class BattleEngine {
   loadMap(mapId: string, defense: Side | null = null, activeSides?: readonly Side[]): void {
     const map = this.bundle.maps.find((m) => m.id === mapId) ?? this.bundle.maps[0];
     if (!map) return;
-    for (const child of [...this.mapGroup.children]) {
-      this.mapGroup.remove(child);
-      child.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (mesh.isMesh && o.name !== 'scenery' && !(o as THREE.InstancedMesh).isInstancedMesh) mesh.geometry.dispose();
-      });
-    }
+    this.clearMap();
     this.map = map;
     const terrain = activeSides ? new Terrain(map, this.bundle.assets, defense, activeSides) : new Terrain(map, this.bundle.assets, defense);
     this.terrain = terrain;
+    this.heights = new HeightField(terrain);
+    this.governor.hold();
     this.mapGroup.add(createTerrainMesh(terrain), createSkirt(terrain));
     this.water = createWater(terrain);
     if (this.water) this.mapGroup.add(this.water.mesh);
@@ -264,7 +290,11 @@ export class BattleEngine {
     this.projectiles.clear();
     this.particles.clear();
     this.effects.clear();
-    this.resetRagdolls();
+    // Nobody dies while deploying: fetch the physics engine (~1 MB) once the page is idle, build its world at battle start.
+    this.resetRagdolls(false);
+    const preload = () => void loadRapier().catch(() => {});
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(preload, { timeout: 5000 });
+    else window.setTimeout(preload, 1500);
     this.setCine(null);
     this.clearVictory();
   }
@@ -314,6 +344,7 @@ export class BattleEngine {
     this.shakeAmount = 0;
     this.mode = 'battle';
     this.acc = 0;
+    this.governor.hold();
     this.resultSent = false;
     this.hidden = null;
     this.paused = false;
@@ -451,6 +482,7 @@ export class BattleEngine {
     }
     if (this.ghost) {
       this.scene.remove(this.ghost.group);
+      if (this.ghost.skin) releaseSkinned(this.ghost.skin);
       for (const m of this.ghost.mats) m.dispose();
       for (const d of this.ghost.footprint.disposables) d.dispose();
       this.ghost = null;
@@ -514,6 +546,7 @@ export class BattleEngine {
     this.scene.add(group);
     this.ghost = {
       group,
+      skin,
       side,
       valid,
       mats: [ok, bad],
@@ -528,6 +561,38 @@ export class BattleEngine {
     // No preserveDrawingBuffer: render and read back in the same task.
     this.renderer.render(this.scene, this.camera);
     return this.renderer.domElement.toDataURL('image/png');
+  }
+
+  /** Caps the frame rate (menus and result screens save battery); null renders every display frame. */
+  setFrameCap(fps: number | null): void {
+    if (fps === this.frameCap) return;
+    this.frameCap = fps;
+    this.governor.hold();
+  }
+
+  /** Current rendering quality tier. */
+  get quality(): QualityTier {
+    return this.tier;
+  }
+
+  /** Applies a quality tier: pixel ratio, shadows, flash lights, ragdoll/corpse caps. */
+  setQuality(tier: QualityTier): void {
+    const q = QUALITY[tier];
+    this.tier = tier;
+    this.renderer.setPixelRatio(Math.min(q.pixelRatio, window.devicePixelRatio));
+    // Toggling the light's shadow (not shadowMap.enabled) makes three recompile the lit materials itself.
+    this.sun.castShadow = q.shadows;
+    if (this.sun.shadow.mapSize.x !== q.shadowMapSize) {
+      this.sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+    this.renderer.shadowMap.autoUpdate = q.shadowEvery <= 1;
+    this.renderer.shadowMap.needsUpdate = true;
+    this.effects.setFlashLights(q.flashLights);
+    const s = this.bundle.settings;
+    this.unitSettings = { ...s, ragdollLimit: Math.min(s.ragdollLimit, q.ragdollCap), corpseLimit: Math.min(s.corpseLimit, q.corpseCap) };
+    this.governor.hold();
   }
 
   dispose(): void {
@@ -545,8 +610,14 @@ export class BattleEngine {
     this.effects.dispose();
     this.audio.dispose();
     this.fireworks.dispose();
+    this.clearMap();
+    const canvas = this.renderer.domElement;
+    canvas.removeEventListener('webglcontextlost', this.onContextLost);
+    canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.renderer.dispose();
-    this.renderer.domElement.remove();
+    // Free the GPU now: phones cap live contexts, and a page revisit would otherwise hold two until GC.
+    this.renderer.forceContextLoss();
+    canvas.remove();
   }
 
   setMuted(muted: boolean): void {
@@ -645,13 +716,28 @@ export class BattleEngine {
     this.hemi.intensity = 1.25 * (1 - 0.4 * k);
   }
 
-  private resetRagdolls(): void {
+  /** Removes the map and frees what it owned on the GPU (scenery geometry and material are shared caches). */
+  private clearMap(): void {
+    for (const child of [...this.mapGroup.children]) {
+      this.mapGroup.remove(child);
+      child.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.geometry || o.name.startsWith('scenery-')) return;
+        mesh.geometry.dispose();
+        for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) m.dispose();
+        if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
+      });
+    }
+  }
+
+  /** Drops the ragdoll world; `create` builds a fresh one for the current terrain. */
+  private resetRagdolls(create = true): void {
     const token = ++this.ragdollToken;
     this.ragdolls?.dispose();
     this.ragdolls = null;
     this.units.setRagdolls(null);
     const terrain = this.terrain;
-    if (!terrain) return;
+    if (!terrain || !create) return;
     void RagdollWorld.create(terrain)
       .then((world) => {
         if (token !== this.ragdollToken) return world.dispose();
@@ -671,9 +757,10 @@ export class BattleEngine {
 
   private groundAt(clientX: number, clientY: number): THREE.Vector3 | null {
     const terrain = this.terrain;
-    if (!terrain) return null;
+    const heights = this.heights;
+    if (!terrain || !heights) return null;
     const rect = this.renderer.domElement.getBoundingClientRect();
-    this.raycaster.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+    this.raycaster.setFromCamera(this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
     const { origin, direction } = this.raycaster.ray;
     const at = (t: number) => this.tmp.copy(origin).addScaledVector(direction, t);
     // Skip the stretch of ray above the highest possible terrain.
@@ -685,11 +772,14 @@ export class BattleEngine {
     const sim = this.mode === 'deploy' ? this.sim : null;
     const surface = (x: number, z: number) => {
       const cell = sim?.cellAt(x, z);
-      return cell ? cell.top : terrain.height(x, z);
+      return cell ? cell.top : heights.at(x, z);
     };
     const step = sim && sim.walls.size > 0 ? 0.25 : 1;
+    const half = terrain.half;
     for (let t = start + step; t < start + 900; t += step) {
       const p = at(t);
+      // Off the map and heading further out: any hit from here on is off the map too.
+      if ((p.x > half && direction.x >= 0) || (p.x < -half && direction.x <= 0) || (p.z > half && direction.z >= 0) || (p.z < -half && direction.z <= 0)) return null;
       if (p.y < surface(p.x, p.z)) {
         let lo = prev;
         let hi = t;
@@ -718,10 +808,12 @@ export class BattleEngine {
       // A second finger makes it a pinch, not a tap.
       const tap = !press && e.button === 0;
       press = tap ? { x: e.clientX, y: e.clientY, at: performance.now(), slack: e.pointerType === 'touch' ? 14 : 6 } : null;
+      this.flushPointerMove();
       this.dispatchPointer('down', e.clientX, e.clientY, e);
     });
-    dom.addEventListener('pointermove', (e) => this.dispatchPointer('move', e.clientX, e.clientY, e));
+    dom.addEventListener('pointermove', (e) => (this.pendingMove = { x: e.clientX, y: e.clientY, e }));
     dom.addEventListener('pointerup', (e) => {
+      this.flushPointerMove();
       const p = press;
       press = null;
       if (p && this.mode === 'battle' && !this.cine && Math.hypot(e.clientX - p.x, e.clientY - p.y) < p.slack && performance.now() - p.at < 400) {
@@ -730,7 +822,18 @@ export class BattleEngine {
       }
       this.dispatchPointer('up', e.clientX, e.clientY, e);
     });
-    dom.addEventListener('pointerleave', () => this.hideGhost());
+    dom.addEventListener('pointerleave', () => {
+      this.pendingMove = null;
+      this.hideGhost();
+    });
+  }
+
+  /** Resolves the newest queued pointer move (once per frame, and before a press or release). */
+  private flushPointerMove(): void {
+    const m = this.pendingMove;
+    if (!m) return;
+    this.pendingMove = null;
+    this.dispatchPointer('move', m.x, m.y, m.e);
   }
 
   /**
@@ -783,8 +886,24 @@ export class BattleEngine {
   }
 
   private frame(): void {
+    if (this.frameCap) {
+      const now = performance.now();
+      // Skip display frames until the cap's interval has passed (a little slack for vsync jitter).
+      if (now - this.lastFrameAt < 1000 / this.frameCap - 4) return;
+      this.lastFrameAt = now;
+    }
     this.timer.update();
     const dt = Math.min(0.1, this.timer.getDelta());
+    this.frameNo++;
+    // A capped frame rate says nothing about the device.
+    if (!this.contextLost && !this.frameCap && this.governor.sample(dt)) {
+      const lower = LOWER_TIER[this.tier];
+      if (lower) {
+        console.info(`Frame rate low: rendering quality ${this.tier} → ${lower}`);
+        this.setQuality(lower);
+      }
+    }
+    this.flushPointerMove();
     if (!this.cine) {
       this.director.update(dt, this.mode === 'battle' ? this.sim : null);
       this.rts.update(dt);
@@ -814,8 +933,10 @@ export class BattleEngine {
     this.alpha = this.acc / SIM_DT;
     if (sim) {
       this.ragdolls?.step(simDt);
-      this.units.manage(simDt, this.bundle.settings);
-      this.units.update(sim, this.mode === 'battle' ? this.alpha : 1, animDt, this.hidden);
+      this.units.manage(simDt, this.unitSettings);
+      // Cinematics move the camera without refreshing its matrices; culling needs this frame's view.
+      this.camera.updateMatrixWorld();
+      this.units.update(sim, this.mode === 'battle' ? this.alpha : 1, animDt, this.hidden, this.camera);
       this.walls.update(animDt, this.hidden);
       this.projectiles.update(sim, this.alpha, simDt, this.particles);
     }
@@ -834,6 +955,7 @@ export class BattleEngine {
       this.camera.position.z += (Math.random() * 2 - 1) * s;
       this.shakeAmount = Math.max(0, this.shakeAmount - dt * 1.6);
     }
+    if (!this.renderer.shadowMap.autoUpdate && this.frameNo % QUALITY[this.tier].shadowEvery === 0) this.renderer.shadowMap.needsUpdate = true;
     this.renderer.render(this.scene, this.camera);
     this.statsTimer += dt;
     if (sim && this.statsTimer > 0.25) {
@@ -896,10 +1018,10 @@ export class BattleEngine {
           const u = sim.units[e.unitId];
           if (u.structure) {
             if (!u.grid || u.wall?.kind === 'platform') this.collapseBuilding(u);
-            this.units.onDeath(e, sim, settings);
+            this.units.onDeath(e, sim, this.unitSettings);
             break;
           }
-          this.units.onDeath(e, sim, settings);
+          this.units.onDeath(e, sim, this.unitSettings);
           this.emit(settings.deathParticleId, u.x, u.y + u.def.height * 0.5, u.z, undefined, Math.round(8 + u.def.radius * 6));
           break;
         }

@@ -110,14 +110,12 @@ export function createWater(terrain: Terrain): Water | null {
   const width = (terrain.riverHalfWidth + 2.2) * 2;
   const verts = (across + 1) * (along + 1);
   const pos = new Float32Array(verts * 3);
-  const base = new Float32Array(verts * 2);
   let v = 0;
   for (let j = 0; j <= along; j++) {
     const z = -half + (j / along) * terrain.size;
     const cx = terrain.riverX(z);
     for (let i = 0; i <= across; i++) {
       const x = cx - width / 2 + (i / across) * width;
-      base.set([x, z], v * 2);
       pos.set([x, terrain.waterLevel, z], v * 3);
       v++;
     }
@@ -136,19 +134,23 @@ export function createWater(terrain: Terrain): Water | null {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setIndex(idx);
   const mat = new THREE.MeshStandardMaterial({ color: terrain.map.waterColor, transparent: true, opacity: 0.8, roughness: 0.2, metalness: 0.1, flatShading: true });
+  // Ripples on the GPU: no per-frame vertex loop or buffer upload (flat shading takes its normals
+  // from screen-space derivatives, so the facets still catch the light as the surface moves).
+  const time = { value: 0 };
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = time;
+    shader.vertexShader = `uniform float uTime;\n${shader.vertexShader}`.replace(
+      '#include <begin_vertex>',
+      '#include <begin_vertex>\n  transformed.y += sin(position.x * 0.9 + uTime * 1.6) * 0.05 + cos(position.z * 0.5 + uTime * 1.1) * 0.06;',
+    );
+  };
   const mesh = new THREE.Mesh(g, mat);
   mesh.name = 'river';
   mesh.receiveShadow = true;
-  const attr = g.getAttribute('position') as THREE.BufferAttribute;
   return {
     mesh,
-    update(time) {
-      for (let i = 0; i < verts; i++) {
-        const x = base[i * 2];
-        const z = base[i * 2 + 1];
-        attr.setY(i, terrain.waterLevel + Math.sin(x * 0.9 + time * 1.6) * 0.05 + Math.cos(z * 0.5 + time * 1.1) * 0.06);
-      }
-      attr.needsUpdate = true;
+    update(t) {
+      time.value = t;
     },
   };
 }

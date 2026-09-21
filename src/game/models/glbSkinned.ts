@@ -328,6 +328,16 @@ export function cloneSkinned(url: string, tint: SkinTint = {}, hide: readonly st
   return { group, mixer, actions, current: null, settled: false };
 }
 
+/** Frees what one clone owns: its skeleton's bone texture on the GPU and its animation state (geometry and materials belong to the shared cache). */
+export function releaseSkinned(inst: SkinnedInstance): void {
+  inst.mixer.stopAllAction();
+  inst.mixer.uncacheRoot(inst.group);
+  inst.group.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (m.isSkinnedMesh) m.skeleton.dispose();
+  });
+}
+
 /** Crossfades to `state`. Death plays once and freezes (or freezes the current pose when the file has no death clip). */
 export function setSkinState(inst: SkinnedInstance, state: SkinState): void {
   if (inst.current === state || inst.settled) return;

@@ -444,11 +444,17 @@ export class BattleSim {
 
   // ------------------------------------------------------------------ step
 
-  /** Removes a side from the fight (surrender/disconnect) at a tick every client applies identically. */
+  /**
+   * Removes a side from the fight (surrender/disconnect) at a tick every client applies identically.
+   * A tick this simulation already passed is applied on the next step instead: that client has
+   * diverged (its checksums will say so), but its battle still ends rather than fighting a side
+   * everyone else removed.
+   */
   queueElimination(side: Side, tick: number): void {
-    const list = this.pendingEliminations.get(tick);
+    const at = Math.max(tick, this.tick + 1);
+    const list = this.pendingEliminations.get(at);
     if (list) list.push(side);
-    else this.pendingEliminations.set(tick, [side]);
+    else this.pendingEliminations.set(at, [side]);
   }
 
   step(): void {
@@ -846,6 +852,11 @@ export class BattleSim {
 
   private scratch: SimUnit[] = [];
   private scratch2: SimUnit[] = [];
+  /** Own lists for the area loops below, so they never alias scratch/scratch2 held by a caller. */
+  private readonly areaScratch: SimUnit[] = [];
+  private readonly blastScratch: SimUnit[] = [];
+  private readonly shotScratch: SimUnit[] = [];
+  private readonly hits: Array<{ v: SimUnit; d: number }> = [];
 
   private resolveCollisions(): void {
     const near = this.scratch;
@@ -1322,8 +1333,9 @@ export class BattleSim {
       return;
     }
     // Cleave / breath: every enemy inside the arc, nearest first.
-    const near = this.near(u.x, u.z, w.range + u.def.radius + 6, this.scratch.slice(0, 0));
-    const hits: Array<{ v: SimUnit; d: number }> = [];
+    const near = this.near(u.x, u.z, w.range + u.def.radius + 6, this.areaScratch);
+    const hits = this.hits;
+    hits.length = 0;
     for (const v of near) {
       if (!v.alive || v.side === u.side) continue;
       const vx = v.x - u.x;
@@ -1454,7 +1466,7 @@ export class BattleSim {
     const cy = u.y + u.def.height * 0.5;
     this.events.push({ type: 'nova', unitId: u.id, weaponId: w.id, x: u.x, y: u.y, z: u.z, radius: w.splashRadius });
     const charge = this.chargeMultiplier(u);
-    const near = this.near(u.x, u.z, w.splashRadius + 4, this.scratch2.slice(0, 0));
+    const near = this.near(u.x, u.z, w.splashRadius + 4, this.areaScratch);
     for (const v of near) {
       if (!v.alive || v.side === u.side) continue;
       const vx = v.x - u.x;
@@ -1562,7 +1574,7 @@ export class BattleSim {
         }
       }
     }
-    this.zones = this.zones.filter((zn) => zn.alive);
+    compact(this.zones, (zn) => zn.alive);
   }
 
   /** The whirlwind collapses and flings whoever it still holds. */
@@ -1740,7 +1752,7 @@ export class BattleSim {
   }
 
   private updateProjectiles(): void {
-    const near: SimUnit[] = [];
+    const near = this.shotScratch;
     const lim = this.terrain.half + 10;
     for (const p of this.projectiles) {
       if (!p.alive) continue;
@@ -1802,7 +1814,7 @@ export class BattleSim {
       }
       if (p.age > p.def.lifetime || p.x < -lim || p.x > lim || p.z < -lim || p.z > lim) p.alive = false;
     }
-    this.projectiles = this.projectiles.filter((p) => p.alive);
+    compact(this.projectiles, (p) => p.alive);
   }
 
   private projectileHit(p: SimProjectile, v: SimUnit, dx: number, dy: number, dz: number): void {
@@ -1826,7 +1838,7 @@ export class BattleSim {
   /** Area damage with falloff; `column` ignores height (strikes from the sky). */
   private blast(x: number, y: number, z: number, w: WeaponDef, side: Side, mul: number, column: boolean): void {
     const r = w.splashRadius;
-    const near = this.near(x, z, r + 4, []);
+    const near = this.near(x, z, r + 4, this.blastScratch);
     const ff = this.content.settings.friendlyFire;
     for (const v of near) {
       if (!v.alive || (!ff && v.side === side)) continue;
@@ -1925,6 +1937,13 @@ function clusterRadius(w: WeaponDef): number {
   if (w.splashRadius > 0) return w.splashRadius;
   if (w.attack === 'breath') return Math.max(2, w.range * 0.4);
   return Math.max(2, w.range);
+}
+
+/** In-place `filter` keeping order (no new array every tick). */
+function compact<T>(list: T[], keep: (item: T) => boolean): void {
+  let n = 0;
+  for (const item of list) if (keep(item)) list[n++] = item;
+  list.length = n;
 }
 
 function cellKey(cx: number, cz: number): number {

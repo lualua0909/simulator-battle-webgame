@@ -3,6 +3,7 @@
 // particles fade by shrinking.
 import * as THREE from 'three';
 import type { ParticleDef } from '@/shared/schema';
+import { commitInstances } from './instancing';
 
 const SHAPES = ['cube', 'tetra', 'sphere'] as const;
 
@@ -117,8 +118,11 @@ export class ParticleSystem {
     }
   }
 
+  private readonly counts: number[] = [];
+
   update(dt: number): void {
-    const counts = new Array(this.meshes.length).fill(0);
+    const counts = this.counts;
+    for (let b = 0; b < this.meshes.length; b++) counts[b] = 0;
     let i = 0;
     while (i < this.alive) {
       const L = i * 7;
@@ -156,11 +160,7 @@ export class ParticleSystem {
       arr[slot * 3 + 2] = this.col[C + 2] + (this.col[C + 5] - this.col[C + 2]) * t;
       i++;
     }
-    this.meshes.forEach((m, b) => {
-      m.count = counts[b];
-      m.instanceMatrix.needsUpdate = true;
-      m.instanceColor!.needsUpdate = true;
-    });
+    this.meshes.forEach((m, b) => commitInstances(m, counts[b]));
   }
 
   private swapRemove(i: number): void {

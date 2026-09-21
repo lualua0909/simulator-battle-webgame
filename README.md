@@ -86,7 +86,7 @@ src/components/            UI game + CMS
 
 **Nội dung CMS trên Firestore:** mỗi collection CMS là một collection Firestore cùng tên (`units`, `weapons`, `assets`…, id tài liệu = id nội dung) cộng tài liệu `settings/global`. Server giữ bản sao trong RAM qua snapshot listener, nên lưu trong CMS hay sửa trực tiếp trên Firebase Console đều có hiệu lực ở trận tiếp theo, không cần khởi động lại. Tài liệu sửa tay bị sai schema sẽ bị bỏ qua và ghi log. Trường `sculpt` của asset lưu dạng chuỗi JSON (Firestore không nhận mảng lồng mảng). Lần đầu gặp Firestore trống, server tự chuyển nội dung từ SQLite cũ (`data/game.db`) nếu có, không thì ghi dữ liệu mặc định. Chưa kết nối được Firestore (thiếu credential, mất mạng) thì game chạy bằng dữ liệu mặc định, CMS từ chối lưu, server tự thử lại.
 
-**Hiển thị:** mỗi (loại lính × bộ phận) là một `InstancedMesh`, nên số draw call không tăng theo quân số. Lính chết được giao cho ragdoll Rapier (khớp cầu tại pivot, vũ khí rơi tự do), sau vài giây đóng băng thành xác. Giới hạn ragdoll/xác chỉnh trong CMS.
+**Hiển thị:** mỗi (loại lính × bộ phận) là một `InstancedMesh`, nên số draw call không tăng theo quân số. Lính chết được giao cho ragdoll Rapier (khớp cầu tại pivot, vũ khí rơi tự do), sau vài giây đóng băng thành xác. Giới hạn ragdoll/xác chỉnh trong CMS. Lính ngoài khung hình (kể cả bóng) không được vẽ, lính ở xa chỉ cập nhật dáng mỗi 2–3 khung. Engine có 3 mức chất lượng (`src/game/render/quality.ts`): điện thoại bắt đầu ở mức trung bình, máy nào dưới 40 fps liên tục thì tự hạ một mức (độ phân giải, bóng đổ, đèn chớp, giới hạn ragdoll/xác). Vì vậy giới hạn trong CMS là mức trần: mức trung bình tối đa 30 ragdoll / 300 xác, mức thấp 12 / 150.
 
 ## Kỹ năng & hiệu ứng
 

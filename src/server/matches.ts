@@ -37,6 +37,8 @@ export interface BattleRecord {
   checksums: Map<number, Partial<Record<Side, number>>>;
   /** Ticks every active side sent the same checksum for. */
   verified: Set<number>;
+  /** Newest checksum tick each side sent: how far its own simulation has already run. */
+  lastTick: Partial<Record<Side, number>>;
   desync: boolean;
   /** Sides that surrendered or disconnected (removed from the fight, authoritative on the server). */
   eliminated: Set<Side>;

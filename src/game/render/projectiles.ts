@@ -4,6 +4,7 @@ import type { ConfigBundle, ParticleDef, ProjectileDef } from '@/shared/schema';
 import { bakeModel, mergeTemplate } from '../models/bake';
 import { createProjectileModel } from '../models/projectiles';
 import type { BattleSim } from '../sim/world';
+import { commitInstance, commitInstances } from './instancing';
 import type { ParticleSystem } from './particles';
 
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.7 });
@@ -16,6 +17,8 @@ interface Kind {
   stuck: THREE.InstancedMesh;
   stuckNext: number;
   stuckCount: number;
+  /** Flying instances written this frame. */
+  count: number;
   trail: ParticleDef | null;
 }
 
@@ -43,18 +46,16 @@ export class ProjectileRenderer {
         mesh.castShadow = true;
         this.group.add(mesh);
       }
-      this.kinds.set(def.id, { def, flying, stuck, stuckNext: 0, stuckCount: 0, trail: def.trailParticleId ? particles.get(def.trailParticleId) ?? null : null });
+      this.kinds.set(def.id, { def, flying, stuck, stuckNext: 0, stuckCount: 0, count: 0, trail: def.trailParticleId ? particles.get(def.trailParticleId) ?? null : null });
     }
   }
 
   update(sim: BattleSim, alpha: number, dt: number, particles: ParticleSystem): void {
-    const counts = new Map<Kind, number>();
+    for (const kind of this.kinds.values()) kind.count = 0;
     for (const p of sim.projectiles) {
       const kind = this.kinds.get(p.def.id);
-      if (!kind) continue;
-      const n = counts.get(kind) ?? 0;
-      if (n >= FLYING_CAP) continue;
-      counts.set(kind, n + 1);
+      if (!kind || kind.count >= FLYING_CAP) continue;
+      const n = kind.count++;
       this.pos.set(p.px + (p.x - p.px) * alpha, p.py + (p.y - p.py) * alpha, p.pz + (p.z - p.pz) * alpha);
       this.dir.set(p.vx, p.vy, p.vz).normalize();
       this.q.setFromUnitVectors(this.fwd, this.dir);
@@ -67,10 +68,7 @@ export class ProjectileRenderer {
         this.trailAcc.set(p.id, acc - whole);
       }
     }
-    for (const kind of this.kinds.values()) {
-      kind.flying.count = counts.get(kind) ?? 0;
-      kind.flying.instanceMatrix.needsUpdate = true;
-    }
+    for (const kind of this.kinds.values()) commitInstances(kind.flying, kind.count);
     if (this.trailAcc.size > 2000) this.trailAcc.clear();
   }
 
@@ -83,10 +81,10 @@ export class ProjectileRenderer {
     this.pos.set(x, y, z).addScaledVector(this.dir, 0.25);
     this.m.compose(this.pos, this.q, this.one);
     kind.stuck.setMatrixAt(kind.stuckNext, this.m);
+    commitInstance(kind.stuck, kind.stuckNext);
     kind.stuckNext = (kind.stuckNext + 1) % STUCK_CAP;
     kind.stuckCount = Math.min(STUCK_CAP, kind.stuckCount + 1);
     kind.stuck.count = kind.stuckCount;
-    kind.stuck.instanceMatrix.needsUpdate = true;
   }
 
   clear(): void {

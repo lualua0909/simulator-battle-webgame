@@ -5,11 +5,12 @@ import * as THREE from 'three';
 import type { AssetDef, ConfigBundle, Settings, WeaponDef } from '@/shared/schema';
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
 import { createAssetModel, getUnitTemplate } from '../models';
-import { cloneSkinned, setSkinState, stepSkin, type SkinnedInstance, type SkinState, type SkinTint } from '../models/glbSkinned';
+import { cloneSkinned, releaseSkinned, setSkinState, stepSkin, type SkinnedInstance, type SkinState, type SkinTint } from '../models/glbSkinned';
 import type { ModelTemplate } from '../models/bake';
 import type { Side } from '../sim/terrain';
 import { SIM_DT, type BattleSim, type SimEvent, type SimUnit } from '../sim/world';
 import { attackStyleFor, Poser, type AttackStyle } from './animate';
+import { commitInstances } from './instancing';
 import type { Ragdoll, RagdollWorld } from './ragdoll';
 
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
@@ -39,6 +40,11 @@ function seatRider(rider: THREE.Object3D): void {
 }
 const EMIT_SOCKETS = ['mouth', 'muzzle', 'staff.tip', 'hand.R', 'rider.muzzle', 'rider.staff.tip', 'rider.hand.R'];
 const RAGDOLL_SECONDS = 6;
+/** Camera distances (m) past which a unit re-poses its limbs only every 2nd / 3rd frame (its body still moves every frame). */
+const LOD_NEAR = 45;
+const LOD_FAR = 90;
+/** Horizontal shadow length per metre of height (sun direction in engine.ts): off-screen units whose shadow can reach the view still draw. */
+const SHADOW_REACH = 0.7;
 
 interface TypeVis {
   template: ModelTemplate;
@@ -90,6 +96,12 @@ interface UnitVis {
   atkT: number;
   radius: number;
   height: number;
+  /** Root transform `world` was last posed with (a LOD frame moves the posed limbs by the root's change). */
+  root: THREE.Matrix4;
+  /** Time since the limbs were last posed (LOD frames skip posing). */
+  lodDt: number;
+  /** Off-screen since its last pose: `world` is out of date until re-posed. */
+  stale: boolean;
 }
 
 const COLLAPSE_TIME = 2.4;
@@ -103,6 +115,8 @@ export class UnitRenderer {
   private types = new Map<string, TypeVis>();
   private pose: THREE.Matrix4[] = [];
   private corpses: UnitVis[] = [];
+  /** One rider model per asset, cloned for each skinned mount (clones share its geometry instead of building new GPU buffers per unit). */
+  private readonly riders = new Map<string, THREE.Group>();
   private ragdolls: RagdollWorld | null = null;
   private readonly assets: Map<string, AssetDef>;
   private readonly weapons: Map<string, WeaponDef>;
@@ -111,6 +125,14 @@ export class UnitRenderer {
   private readonly tmpE = new THREE.Euler(0, 0, 0, 'YXZ');
   private readonly tmpP = new THREE.Vector3();
   private readonly one = new THREE.Vector3(1, 1, 1);
+  private readonly frustum = new THREE.Frustum();
+  private readonly viewProj = new THREE.Matrix4();
+  private readonly sphere = new THREE.Sphere();
+  private readonly delta = new THREE.Matrix4();
+  private frame = 0;
+  /** Last updated sim and interpolation, for posing a culled unit on demand (sockets, deaths). */
+  private sim: BattleSim | null = null;
+  private alpha = 1;
   time = 0;
 
   constructor(bundle: ConfigBundle) {
@@ -123,8 +145,11 @@ export class UnitRenderer {
     this.ragdolls = world;
   }
 
+  /** Fresh visuals for a new sim. Instanced meshes are kept and reused (deployment rebuilds on every placement). */
   build(sim: BattleSim): void {
-    this.clear();
+    this.detachSkins();
+    this.vis = [];
+    this.corpses = [];
     this.ensure(sim);
   }
 
@@ -191,6 +216,9 @@ export class UnitRenderer {
         atkT: 0,
         radius: u.def.radius,
         height: u.def.height,
+        root: new THREE.Matrix4(),
+        lodDt: 0,
+        stale: false,
       };
       this.vis.push(v);
       if (!wall && !usesSkin) this.poseAlive(u, v, sim, 1, 0);
@@ -227,9 +255,15 @@ export class UnitRenderer {
     this.types.set(id, { template, poser: new Poser(template, style), style, styles: new Map(), meshes, capacity, used: 0, refSpeed: Math.max(1, def.speed), stride: Math.max(0.5, template.bounds.max.y * 0.32) });
   }
 
-  update(sim: BattleSim, alpha: number, dt: number, hidden: Side | null): void {
+  /** `camera`: skips units outside its view (and their shadow's reach) and re-poses far ones less often; omitted = pose and draw everything. */
+  update(sim: BattleSim, alpha: number, dt: number, hidden: Side | null, camera?: THREE.Camera): void {
     this.time += dt;
+    this.sim = sim;
+    this.alpha = alpha;
+    this.frame++;
     this.ensure(sim);
+    const view = camera ? this.frustum.setFromProjectionMatrix(this.viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)) : null;
+    const eye = camera?.position;
     for (const t of this.types.values()) t.used = 0;
     for (let i = 0; i < sim.units.length; i++) {
       const u = sim.units[i];
@@ -239,6 +273,7 @@ export class UnitRenderer {
         // Sunk corpses leave the instanced draw (count excludes them); skinned clones must detach.
         if (v.skin) {
           this.group.remove(v.skin.group);
+          releaseSkinned(v.skin);
           v.skin = null;
         }
         continue;
@@ -247,14 +282,34 @@ export class UnitRenderer {
         if (v.skin) v.skin.group.visible = false;
         continue;
       }
-      if (v.skin) v.skin.group.visible = true;
       if (v.usesSkin) {
-        this.updateSkinned(u, v, alpha, dt);
+        this.updateSkinned(u, v, alpha, dt, view);
         continue;
       }
-      if (u.alive) this.poseAlive(u, v, sim, alpha, dt);
-      else if (v.collapse >= 0) this.collapseStep(u, v, dt);
-      else if (v.ragdoll && this.ragdolls) this.ragdolls.read(v.ragdoll, v.world);
+      if (u.alive) {
+        const x = u.px + (u.x - u.px) * alpha;
+        const y = u.py + (u.y - u.py) * alpha;
+        const z = u.pz + (u.z - u.pz) * alpha;
+        if (view && !this.standingInView(view, u, x, y, z)) {
+          v.stale = true;
+          v.lodDt = 0;
+          continue;
+        }
+        const every = eye ? lodEvery(eye.distanceToSquared(this.tmpP.set(x, y, z))) : 1;
+        v.lodDt += dt;
+        if (v.stale || every === 1 || (this.frame + i) % every === 0) {
+          this.poseAlive(u, v, sim, alpha, v.lodDt);
+          v.lodDt = 0;
+        } else this.moveRoot(v, x, y, z);
+      } else if (v.collapse >= 0) {
+        if (view && !this.standingInView(view, u, u.x, u.y, u.z)) continue;
+        this.collapseStep(u, v, dt);
+      } else if (v.ragdoll && this.ragdolls) this.ragdolls.read(v.ragdoll, v.world);
+      else if (view && v.world.length > 0) {
+        // Frozen corpse: its root part says where it lies.
+        const e = v.world[0].elements;
+        if (!view.intersectsSphere(this.sphere.set(this.tmpP.set(e[12], e[13] - v.sink, e[14]), Math.max(v.height, v.radius) + 1))) continue;
+      }
       const t = v.type;
       const slot = t.used++;
       for (let k = 0; k < t.meshes.length; k++) {
@@ -267,12 +322,36 @@ export class UnitRenderer {
       }
     }
     for (const t of this.types.values()) {
-      for (const m of t.meshes) {
-        if (!m) continue;
-        m.count = t.used;
-        m.instanceMatrix.needsUpdate = true;
-      }
+      for (const m of t.meshes) if (m) commitInstances(m, t.used);
     }
+  }
+
+  /** A standing unit (or building) at (x, y, z) is on screen, or its shadow can reach the screen. */
+  private standingInView(view: THREE.Frustum, u: SimUnit, x: number, y: number, z: number): boolean {
+    const h = u.def.height;
+    const lift = u.flying ? u.flyHeight : 0;
+    return view.intersectsSphere(this.sphere.set(this.tmpP.set(x, y + h * 0.5, z), h * 0.5 + u.def.radius + (h + lift) * SHADOW_REACH + 0.5));
+  }
+
+  /** LOD frame: carry the last posed limbs along with the body's new position. */
+  private moveRoot(v: UnitVis, x: number, y: number, z: number): void {
+    this.composeRoot(v, x, y, z);
+    this.delta.copy(v.root).invert().premultiply(this.rootM);
+    for (const w of v.world) w.premultiply(this.delta);
+    v.root.copy(this.rootM);
+  }
+
+  private composeRoot(v: UnitVis, x: number, y: number, z: number): void {
+    this.tmpE.set(-v.tumble, v.yaw, 0, 'YXZ');
+    this.tmpQ.setFromEuler(this.tmpE);
+    this.rootM.compose(this.tmpP.set(x, y, z), this.tmpQ, this.one);
+  }
+
+  /** A culled unit's `world` is stale: pose it now at the last interpolation (no state advance). */
+  private refresh(unitId: number, v: UnitVis): void {
+    const sim = this.sim;
+    const u = sim?.units[unitId];
+    if (sim && u) this.poseAlive(u, v, sim, this.alpha, 0);
   }
 
   private poseAlive(u: SimUnit, v: UnitVis, sim: BattleSim, alpha: number, dt: number): void {
@@ -332,10 +411,10 @@ export class UnitRenderer {
       { time: this.time, speed: v.speed, phase: v.phase, attack, style: this.styleOf(t, act.def), airborne: u.airborne && !u.dashWeapon, stunned: u.stun > 0, leanX: v.leanX, leanZ: v.leanZ, seed: v.seed, refSpeed: t.refSpeed, aim: v.aim, climbing: u.climb !== null },
       this.pose,
     );
-    this.tmpE.set(-v.tumble, v.yaw, 0, 'YXZ');
-    this.tmpQ.setFromEuler(this.tmpE);
-    this.rootM.compose(this.tmpP.set(x, y, z), this.tmpQ, this.one);
+    this.composeRoot(v, x, y, z);
     for (let k = 0; k < t.template.parts.length; k++) v.world[k].multiplyMatrices(this.rootM, this.pose[k]);
+    v.root.copy(this.rootM);
+    v.stale = false;
   }
 
   private styleOf(type: TypeVis, weapon: WeaponDef): AttackStyle {
@@ -345,7 +424,7 @@ export class UnitRenderer {
   }
 
   /** Skeletal GLB units: drive the file's clips (idle/walk/run/attack/death) instead of the procedural poser. */
-  private updateSkinned(u: SimUnit, v: UnitVis, alpha: number, dt: number): void {
+  private updateSkinned(u: SimUnit, v: UnitVis, alpha: number, dt: number, view: THREE.Frustum | null): void {
     if (!v.skin) {
       if (!v.skinUrl) return;
       const inst = cloneSkinned(v.skinUrl, v.skinTint, v.skinHide);
@@ -355,7 +434,9 @@ export class UnitRenderer {
       v.skin = inst;
       const riderAsset = u.def.riderModelId ? this.assets.get(u.def.riderModelId) : undefined;
       if (riderAsset) {
-        const rider = createAssetModel(riderAsset);
+        let template = this.riders.get(riderAsset.id);
+        if (!template) this.riders.set(riderAsset.id, (template = createAssetModel(riderAsset)));
+        const rider = template.clone();
         // Counter the mount's own scale so the rider keeps its own asset scale.
         rider.scale.multiplyScalar(1 / Math.max(0.0001, v.skinScale));
         seatRider(rider);
@@ -387,7 +468,9 @@ export class UnitRenderer {
     else if (v.speed > 0.4) state = 'walk';
     else state = 'idle';
     setSkinState(skin, state);
-    stepSkin(skin, dt);
+    // Off screen: keep its place (emit points follow it) but skip the skeletal animation.
+    skin.group.visible = !view || (u.alive ? this.standingInView(view, u, x, y, z) : view.intersectsSphere(this.sphere.set(this.tmpP.set(x, y, z), Math.max(v.height, v.radius) + 1)));
+    if (skin.group.visible) stepSkin(skin, dt);
     // Dead flyers glide down instead of hovering: settle on the ground, then corpses sink as usual.
     if (!u.alive && skin.settled && dt > 0) {
       const restY = y - v.sink - v.fall;
@@ -420,9 +503,9 @@ export class UnitRenderer {
     const tilt = fall * 0.14 * (v.seed > 0.5 ? 1 : -1);
     const m = this.rootM
       .makeTranslation(u.x + (Math.random() * 2 - 1) * shake, u.y - fall * h * 0.72, u.z + (Math.random() * 2 - 1) * shake)
-      .multiply(new THREE.Matrix4().makeRotationZ(tilt))
-      .multiply(new THREE.Matrix4().makeRotationX(tilt * 0.6))
-      .multiply(new THREE.Matrix4().makeTranslation(-u.x, -u.y, -u.z));
+      .multiply(this.delta.makeRotationZ(tilt))
+      .multiply(this.delta.makeRotationX(tilt * 0.6))
+      .multiply(this.delta.makeTranslation(-u.x, -u.y, -u.z));
     for (let i = 0; i < v.world.length; i++) v.world[i].multiplyMatrices(m, v.rest[i]);
   }
 
@@ -430,6 +513,8 @@ export class UnitRenderer {
     const v = this.vis[e.unitId];
     const u = sim.units[e.unitId];
     if (!v || !u || v.gone) return;
+    // Died off screen: ragdoll, topple and collapse start from its real pose, not the last one drawn.
+    if (v.stale) this.poseAlive(u, v, sim, 1, 0);
     if (u.structure) {
       v.collapse = 0;
       v.rest = v.world.map((w) => w.clone());
@@ -512,8 +597,19 @@ export class UnitRenderer {
     if (!v || v.usesSkin) return false;
     const s = v.type.template.sockets[name];
     if (!s) return false;
+    if (v.stale) this.refresh(unitId, v);
     out.setFromMatrixPosition(this.rootM.multiplyMatrices(v.world[s.part], s.matrix));
     return true;
+  }
+
+  private detachSkins(): void {
+    for (const v of this.vis) {
+      if (v.skin) {
+        this.group.remove(v.skin.group);
+        releaseSkinned(v.skin);
+        v.skin = null;
+      }
+    }
   }
 
   clear(): void {
@@ -524,14 +620,14 @@ export class UnitRenderer {
         m.dispose();
       }
     }
-    for (const v of this.vis) {
-      if (v.skin) {
-        this.group.remove(v.skin.group);
-        v.skin = null;
-      }
-    }
+    this.detachSkins();
     this.types.clear();
     this.vis = [];
     this.corpses = [];
   }
+}
+
+/** Pose every n-th frame by camera distance². */
+function lodEvery(d2: number): number {
+  return d2 > LOD_FAR * LOD_FAR ? 3 : d2 > LOD_NEAR * LOD_NEAR ? 2 : 1;
 }

@@ -3,6 +3,7 @@
 // the chunk settles, lingers and sinks away. Never feeds the simulation.
 import * as THREE from 'three';
 import type { Terrain } from '../sim/terrain';
+import { commitInstances } from './instancing';
 
 const CAP = 1400;
 const LINGER = 5;
@@ -150,9 +151,7 @@ export class DebrisSystem {
       w++;
     }
     this.n = w;
-    this.mesh.count = w;
-    this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    commitInstances(this.mesh, w);
   }
 
   private move(from: number, to: number): void {

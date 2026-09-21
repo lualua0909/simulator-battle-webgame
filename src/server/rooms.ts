@@ -25,6 +25,11 @@ import { SESSION_COOKIE, userFromSessionCookie } from './users';
 
 /** Deployment countdown: the battle auto-starts at this deadline even if not everyone is ready. */
 const DEPLOY_MS = 30_000;
+/**
+ * Ticks between the furthest simulation the server has heard from and the tick a surrender or
+ * disconnect is applied at. Covers the up-to-one-interval-old report, the round trip and a 4× speed-up.
+ */
+const ELIMINATION_LEAD = CHECKSUM_EVERY * 4;
 
 interface Player {
   uid: string;
@@ -212,7 +217,10 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     if (!battle || battle.reports[side] || battle.eliminated.has(side)) return;
     battle.eliminated.add(side);
     if (disconnected) battle.disconnected.add(side);
-    const tick = Math.min(battle.maxTick, Math.max(0, ...battle.verified) + CHECKSUM_EVERY * 2);
+    // Past the fastest simulation (sides run unsynchronised: skipped intro, speed-up, slow device),
+    // or a client already beyond this tick could never apply it and would fight a ghost army.
+    const reached = Math.max(0, ...battle.verified, ...Object.values(battle.lastTick));
+    const tick = Math.min(battle.maxTick, reached + ELIMINATION_LEAD);
     io.to(room.code).emit('battle:eliminate', { side, tick });
     const remaining = battle.activeSides.filter((s) => !battle.eliminated.has(s));
     if (remaining.length > 1) return void (await maybeSettle(room));
@@ -276,6 +284,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       reports: {},
       checksums: new Map(),
       verified: new Set(),
+      lastTick: {},
       desync: false,
       eliminated: new Set(),
       disconnected: new Set(),
@@ -483,6 +492,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       const hash = Number(req?.hash);
       // Only ticks a real simulation sends, which also bounds the map (≤ battleTimeLimit / 1 s entries).
       if (!Number.isInteger(tick) || tick <= 0 || tick % CHECKSUM_EVERY !== 0 || tick > battle.maxTick || !Number.isFinite(hash)) return;
+      battle.lastTick[side] = Math.max(battle.lastTick[side] ?? 0, tick);
       if (battle.verified.has(tick)) return;
       const entry = battle.checksums.get(tick) ?? {};
       if (entry[side] !== undefined) return;
