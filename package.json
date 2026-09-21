@@ -19,6 +19,7 @@
     "@dicebear/core": "^10.7.0",
     "@dicebear/styles": "^10.6.0",
     "@dimforge/rapier3d-compat": "0.20.0",
+    "@vercel/speed-insights": "^1.1.0",
     "better-sqlite3": "^13.0.3",
     "firebase": "^12.19.0",
     "firebase-admin": "^14.4.0",
