@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   // Native module: must stay a runtime require, never bundled.
   serverExternalPackages: ['better-sqlite3'],
   // One value per build (per start in dev): client caches keyed by it drop what older code produced.
-  env: { BUILD_STAMP: Date.now().toString(36) },
+  env: { BUILD_STAMP: Date.now().toString(36), SERVER: process.env.SERVER ?? '' },
 };
 
 export default nextConfig;

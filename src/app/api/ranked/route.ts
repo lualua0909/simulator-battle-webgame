@@ -1,12 +1,14 @@
 // Ranked lobby data for the signed-in player, and a season's leaderboard (?board=<season id>).
 import { idSchema } from '@/shared/schema';
-import { jsonError } from '@/server/admin';
+import { jsonError, unsupportedOnVercel } from '@/server/admin';
 import { leaderboard, rankView } from '@/server/ranked';
 import { currentUser } from '@/server/users';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  const off = unsupportedOnVercel();
+  if (off) return off;
   const user = await currentUser();
   if (!user) return jsonError(401, 'Cần đăng nhập');
   const board = new URL(req.url).searchParams.get('board');

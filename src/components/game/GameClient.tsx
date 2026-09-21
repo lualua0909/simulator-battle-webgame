@@ -510,8 +510,9 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   // Only deployment and the battle need every display frame; menus and the result screen run at 30 fps.
   useEffect(() => engine?.setFrameCap(phase === 'deploy' || phase === 'battle' ? null : 30), [engine, phase]);
-  useEffect(() => engine?.setSpeed(speed), [engine, speed]);
-  useEffect(() => engine?.setPaused(paused), [engine, paused]);
+  // Online sides run unsynchronised simulations: a speed-up or pause would end one player's battle before or after the others.
+  useEffect(() => engine?.setSpeed(online ? 1 : speed), [engine, speed, online]);
+  useEffect(() => engine?.setPaused(!online && paused), [engine, paused, online]);
   useEffect(() => engine?.setMuted(muted), [engine, muted]);
   useEffect(() => {
     try {
@@ -671,7 +672,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         }
         return;
       }
-      if (e.code === 'Space' && phase === 'battle') {
+      if (e.code === 'Space' && !online && phase === 'battle') {
         e.preventDefault();
         setPaused((p) => !p);
       }
@@ -682,7 +683,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         undo();
       }
       const speedKey = { '1': 0.25, '2': 1, '3': 2, '4': 4 }[e.key];
-      if (speedKey && (phase === 'battle' || phase === 'result')) setSpeed(speedKey);
+      if (speedKey && !online && (phase === 'battle' || phase === 'result')) setSpeed(speedKey);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -891,8 +892,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             paused={paused}
             muted={muted}
             onMute={toggleMuted}
-            onSpeed={setSpeed}
-            onPause={() => setPaused((p) => !p)}
+            onSpeed={online ? undefined : setSpeed}
+            onPause={online ? undefined : () => setPaused((p) => !p)}
             onStop={online && phase === 'battle' ? surrenderOnline : mode === 'ranked' ? backToRankedLobby : backToDeploy}
             stopLabel={online ? (phase === 'battle' ? 'Dừng trận' : mode === 'ranked' ? 'Về sảnh xếp hạng' : 'Về xếp quân') : 'Dừng trận'}
             timeLimit={bundle.settings.battleTimeLimit}

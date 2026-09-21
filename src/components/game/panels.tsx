@@ -414,8 +414,9 @@ export function BattleHud(props: {
   paused: boolean;
   muted: boolean;
   onMute(): void;
-  onSpeed(s: number): void;
-  onPause(): void;
+  /** Speed and pause are omitted online: every client simulates on its own clock, so both stay locked. */
+  onSpeed?(s: number): void;
+  onPause?(): void;
   onStop(): void;
   stopLabel: string;
   timeLimit: number;
@@ -464,14 +465,17 @@ export function BattleHud(props: {
         <button className={`btn px-3 py-1 ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title="Bật/tắt âm thanh">
           {props.muted ? '🔇' : '🔊'}
         </button>
-        <button className={`btn px-3 py-1 ${props.paused ? 'btn-gold' : ''}`} onClick={props.onPause} title="Space">
-          {props.paused ? '▶' : '❚❚'}
-        </button>
-        {[0.25, 1, 2, 4].map((s, i) => (
-          <button key={s} className={`btn px-2 py-1 text-sm ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed(s)} title={`Phím ${i + 1}`}>
-            {s}×
+        {props.onPause && (
+          <button className={`btn px-3 py-1 ${props.paused ? 'btn-gold' : ''}`} onClick={props.onPause} title="Space">
+            {props.paused ? '▶' : '❚❚'}
           </button>
-        ))}
+        )}
+        {props.onSpeed &&
+          [0.25, 1, 2, 4].map((s, i) => (
+            <button key={s} className={`btn px-2 py-1 text-sm ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed?.(s)} title={`Phím ${i + 1}`}>
+              {s}×
+            </button>
+          ))}
         <button className="btn ml-2 px-2 py-1 text-sm" onClick={props.onStop}>
           {props.stopLabel}
         </button>

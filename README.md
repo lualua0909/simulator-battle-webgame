@@ -3,7 +3,7 @@
 Game mô phỏng đại chiến kiểu *Totally Accurate Battle Simulator*: xếp quân trong vùng triển khai, bấm bắt đầu, xem hai đạo quân lắc lư lao vào nhau, bay người, ragdoll, mưa tên.
 
 - **Next.js 16 (App Router) + Three.js** (engine tự viết, không dùng R3F), **Rapier** cho ragdoll.
-- **3 chế độ**: đấu với máy (6 bot có hồ sơ riêng), 2 người 1 máy (xếp quân bí mật), đấu online qua mã phòng (Socket.IO).
+- **4 chế độ**: đấu với máy (6 bot có hồ sơ riêng), 2 người 1 máy (xếp quân bí mật), đấu online qua mã phòng (Socket.IO), **xếp hạng** (ghép trận tự động, 6 bậc kiểu Pokemon Unite, mùa giải, bảng xếp hạng).
 - **CMS** tại `/admin`: quản lý lính, kỹ năng & vũ khí, đạn, particle, asset 3D, bản đồ, bot, cài đặt + bảng khắc chế giáp. Lưu trên Firestore, có preview trực tiếp và đấu thử với hình nộm.
 - **Kỹ năng hoành tráng**: sét chuỗi phóng từ tay, thiên lôi và bão sấm giáng từ trời, lốc xoáy / lốc lửa hút bổng quân địch, thiên thạch, phun lửa, dậm đất, súng hỏa mai, mưa tên, ném tảng đá, hồi máu diện rộng. Admin gán kỹ năng cho từng lính và chỉnh tốc độ đánh, tốc độ chạy, tốc độ ra kỹ năng.
 - **Xưởng mô hình** tại `/models` (chỉ root/admin; user thường và khách bị chuyển về trang đăng nhập CMS): xem mọi lính/kỹ năng/asset, sửa ngay tại đó thông số, kỹ năng (gán + chỉ số), giá lính, tải model (TypeScript/GLB/OBJ/STL/PLY/USDZ) và yêu cầu Claude generate lại model bằng img2threejs.
@@ -27,7 +27,7 @@ npm start
 
 | Lệnh | Việc |
 | --- | --- |
-| `npm test` | test mô phỏng (tất định, bot hợp lệ, seed CMS hợp lệ, sao nâng cấp) + luật coin/hộp quà/nâng sao + phòng online (lính chưa mở khóa, sao) + sculpt spec (gate, phản chiếu, file TS xuất ra khớp model) |
+| `npm test` | test mô phỏng (tất định, bot hợp lệ, seed CMS hợp lệ, sao nâng cấp) + luật coin/hộp quà/nâng sao/thưởng thắng bot + luật xếp hạng (♦, mùa, ghép trận, chống nhường trận) + phòng online và phòng xếp hạng (lính chưa mở khóa, sao, ghép cặp, đầu hàng) + sculpt spec (gate, phản chiếu, file TS xuất ra khớp model) |
 | `npm run typecheck` | kiểm tra TypeScript |
 | `npm run db:reset` | ghi đè nội dung CMS trên Firestore bằng dữ liệu mặc định |
 | `npm run shots -- models` | chụp ảnh mọi mô hình vào `.shots/models` (cần server đang chạy) |
@@ -47,9 +47,21 @@ Mọi con số nằm trên server: trình duyệt chỉ gửi ý định (mở h
 - **Mở hộp:** rương 3D (6 kiểu: gỗ, bạc, vàng, khổng lồ, phép thuật, siêu phép thuật — dựng lại từ ảnh mẫu theo chuẩn img2threejs, `src/game/models/chest.ts`) nhún nhảy lắc lư khi chờ, rung khi chờ server, bật nắp với quầng sáng, cột sáng, tia sáng và hạt lấp lánh, rồi coin và thẻ bài bay ra.
 - **Bộ sưu tập thẻ:** mỗi lính là một thẻ kiểu Clash Royale (thẻ đang có / cần cho sao tiếp theo, sao, ổ khóa + giá). Lên 1★ cần 100 thẻ, 2★ 200 thẻ … 5★ 500 thẻ (dùng hết thẻ và coin mỗi lần nâng; chỉnh riêng từng lính). Mỗi sao +10% máu và sát thương (chỉnh trong Cài đặt).
 - **Mở khóa lính:** lính giá ≤ 150 miễn phí cho mọi người (kể cả khách), lính khác mở bằng coin. Lính chưa mở khóa hiện mờ có ổ khóa trong bảng xếp quân, không đặt được; server từ chối đội hình online có lính chưa mở khóa.
-- **Sao trong trận:** đấu với máy luôn tính sao của bạn; 2 người 1 máy không tính; đấu online **chủ phòng chọn** có tính sao hay không (server đọc sao từ ví của từng người).
+- **Sao trong trận:** đấu với máy luôn tính sao của bạn; 2 người 1 máy không tính; đấu online **chủ phòng chọn** có tính sao hay không; xếp hạng luôn tính sao (server đọc sao từ ví của từng người).
+- **Thưởng thắng bot:** lúc bắt đầu trận, game báo server (`bot-start`) để server ghi *vé trận* (bot nào, mấy bot, lúc nào). Nhận thưởng phải có vé, mỗi vé dùng một lần, trận phải dài ít nhất 15 giây, cách lần trước 20 giây, tối đa 30 lần mỗi ngày (chỉnh trong Cài đặt). Server không tự xem trận nên không chứng minh được thắng thật; các giới hạn này chỉ chặn script cày thưởng không giới hạn.
 - **Admin:** `/models` tab *🃏 Thẻ & sao* đặt giá mở khóa, giá thẻ, thẻ + coin mỗi sao; *Cài đặt* đặt `x` giờ, % mỗi sao, phần thưởng và kiểu rương từng hộp; `/admin/users/{uid}` xem ví, sổ giao dịch và cộng/trừ coin (bắt buộc ghi lý do — cách nạp tay tạm thời khi chưa có cổng thanh toán).
 - **Firestore đã có dữ liệu:** lính cũ được đọc là miễn phí và không bán thẻ cho tới khi đặt giá. Trang Tổng quan CMS → *Nội dung mặc định mới* → tick *Đặt giá mở khóa, giá thẻ và giá nâng sao mặc định*.
+
+## Xếp hạng
+
+Vào `/play?mode=ranked` (thẻ *Xếp hạng* ở màn chính). Bấm *Tìm trận*, server ghép với người có hạng gần nhất rồi đưa cả hai vào một phòng riêng: bản đồ ngẫu nhiên, ngân sách của bản đồ, tính sao, 30 giây xếp quân, một trận duy nhất.
+
+- **6 bậc:** Tân Binh → Tinh Nhuệ → Cao Thủ → Kỳ Cựu → Siêu Việt → Bậc Thầy. Năm bậc đầu chia hạng, mỗi hạng vài ♦; Bậc Thầy tính điểm 0–99999. Thắng +1 ♦, thua −1 ♦ (Tân Binh không mất ♦), đủ ♦ thắng thêm một trận thì lên hạng, hết ♦ thua tiếp thì xuống hạng, kể cả rớt bậc.
+- **Mùa giải** tự nối tiếp (mặc định 30 ngày từ `ranked.seasonStart`). Hết mùa: nhận rương theo bậc cuối mùa, mùa mới bắt đầu thấp hơn 1 bậc. Có bảng xếp hạng theo mùa.
+- **Thắng có rương** (tối đa 20 rương/ngày).
+- **Chống acc phụ cày thắng:** chỉ ghép tự động (không vào bằng mã), tài khoản ≥ 3 ngày tuổi và đã nhận thưởng thắng bot 10 lần mới được xếp hạng, không ghép hai người cùng IP, cùng hai tài khoản chỉ tính 2 trận/ngày, đối thủ bỏ trận quá sớm hoặc đội quá rẻ thì bên thắng không được ♦, kết quả hai máy báo lệch nhau thì hủy và đếm tranh chấp (quá 5 lần/mùa thì khóa xếp hạng). Trận đáng ngờ hiện ở CMS `/admin/ranked`.
+
+Mọi con số chỉnh ở CMS *Cài đặt* (mục Xếp hạng). Chi tiết: [ARCHITECTURE.md mục 7](docs/ARCHITECTURE.md#7-chế-độ-xếp-hạng-và-chống-cày-thắng).
 
 **Font game:** mọi màn game (trừ `/admin` và `/models`) dùng font Clash từ `data/Clash_Regular.otf.ttf`, chữ màu `#2D3232`, cỡ tối thiểu 16px. File được phục vụ qua `/api/fonts/clash`: chép bản mới đè lên là có hiệu lực, không cần build lại; thiếu file thì game dùng font dự phòng. File Clash hiện tại **thiếu phần lớn chữ tiếng Việt có dấu chồng** (ơ ư ạ ả ấ ầ ậ ế ệ ộ ợ ự…), các chữ này tạm lấy từ Paytone One nên nhìn hơi lệch kiểu; thay bằng bản Clash có tiếng Việt là hết. Lưu ý file ghi bản quyền Supercell ("All rights reserved"): cần giấy phép trước khi dùng trong sản phẩm thu tiền.
 
@@ -74,15 +86,18 @@ src/game/sculpt/           sculpt spec → Three.js (kit, builder, gate, rig con
 src/server/studio/         xưởng img2threejs: gọi Claude (API hoặc CLI), prompt, pipeline, lưu job/version
 src/game/render/           engine Three.js: lính instanced + animation lò xo, ragdoll Rapier, particle, đạn, hiệu ứng kỹ năng, camera
 src/game/arena.ts          đấu trường thử kỹ năng (1 lính vs hình nộm) cho preview CMS và /models
-src/shared/economy.ts      luật coin, thẻ, sao, mở khóa, hộp quà (thuần, có test)
+src/shared/economy.ts      luật coin, thẻ, sao, mở khóa, hộp quà, thưởng thắng bot (thuần, có test)
 src/server/players.ts      ví coin trên Firestore: transaction + sổ giao dịch
+src/shared/ranked.ts       luật xếp hạng: bậc/hạng/♦, mùa, ghép trận, chống nhường trận (thuần, có test)
+src/server/ranked.ts       xếp hạng trên Firestore: chốt kết quả, bảng xếp hạng, cờ gian lận
+src/components/game/ranked.tsx  sảnh xếp hạng, huy hiệu 6 bậc, bảng xếp hạng, kết quả ♦
 src/components/player/     HUD coin, menu hộp quà, màn mở hộp (rương 3D), bộ sưu tập thẻ
 src/components/            UI game + CMS
 ```
 
 **Online không gửi từng khung hình.** Server chỉ kiểm tra đội hình hai bên theo dữ liệu CMS, chọn seed, rồi hai trình duyệt tự chạy cùng một trận. Mô phỏng chỉ dùng `+ - * /`, `Math.sqrt` và PRNG có seed (không dùng `Math.sin/cos/random`), nên kết quả trùng từng bit giữa các trình duyệt. Mỗi giây hai máy gửi checksum; nếu lệch, UI báo desync. Ragdoll, particle và animation chỉ để hiển thị, không ảnh hưởng kết quả.
 
-**Đấu online cần đăng nhập** (Socket.IO kiểm tra cookie phiên và Origin khi bắt tay, mỗi tài khoản một kết nối, giới hạn số sự kiện/giây). Kết quả chỉ được lưu vào Firestore `matches` khi cả hai máy cùng báo kết thúc ở cùng tick, một thắng một thua hoặc cả hai hòa, không desync và đủ checksum; báo thắng/thua mâu thuẫn, rời trận trước khi xác nhận hoặc lệch trận thì hủy kết quả. Chi tiết: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Đấu online cần đăng nhập** (Socket.IO kiểm tra cookie phiên và Origin khi bắt tay, mỗi tài khoản một kết nối, giới hạn số sự kiện/giây). Kết quả chỉ được lưu vào Firestore `matches` khi cả hai máy cùng báo kết thúc ở cùng tick, một thắng một thua hoặc cả hai hòa, không desync và đủ checksum; báo thắng/thua mâu thuẫn hoặc lệch trận thì hủy kết quả. Đầu hàng hoặc mất kết nối trước khi báo kết thúc thì bị loại: trận 2 người, bên còn lại thắng ngay. Chi tiết: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 **Nội dung CMS trên Firestore:** mỗi collection CMS là một collection Firestore cùng tên (`units`, `weapons`, `assets`…, id tài liệu = id nội dung) cộng tài liệu `settings/global`. Server giữ bản sao trong RAM qua snapshot listener, nên lưu trong CMS hay sửa trực tiếp trên Firebase Console đều có hiệu lực ở trận tiếp theo, không cần khởi động lại. Tài liệu sửa tay bị sai schema sẽ bị bỏ qua và ghi log. Trường `sculpt` của asset lưu dạng chuỗi JSON (Firestore không nhận mảng lồng mảng). Lần đầu gặp Firestore trống, server tự chuyển nội dung từ SQLite cũ (`data/game.db`) nếu có, không thì ghi dữ liệu mặc định. Chưa kết nối được Firestore (thiếu credential, mất mạng) thì game chạy bằng dữ liệu mặc định, CMS từ chối lưu, server tự thử lại.
 

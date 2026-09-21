@@ -1,8 +1,10 @@
 import GameClient, { type Mode } from '@/components/game/GameClient';
+import { IS_VERCEL } from '@/shared/deploy';
 
 export const metadata = { title: 'Chiến trường — Mini Battle Simulator' };
 
-const MODES: Mode[] = ['bot', 'local', 'online', 'ranked'];
+// Vercel has no Socket.IO server: online/ranked links (old invites included) fall back to bot.
+const MODES: Mode[] = IS_VERCEL ? ['bot', 'local'] : ['bot', 'local', 'online', 'ranked'];
 
 export default async function PlayPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

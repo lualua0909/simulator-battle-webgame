@@ -37,6 +37,7 @@ Miễn phí để chơi, thu tiền qua **coin** (1.000 VNĐ = 1.000 coin), gi�
 | Mở khóa lính | Lính cao cấp (rồng, thần sấm, voi ma mút…) mở bằng coin | Lính rẻ (≤ 150) miễn phí cho mọi người, kể cả khách |
 | Thẻ bài và sao | Mua thẻ để nâng sao nhanh hơn thay vì chờ hộp quà | Hộp quà hằng ngày và hộp x giờ vẫn cho thẻ miễn phí |
 | Công bằng khi đấu online | Chủ phòng bật/tắt "Tính sao nâng cấp" | Đấu với bạn bè có thể tắt sao để chỉ so tài xếp quân |
+| Xếp hạng | Luôn tính sao (quyết định 2026-09-21) | Sao mua bằng coin ảnh hưởng thắng thua trong xếp hạng: khuyến khích nâng sao nhưng là yếu tố *trả tiền để mạnh hơn*; theo dõi phản hồi người chơi |
 | Mở rộng sau này | Skin lính, hiệu ứng thắng trận, bản đồ, battle pass theo mùa | Chỉ hình thức, không tăng sức mạnh: rủi ro pháp lý và phản ứng người chơi thấp hơn |
 | Quảng cáo (tùy chọn) | Xem video nhận thêm hộp quà | Chỉ khi đủ lượng người chơi |
 
@@ -111,9 +112,10 @@ Tóm tắt những điểm ảnh hưởng trực tiếp tới việc thu tiền 
 | Giai đoạn | Việc |
 | --- | --- |
 | Phase 2 (xong) | Ví coin + sổ giao dịch trên Firestore, hộp quà hằng ngày / x giờ, thẻ bài, nâng sao, mở khóa lính, admin cộng/trừ coin, sao trong đấu online do chủ phòng chọn |
+| Xếp hạng (xong, 2026-09-21) | Chế độ xếp hạng: ghép trận, 6 bậc, mùa giải, bảng xếp hạng. Nguồn coin/thẻ miễn phí mới: rương mỗi trận thắng (≤ 20/ngày) và rương cuối mùa theo bậc. Thưởng thắng bot có vé trận và giới hạn 30 lần/ngày. Chi tiết: [ARCHITECTURE.md mục 7](ARCHITECTURE.md#7-chế-độ-xếp-hạng-và-chống-cày-thắng) |
 | Phase 3 | Chọn cổng (khuyến nghị bắt đầu với VietQR vì phí thấp), collection `topups`, `/api/topup` + webhook có chữ ký, màn nạp coin, báo cáo doanh thu và đối soát trong CMS, rate limit |
 | Phase 4 | Pháp nhân + giấy phép G1, xác thực số điện thoại, ngày sinh và giới hạn giờ chơi cho người dưới 18 tuổi, chính sách hoàn tiền, điều khoản sử dụng |
-| Sau đó | Skin/hiệu ứng thắng trận, battle pass theo mùa, ghép trận theo tổng sao nếu mở đấu xếp hạng |
+| Sau đó | Skin/hiệu ứng thắng trận, battle pass gắn với mùa xếp hạng, cân nhắc tính tổng sao khi ghép trận xếp hạng |
 
 Nguồn tham khảo:
 

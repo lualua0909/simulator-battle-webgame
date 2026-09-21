@@ -2,7 +2,7 @@
 // The step keeps running if the browser disconnects; only the "stop" action aborts it.
 import { z } from 'zod';
 import { IMAGE_DATA_URL, type StudioEvent } from '@/shared/studio';
-import { guard, issuesOf, jsonError, readJson } from '@/server/admin';
+import { guard, issuesOf, jsonError, readJson, unsupportedOnVercel } from '@/server/admin';
 import { reviewStep, runStep, specStep, stopRun } from '@/server/studio/pipeline';
 import { getJob, getJobDetail } from '@/server/studio/store';
 
@@ -22,7 +22,7 @@ const bodySchema = z.discriminatedUnion('action', [
 ]);
 
 export async function POST(req: Request, ctx: Ctx) {
-  const denied = await guard();
+  const denied = unsupportedOnVercel() ?? (await guard());
   if (denied) return denied;
   const { id } = await ctx.params;
   if (!getJob(id)) return jsonError(404, 'Không tìm thấy job');

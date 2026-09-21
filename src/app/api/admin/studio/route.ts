@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { rigOfKind, SCULPT_KINDS } from '@/game/sculpt/rigs';
 import { idSchema, RIG_OF_KIND } from '@/shared/schema';
 import { IMAGE_DATA_URL } from '@/shared/studio';
-import { guard, issuesOf, jsonError, readJson } from '@/server/admin';
+import { guard, issuesOf, jsonError, readJson, unsupportedOnVercel } from '@/server/admin';
 import { getDoc } from '@/server/content';
 import { engineStatus } from '@/server/studio/llm';
 import { createJob, listJobs } from '@/server/studio/store';
@@ -21,13 +21,13 @@ const createSchema = z
   .refine((b) => b.prompt.trim() || b.image, { message: 'Cần ảnh mẫu hoặc mô tả', path: ['prompt'] });
 
 export async function GET() {
-  const denied = await guard();
+  const denied = unsupportedOnVercel() ?? (await guard());
   if (denied) return denied;
   return Response.json({ engine: engineStatus(), jobs: listJobs() });
 }
 
 export async function POST(req: Request) {
-  const denied = await guard();
+  const denied = unsupportedOnVercel() ?? (await guard());
   if (denied) return denied;
   const body = await readJson(req);
   if (body instanceof Response) return body;

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import PlayerHud from '@/components/player/PlayerHud';
+import { IS_VERCEL } from '@/shared/deploy';
 import { formatTopupCoins, formatVnd, vietqrImageUrl, type TopupOrder, type TopupPackage } from '@/shared/topup';
 
 interface Config {
@@ -22,7 +23,7 @@ const STATUS_CLS: Record<string, string> = {
 };
 const STATUS_TXT: Record<string, string> = { pending: 'Đang chờ duyệt', confirmed: 'Đã cộng xu', cancelled: 'Đã huỷ' };
 
-const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 5 CẤP ĐỘ', '🌐 ONLINE REAL-TIME', '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', '🏆 BẢNG XẾP HẠNG'];
+const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 5 CẤP ĐỘ', ...(IS_VERCEL ? [] : ['🌐 ONLINE REAL-TIME']), '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', ...(IS_VERCEL ? [] : ['🏆 BẢNG XẾP HẠNG'])];
 
 async function copy(text: string): Promise<boolean> {
   try {

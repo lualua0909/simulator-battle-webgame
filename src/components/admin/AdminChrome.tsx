@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { COLLECTIONS } from '@/shared/schema';
 import { COLLECTION_SPECS, SETTINGS_FIELDS } from '@/shared/fields';
+import { IS_VERCEL } from '@/shared/deploy';
 import type { MissingDefaults } from '@/shared/merge';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { api, ApiError } from './api';
@@ -24,14 +25,14 @@ export function AdminNav() {
   return (
     <nav className="flex flex-col gap-0.5">
       {item('/admin', '🏠 Tổng quan', true)}
-      {item('/admin/monitoring', '📈 Giám sát máy chủ')}
+      {!IS_VERCEL && item('/admin/monitoring', '📈 Giám sát máy chủ')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Nội dung game</div>
       {item('/models', '🪖 Nhân vật & mô hình')}
       {COLLECTIONS.filter((c) => c !== 'units').map((c) => item(`/admin/c/${c}`, `${COLLECTION_SPECS[c].icon} ${COLLECTION_SPECS[c].label}`))}
       {item('/admin/settings', '⚙️ Cài đặt & khắc chế')}
       {item('/admin/users', '👥 Người dùng')}
       {item('/admin/topups', '💳 Nạp xu')}
-      {item('/admin/ranked', '🏆 Xếp hạng & gian lận')}
+      {!IS_VERCEL && item('/admin/ranked', '🏆 Xếp hạng & gian lận')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
       {item('/play?mode=bot', '⚔️ Mở game')}
       <button

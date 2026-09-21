@@ -4,6 +4,7 @@ import GameTitle from '@/components/home/GameTitle';
 import HeroBanner from '@/components/home/HeroBanner';
 import Reveal from '@/components/home/Reveal';
 import PlayerHud from '@/components/player/PlayerHud';
+import { IS_VERCEL } from '@/shared/deploy';
 
 // Bố cục giữ như cũ: nav (PlayerHud góc phải) + 4 nút chế độ + Xưởng + chat.
 // Chỉ khoác áo mới kiểu Unite: hero tím rực, dải zigzag, thẻ chế độ nổi khối.
@@ -35,6 +36,7 @@ const MODES = [
     title: 'Đấu online',
     desc: 'Tạo phòng, gửi mã cho bạn bè, trận đấu mô phỏng đồng bộ trên hai máy.',
     icon: '🌐',
+    online: true,
     ribbon: 'THỬ THÁCH THẬT',
     ribbonCls: 'bg-[#d8373a] text-white',
     ring: 'hover:shadow-[#d8373a]/40',
@@ -46,13 +48,14 @@ const MODES = [
     title: 'Xếp hạng',
     desc: 'Tìm đối thủ ngang tài, leo 6 bậc từ Tân Binh tới Bậc Thầy, nhận thưởng cuối mùa.',
     icon: '🏆',
+    online: true,
     ribbon: 'LEO HẠNG',
     ribbonCls: 'bg-[#7c3aed] text-white',
     ring: 'hover:shadow-[#7c3aed]/40',
     iconBg: 'bg-gradient-to-b from-[#c084fc] to-[#7c3aed]',
     cta: 'text-[#7c3aed]',
   },
-];
+].filter((m) => !(IS_VERCEL && m.online));
 
 const STEPS = [
   { n: '01', icon: '🛡️', title: 'Xếp quân', desc: 'Kéo thả tướng low-poly lên bàn cờ, xoay đội hình theo ý bạn.' },
@@ -60,7 +63,7 @@ const STEPS = [
   { n: '03', icon: '🏆', title: 'Xem hỗn loạn', desc: 'Wobbly ragdoll lao vào nhau, phe còn đứng vững thắng trận.' },
 ];
 
-const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 4 CẤP ĐỘ', '🌐 ONLINE REAL-TIME', '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', '🏆 BẢNG XẾP HẠNG'];
+const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 4 CẤP ĐỘ', ...(IS_VERCEL ? [] : ['🌐 ONLINE REAL-TIME']), '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', ...(IS_VERCEL ? [] : ['🏆 BẢNG XẾP HẠNG'])];
 
 export default function Home() {
   return (
@@ -107,7 +110,7 @@ export default function Home() {
               Mô phỏng đại chiến low-poly: xếp quân, bấm bắt đầu, xem hỗn loạn.
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[#2d3232]">
-              {['⚔️ 3 chế độ chơi', '🤖 AI 4 cấp độ', '🌐 Online real-time'].map((b) => (
+              {(IS_VERCEL ? ['⚔️ 2 chế độ chơi', '🤖 AI 4 cấp độ'] : ['⚔️ 3 chế độ chơi', '🤖 AI 4 cấp độ', '🌐 Online real-time']).map((b) => (
                 <span key={b} className="rounded-full border-2 border-[#2d3232] bg-white px-3 py-1 shadow-[0_3px_0_0_#2d3232]">
                   {b}
                 </span>
@@ -134,10 +137,10 @@ export default function Home() {
           <Reveal>
             <h2 className="text-outline text-center text-4xl sm:text-5xl">CHỌN CHẾ ĐỘ CHIẾN ĐẤU</h2>
             <p className="mx-auto mt-2 max-w-xl text-center text-lg text-white drop-shadow-[0_2px_0_#2d3232]">
-              Bốn đấu trường, một mục tiêu: đội quân cuối cùng còn đứng vững!
+              {IS_VERCEL ? 'Hai' : 'Bốn'} đấu trường, một mục tiêu: đội quân cuối cùng còn đứng vững!
             </p>
           </Reveal>
-          <div className="mt-8 grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={`mt-8 grid w-full gap-6 sm:grid-cols-2 ${IS_VERCEL ? 'mx-auto max-w-3xl' : 'lg:grid-cols-4'}`}>
             {MODES.map((m, i) => (
               <Reveal key={m.href} variant="up" delay={(i % 4) * 110} className="h-full">
               <Link

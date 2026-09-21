@@ -5,6 +5,7 @@
 // workshop viewer in place of the asset; applying it overrides the asset (revertible).
 import { useEffect, useRef, useState } from 'react';
 import { createAssetModel, createUnitModel } from '@/game/models';
+import { IS_VERCEL } from '@/shared/deploy';
 import { COLLECTION_SPECS } from '@/shared/fields';
 import { RIG_OF_KIND, RIGID_GLB_KINDS, SKINNED_GLB_KINDS, type AssetDef, type ConfigBundle, type UnitDef } from '@/shared/schema';
 import type { StudioJobDetail, StudioVersion } from '@/shared/studio';
@@ -166,7 +167,7 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
       {(SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && <SkinnedGlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
       {asset.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && <TintSavePanel key={asset.glb.url} asset={asset} users={users} act={act} saving={saving} />}
       <DownloadPanel key={sources.map((s) => s.label).join('|')} sources={sources} />
-      <ClaudePanel bundle={bundle} asset={asset} context={context} users={users} setCandidate={setCandidate} act={act} saving={saving} onNewAsset={onNewAsset} />
+      {!IS_VERCEL && <ClaudePanel bundle={bundle} asset={asset} context={context} users={users} setCandidate={setCandidate} act={act} saving={saving} onNewAsset={onNewAsset} />}
     </div>
   );
 }
@@ -245,6 +246,8 @@ function GlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef; users:
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? res.statusText);
     }, 'Đã xóa model upload ✓');
 
+  // Vercel has no writable disk: no new upload, only reverting one made before.
+  if (IS_VERCEL && !asset.glb) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
       <b>📦 Upload model (.glb/.gltf)</b>
@@ -270,9 +273,11 @@ function GlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef; users:
           }
         }}
       />
-      <button className="btn px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => fileInput.current?.click()}>
-        {busy ? 'Đang tải lên…' : asset.glb ? 'Thay file khác' : 'Chọn file…'}
-      </button>
+      {!IS_VERCEL && (
+        <button className="btn px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => fileInput.current?.click()}>
+          {busy ? 'Đang tải lên…' : asset.glb ? 'Thay file khác' : 'Chọn file…'}
+        </button>
+      )}
       {asset.glb && (
         <button className="btn ml-auto px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => void remove()}>
           Hoàn tác về procedural
@@ -306,6 +311,8 @@ function SkinnedGlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef;
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? res.statusText);
     }, 'Đã xóa model upload ✓');
 
+  // Vercel has no writable disk: no new upload, only reverting one made before.
+  if (IS_VERCEL && !asset.glb) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
       <b>🦖 Upload model animated (.glb/.gltf)</b>
@@ -331,9 +338,11 @@ function SkinnedGlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef;
           }
         }}
       />
-      <button className="btn px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => fileInput.current?.click()}>
-        {busy ? 'Đang tải lên…' : asset.glb ? 'Thay file khác' : 'Chọn file…'}
-      </button>
+      {!IS_VERCEL && (
+        <button className="btn px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => fileInput.current?.click()}>
+          {busy ? 'Đang tải lên…' : asset.glb ? 'Thay file khác' : 'Chọn file…'}
+        </button>
+      )}
       {asset.glb && (
         <button className="btn ml-auto px-2 py-0.5 text-xs" disabled={saving || busy} onClick={() => void remove()}>
           Hoàn tác về procedural

@@ -3,7 +3,7 @@
 // RIGID_GLB_KINDS: baked rigid but keep body motion + saddle).
 import { assetSchema, RIG_OF_KIND, RIGID_GLB_KINDS, SKINNED_GLB_KINDS, type AssetDef } from '@/shared/schema';
 import { getDoc, putDoc } from '@/server/content';
-import { checkRefs, guard, issuesOf, jsonError } from '@/server/admin';
+import { checkRefs, guard, issuesOf, jsonError, unsupportedOnVercel } from '@/server/admin';
 import { deleteAssetGlb, saveAssetGlb } from '@/server/assetUploads';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -11,7 +11,7 @@ type Ctx = { params: Promise<{ id: string }> };
 const MAX_BYTES = 20 * 1024 * 1024;
 
 export async function POST(req: Request, ctx: Ctx) {
-  const denied = await guard();
+  const denied = unsupportedOnVercel() ?? (await guard());
   if (denied) return denied;
   const { id } = await ctx.params;
   const doc = (await getDoc('assets', id)) as AssetDef | null;

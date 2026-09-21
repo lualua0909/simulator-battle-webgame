@@ -1,7 +1,7 @@
 // CMS: ranked battles flagged as possible win-trading (?reviewed=1 for the handled ones),
 // marking one reviewed, and lifting a player's dispute lock.
 import { z } from 'zod';
-import { issuesOf, jsonError, readJson, requireCms } from '@/server/admin';
+import { issuesOf, jsonError, readJson, requireCms, unsupportedOnVercel } from '@/server/admin';
 import { clearDisputes, listFlags, reviewFlag } from '@/server/ranked';
 
 export const dynamic = 'force-dynamic';
@@ -12,6 +12,8 @@ const actionSchema = z.discriminatedUnion('action', [
 ]);
 
 export async function GET(req: Request) {
+  const off = unsupportedOnVercel();
+  if (off) return off;
   const actor = await requireCms();
   if (actor instanceof Response) return actor;
   try {
@@ -23,6 +25,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const off = unsupportedOnVercel();
+  if (off) return off;
   const actor = await requireCms();
   if (actor instanceof Response) return actor;
   const body = await readJson(req);

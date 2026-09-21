@@ -1,6 +1,6 @@
 import { Timestamp, type Query } from 'firebase-admin/firestore';
 import { USERS_COLLECTION } from '@/shared/users';
-import { guard } from '@/server/admin';
+import { guard, unsupportedOnVercel } from '@/server/admin';
 import { firestore } from '@/server/firebase';
 import { MATCHES_COLLECTION } from '@/server/matches';
 import { metricsSnapshot, type StoredStats } from '@/server/metrics';
@@ -35,7 +35,7 @@ async function storedStats(): Promise<StoredStats> {
 }
 
 export async function GET() {
-  const denied = await guard();
+  const denied = unsupportedOnVercel() ?? (await guard());
   if (denied) return denied;
   let stored: StoredStats | null = null;
   let storedError: string | null = null;

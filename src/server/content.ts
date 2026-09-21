@@ -15,6 +15,7 @@ import {
   type ContentBundle,
   type Settings,
 } from '@/shared/schema';
+import { IS_VERCEL } from '@/shared/deploy';
 import { SEED } from '@/shared/seed';
 import { getDb } from './db';
 import { firestore } from './firebase';
@@ -167,7 +168,8 @@ function apply(s: Store, collection: CollectionName, snap: QuerySnapshot, first:
 
 /** Fills an empty Firestore once: with the content the CMS kept in SQLite before, or the built-in defaults. */
 async function seed(s: Store): Promise<void> {
-  const legacy = legacyContent();
+  // Vercel has no local SQLite file to migrate from (read-only disk).
+  const legacy = IS_VERCEL ? null : legacyContent();
   console.log(legacy ? 'Firestore trống: chuyển nội dung CMS từ SQLite sang Firestore' : 'Firestore trống: ghi nội dung CMS mặc định');
   await write(s, legacy ?? SEED);
 }

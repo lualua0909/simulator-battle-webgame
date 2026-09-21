@@ -2,10 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { ARMOR_CLASSES, DAMAGE_TYPES, type Settings } from '@/shared/schema';
-import { ENUM_LABELS, SETTINGS_FIELDS } from '@/shared/fields';
+import { IS_VERCEL } from '@/shared/deploy';
+import { ENUM_LABELS, SETTINGS_FIELDS, type Field } from '@/shared/fields';
 import { useConfig } from '@/game/useConfig';
 import { api, ApiError, detailsToErrors } from './api';
 import DocForm from './DocForm';
+
+/** Vercel has no ranked mode: drop its `ranked.*` fields, then the section headers left with no field under them. */
+function visibleFields(): Field[] {
+  if (!IS_VERCEL) return SETTINGS_FIELDS;
+  const kept = SETTINGS_FIELDS.filter((f) => !('key' in f && f.key.startsWith('ranked.')));
+  return kept.filter((f, i) => f.type !== 'section' || (i + 1 < kept.length && kept[i + 1].type !== 'section'));
+}
+
+const FIELDS = visibleFields();
 
 export default function SettingsEditor() {
   const { bundle, reload } = useConfig();
@@ -49,7 +59,7 @@ export default function SettingsEditor() {
       {status && <div className={`rounded-lg border-2 px-3 py-2 text-sm ${status.ok ? 'border-green-700 bg-green-50' : 'border-red-team bg-red-50'}`}>{status.text}</div>}
       <div className="grid items-start gap-3 xl:grid-cols-2">
         <div className="panel p-4">
-          <DocForm fields={SETTINGS_FIELDS} doc={settings as unknown as Record<string, unknown>} onChange={(d) => setSettings(d as unknown as Settings)} bundle={bundle} errors={errors} />
+          <DocForm fields={FIELDS} doc={settings as unknown as Record<string, unknown>} onChange={(d) => setSettings(d as unknown as Settings)} bundle={bundle} errors={errors} />
         </div>
         <div className="panel p-4">
           <h2 className="font-display text-sm">Bảng khắc chế sát thương × giáp</h2>

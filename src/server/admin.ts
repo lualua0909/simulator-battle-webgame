@@ -1,4 +1,5 @@
 // Shared guards/helpers for admin route handlers.
+import { IS_VERCEL } from '@/shared/deploy';
 import type { CollectionDocs, CollectionName } from '@/shared/schema';
 import { findRefIssues } from '@/shared/validate';
 import { canAccessCms, type AppUser } from '@/shared/users';
@@ -23,6 +24,11 @@ export async function cmsUser(): Promise<AppUser | null> {
 
 export function jsonError(status: number, error: string, details?: unknown): Response {
   return Response.json({ error, details }, { status });
+}
+
+/** 404 for a feature Vercel cannot run (see IS_VERCEL); null elsewhere. */
+export function unsupportedOnVercel(): Response | null {
+  return IS_VERCEL ? jsonError(404, 'Tính năng không hỗ trợ khi deploy trên Vercel') : null;
 }
 
 /** The acting root/admin, or the error response to return. */
