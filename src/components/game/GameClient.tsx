@@ -13,7 +13,7 @@ import type { RankResult } from '@/shared/ranked';
 import { generateBotArmy } from '@/game/bot/generate';
 import { generateSiegeDefense } from '@/game/bot/siege';
 import { useOnline } from '@/game/net/client';
-import { BattleEngine, type BattleStats, type CinematicKind, type PointerInfo } from '@/game/render/engine';
+import { BattleEngine, type BattleStats, type CinematicKind, type PointerInfo, type ViewState } from '@/game/render/engine';
 import { unitThumbnails } from '@/game/render/thumbnails';
 import { armies as fullArmies, armyCost, canField, cellKeyOf, gridCells, isGridStructure, overlapsGrid, sideBudget, snapToCell, type Armies, type Placement } from '@/game/sim/army';
 import { ALL_SIDES, wallCenter, wallIndex, type Side } from '@/game/sim/terrain';
@@ -92,6 +92,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [busy, setBusy] = useState(false);
   const [desync, setDesync] = useState(false);
   const [cine, setCine] = useState<CinematicKind | null>(null);
+  const [view, setView] = useState<ViewState>({ mode: 'overview', unit: null, vr: false });
+  const [vrOk, setVrOk] = useState(false);
   const cineRef = useRef<CinematicKind | null>(null);
   /** Set on a fresh entry into deployment (not a return from battle) → establishing flight. */
   const introPending = useRef(false);
@@ -176,6 +178,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         cineRef.current = k;
         setCine(k);
       },
+      onView: setView,
     });
     setEngine(e);
     (window as unknown as { __engine?: BattleEngine }).__engine = e;
@@ -184,6 +187,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       setEngine(null);
     };
   }, [bundle]);
+
+  useEffect(() => {
+    void BattleEngine.vrSupported().then(setVrOk);
+  }, []);
 
   // online room drives map + budget
   useEffect(() => {
@@ -682,6 +689,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         e.preventDefault();
         undo();
       }
+      if (e.key.toLowerCase() === 'v' && phase === 'battle') engine?.cycleView();
+      if (e.key.toLowerCase() === 'n' && phase === 'battle') engine?.nextViewUnit();
       const speedKey = { '1': 0.25, '2': 1, '3': 2, '4': 4 }[e.key];
       if (speedKey && !online && (phase === 'battle' || phase === 'result')) setSpeed(speedKey);
     };
@@ -898,6 +907,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             stopLabel={online ? (phase === 'battle' ? 'Dừng trận' : mode === 'ranked' ? 'Về sảnh xếp hạng' : 'Về xếp quân') : 'Dừng trận'}
             timeLimit={bundle.settings.battleTimeLimit}
             defense={engine?.sim?.defense ?? defense}
+            view={view}
+            onView={(m) => engine?.setViewMode(m)}
+            onNextUnit={() => engine?.nextViewUnit()}
+            onVR={vrOk ? () => (view.vr ? engine?.exitVR() : void engine?.enterVR().catch((err) => flash(`Không vào được VR: ${err instanceof Error ? err.message : err}`))) : undefined}
           />
         )}
         {desync && phase === 'battle' && <div className="panel pointer-events-auto absolute left-1/2 top-20 -translate-x-1/2 px-3 py-1 text-sm text-red-team">Hai máy đang lệch trận (desync) — kết quả có thể khác nhau.</div>}

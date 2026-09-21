@@ -6,7 +6,8 @@ import type { BotDef, ConfigBundle } from '@/shared/schema';
 import type { RoomSettings, RoomState } from '@/shared/net';
 import { ALL_SIDES, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
-import type { BattleStats } from '@/game/render/engine';
+import type { BattleStats, ViewState } from '@/game/render/engine';
+import type { ViewMode } from '@/game/render/unitView';
 
 export const SIDE_NAME: Record<Side, string> = { blue: 'Xanh', red: 'Đỏ', green: 'Lục', yellow: 'Vàng' };
 export const SIDE_BG: Record<Side, string> = { blue: 'bg-blue-team', red: 'bg-red-team', green: 'bg-green-team', yellow: 'bg-yellow-team' };
@@ -421,6 +422,11 @@ export function BattleHud(props: {
   stopLabel: string;
   timeLimit: number;
   defense: Side | null;
+  view: ViewState;
+  onView(mode: ViewMode): void;
+  onNextUnit(): void;
+  /** Shown only on a WebXR headset (Quest Browser). */
+  onVR?(): void;
 }) {
   const { stats, total, activeSides } = props;
   const left = Math.max(0, props.timeLimit - stats.time);
@@ -480,8 +486,41 @@ export function BattleHud(props: {
           {props.stopLabel}
         </button>
       </div>
-      <HelpHint className="absolute bottom-3 left-3" text="Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE" />
+      <ViewBar view={props.view} onView={props.onView} onNextUnit={props.onNextUnit} onVR={props.onVR} />
+      <HelpHint className="absolute bottom-3 left-3" text="Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE · V: đổi góc nhìn · N: lính kế · Bấm vào lính để theo lính đó" />
     </>
+  );
+}
+
+const VIEW_BUTTONS: { mode: ViewMode; icon: string; label: string; title: string }[] = [
+  { mode: 'overview', icon: '🗺', label: 'Toàn cảnh', title: 'Toàn cảnh (V)' },
+  { mode: 'third', icon: '👤', label: 'Sau lưng', title: 'Góc nhìn thứ 3: đứng sau lưng lính (V)' },
+  { mode: 'first', icon: '👁', label: 'Mắt lính', title: 'Góc nhìn thứ 1: nhìn bằng mắt lính (V)' },
+  { mode: 'second', icon: '🧍', label: 'Trước mặt', title: 'Góc nhìn thứ 2: đứng trước mặt lính, nhìn nó lao tới (V)' },
+];
+
+/** Camera view switcher: overview or following one soldier, plus the VR entry on a headset. */
+function ViewBar(props: { view: ViewState; onView(mode: ViewMode): void; onNextUnit(): void; onVR?(): void }) {
+  const { view } = props;
+  return (
+    <div className="panel pointer-events-auto absolute left-2 top-14 flex max-w-[calc(100vw-1rem)] flex-wrap items-center gap-1 p-1.5 sm:bottom-14 sm:left-3 sm:top-auto sm:p-2">
+      {VIEW_BUTTONS.map((b) => (
+        <button key={b.mode} className={`btn px-2 py-1 text-sm ${view.mode === b.mode ? 'btn-gold' : ''}`} onClick={() => props.onView(b.mode)} title={b.title}>
+          {b.icon}
+          <span className="ml-1 hidden sm:inline">{b.label}</span>
+        </button>
+      ))}
+      {view.mode !== 'overview' && (
+        <button className="btn px-2 py-1 text-sm" onClick={props.onNextUnit} title="Theo lính kế tiếp (N)">
+          ▶ <span className="max-w-[8rem] truncate">{view.unit ?? 'Lính kế'}</span>
+        </button>
+      )}
+      {props.onVR && (
+        <button className={`btn px-2 py-1 text-sm ${view.vr ? 'btn-gold' : ''}`} onClick={props.onVR} title="Chơi bằng kính VR (Quest)">
+          🥽 {view.vr ? 'Thoát VR' : 'VR'}
+        </button>
+      )}
+    </div>
   );
 }
 

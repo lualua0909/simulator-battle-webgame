@@ -112,6 +112,8 @@ type DeathEvent = Extract<SimEvent, { type: 'death' }>;
 export class UnitRenderer {
   readonly group = new THREE.Group();
   vis: UnitVis[] = [];
+  /** Living unit not drawn (the first-person view looks out of its head). */
+  hideId = -1;
   private types = new Map<string, TypeVis>();
   private pose: THREE.Matrix4[] = [];
   private corpses: UnitVis[] = [];
@@ -124,6 +126,7 @@ export class UnitRenderer {
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpE = new THREE.Euler(0, 0, 0, 'YXZ');
   private readonly tmpP = new THREE.Vector3();
+  private readonly eye = new THREE.Vector3();
   private readonly one = new THREE.Vector3(1, 1, 1);
   private readonly frustum = new THREE.Frustum();
   private readonly viewProj = new THREE.Matrix4();
@@ -263,7 +266,8 @@ export class UnitRenderer {
     this.frame++;
     this.ensure(sim);
     const view = camera ? this.frustum.setFromProjectionMatrix(this.viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)) : null;
-    const eye = camera?.position;
+    // World position: in VR the camera sits inside a moved, scaled rig.
+    const eye = camera ? this.eye.setFromMatrixPosition(camera.matrixWorld) : undefined;
     for (const t of this.types.values()) t.used = 0;
     for (let i = 0; i < sim.units.length; i++) {
       const u = sim.units[i];
@@ -278,7 +282,7 @@ export class UnitRenderer {
         }
         continue;
       }
-      if (hidden && u.side === hidden) {
+      if ((hidden && u.side === hidden) || (i === this.hideId && u.alive)) {
         if (v.skin) v.skin.group.visible = false;
         continue;
       }

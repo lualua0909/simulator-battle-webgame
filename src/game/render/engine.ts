@@ -9,7 +9,7 @@ import { getUnitTemplate } from '../models';
 import { cloneSkinned, releaseSkinned, type SkinnedInstance } from '../models/glbSkinned';
 import type { Armies } from '../sim/army';
 import { Terrain, WALL_CELL, type Side } from '../sim/terrain';
-import { BattleSim, SIM_DT, type BattleResult, type SimEvent } from '../sim/world';
+import { BattleSim, SIM_DT, type BattleResult, type SimEvent, type SimUnit } from '../sim/world';
 import { attackStyleFor, Poser } from './animate';
 import { basePitch, RtsCamera, type CameraView } from './camera';
 import { Cinematic, type Shot } from './cinematic';
@@ -26,6 +26,8 @@ import { DebrisSystem } from './debris';
 import { WallRenderer } from './walls';
 import { createSkirt, createTerrainMesh, createWater, createZoneOverlay, type Water } from './terrainMesh';
 import { UnitRenderer } from './units';
+import { angleDiff, UnitView, VIEW_MODES, type ViewMode } from './unitView';
+import { XrControls } from './xr';
 
 export interface PointerInfo {
   type: 'down' | 'move' | 'up';
@@ -51,6 +53,16 @@ export interface EngineEvents {
   onCinematic?(kind: CinematicKind | null): void;
   /** The browser took the WebGL context away (true) or gave it back (false). */
   onContextLost?(lost: boolean): void;
+  /** View mode, followed soldier or VR state changed. */
+  onView?(v: ViewState): void;
+}
+
+export interface ViewState {
+  mode: ViewMode;
+  /** Name of the followed soldier (null in the overview). */
+  unit: string | null;
+  /** A Quest/WebXR session is running. */
+  vr: boolean;
 }
 
 export type CinematicKind = 'intro' | 'battle' | 'victory';
@@ -91,6 +103,8 @@ export class BattleEngine {
   readonly rts: RtsCamera;
   /** Films the battle whenever a cinematic is not running. */
   readonly director: CameraDirector;
+  /** Unit-follow views (first / second / third person). */
+  readonly view = new UnitView();
   terrain: Terrain | null = null;
   map: MapDef | null = null;
   sim: BattleSim | null = null;
@@ -159,6 +173,25 @@ export class BattleEngine {
   /** Settings with the quality tier's ragdoll and corpse caps applied. */
   private unitSettings: Settings;
   private contextLost = false;
+  private readonly xr: XrControls;
+  /** The camera follows a soldier this frame (a unit view during a battle). */
+  private following = false;
+  private viewKey = '';
+  /** Head pose inside the rig when the view was last recentred: the rig puts that spot on the wanted eye. */
+  private readonly headCalib = new THREE.Vector3(0, 1.6, 0);
+  /** Frames left that recentre on the live head pose (the first XR frames report it late). */
+  private xrRecenter = 0;
+  /** Snap turns added by the player on top of the view's own facing. */
+  private xrTurn = 0;
+  /** Facing a unit view holds in VR: it only follows the soldier's heading in big steps (smooth turning makes people sick). */
+  private xrYaw = 0;
+  private tablePlaced = false;
+  /** Sandbox-table scale (world metres per real metre), kept across view switches. */
+  private tableScale = 0;
+  private readonly eyeAt = new THREE.Vector3();
+  private readonly lookAt = new THREE.Vector3();
+  private readonly xrA = new THREE.Vector3();
+  private readonly xrB = new THREE.Vector3();
   /** Frame-rate cap while nothing needs full rate (menus, lobby, result screen); null = every display frame. */
   private frameCap: number | null = null;
   private lastFrameAt = 0;
@@ -185,6 +218,7 @@ export class BattleEngine {
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
+    this.renderer.xr.enabled = true;
     this.timer.connect(document);
     this.renderer.domElement.style.display = 'block';
     this.renderer.domElement.style.touchAction = 'none';
@@ -228,6 +262,35 @@ export class BattleEngine {
     };
     this.scene.add(this.sky, this.hemi, this.sun, this.sun.target, this.mapGroup, this.units.group, this.walls.group, this.debris.group, this.projectiles.group, this.effects.group, this.particles.group, this.fireworks.group);
 
+    this.xr = new XrControls(this.renderer, {
+      select: (origin, direction) => this.xrSelect(origin, direction),
+      cycleView: () => this.cycleView(),
+      nextUnit: () => this.nextViewUnit(),
+      overview: () => this.setViewMode('overview'),
+      turn: (r) => this.xrTurnBy(r),
+      zoom: (a) => this.xrZoom(a),
+    });
+    // The camera rides in the rig; outside VR the rig stays identity, so the desktop camera works in world space.
+    this.xr.rig.add(this.camera);
+    this.scene.add(this.xr.rig);
+    this.renderer.xr.addEventListener('sessionstart', () => {
+      if (this.cine) this.finishCinematic();
+      // Real metres in the headset: controllers held close to the face must not clip.
+      this.camera.near = 0.05;
+      this.camera.updateProjectionMatrix();
+      this.xrRecenter = 10;
+      this.xrTurn = 0;
+      this.tablePlaced = false;
+      this.tableScale = 0;
+      this.shakeAmount = 0;
+      this.governor.hold();
+    });
+    this.renderer.xr.addEventListener('sessionend', () => {
+      this.xr.reset();
+      this.camera.near = 0.3;
+      this.resize();
+      this.governor.hold();
+    });
     this.rts = new RtsCamera(this.camera, this.renderer.domElement);
     this.rts.pick = (x, y) => this.groundAt(x, y);
     this.director = new CameraDirector(this.rts);
@@ -335,6 +398,7 @@ export class BattleEngine {
     if (!this.terrain || !this.map) return;
     this.resetRagdolls();
     this.sim = new BattleSim(this.bundle, this.map, this.terrain, armies, seed, stars);
+    this.view.id = -1;
     this.units.build(this.sim);
     this.walls.build(this.sim);
     this.debris.clear();
@@ -471,6 +535,57 @@ export class BattleEngine {
     this.dusk.goal = 1;
   }
 
+  get viewMode(): ViewMode {
+    return this.view.mode;
+  }
+
+  /** Overview (RTS camera / VR sandbox table) or a view that follows one soldier. */
+  setViewMode(mode: ViewMode): void {
+    if (mode === this.view.mode) return;
+    const leaving = this.view.mode !== 'overview' && mode === 'overview';
+    this.view.mode = mode;
+    this.xrRecenter = 1;
+    this.xrTurn = 0;
+    // Back to the overview over the soldier that was followed.
+    if (leaving && this.view.id >= 0) {
+      const a = this.view.anchor;
+      this.rts.focus(a.x, a.z);
+      this.director.focusAt(a.x, a.z);
+    }
+  }
+
+  cycleView(): void {
+    this.setViewMode(VIEW_MODES[(VIEW_MODES.indexOf(this.view.mode) + 1) % VIEW_MODES.length]);
+  }
+
+  /** Follow the next soldier of the own army (from the overview: switches to the third-person view). */
+  nextViewUnit(): void {
+    if (!this.sim || this.mode !== 'battle') return;
+    this.view.next(this.sim, this.director.side);
+    if (this.view.mode === 'overview') this.setViewMode('third');
+  }
+
+  /** A headset that can run the game in VR (Quest Browser; needs HTTPS or localhost). */
+  static async vrSupported(): Promise<boolean> {
+    try {
+      return !!navigator.xr && (await navigator.xr.isSessionSupported('immersive-vr'));
+    } catch {
+      return false;
+    }
+  }
+
+  /** Must be called from a click: browsers only open an XR session on a user gesture. */
+  async enterVR(): Promise<void> {
+    if (!navigator.xr || this.renderer.xr.isPresenting) return;
+    this.audio.resume();
+    const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] });
+    await this.renderer.xr.setSession(session);
+  }
+
+  exitVR(): void {
+    void this.renderer.xr.getSession()?.end();
+  }
+
   skipCinematic(): void {
     if (this.cine) this.finishCinematic();
   }
@@ -596,6 +711,7 @@ export class BattleEngine {
   }
 
   dispose(): void {
+    void this.renderer.xr.getSession()?.end();
     this.renderer.setAnimationLoop(null);
     this.ro.disconnect();
     this.timer.dispose();
@@ -627,6 +743,11 @@ export class BattleEngine {
   // ------------------------------------------------------------------ internals
 
   private play(kind: CinematicKind, view: CameraView, onEnd: () => void, endAt: number, shots: Shot[]): void {
+    // A camera flight flown for the player's head is instant motion sickness: VR skips straight to the end.
+    if (this.renderer.xr.isPresenting) {
+      this.rts.jumpTo(view);
+      return onEnd();
+    }
     shots.push({ at: endAt, pos: this.rts.positionFor(view, new THREE.Vector3()), look: view.target.clone() });
     this.setCine({ kind, run: new Cinematic(shots, this.terrain), view, onEnd });
   }
@@ -747,7 +868,132 @@ export class BattleEngine {
       .catch((e) => console.warn('Ragdoll physics unavailable', e));
   }
 
+  private overviewCamera(dt: number): void {
+    this.director.update(dt, this.mode === 'battle' ? this.sim : null);
+    this.rts.update(dt);
+  }
+
+  /** Desktop unit view: the camera sits at the view's eye and looks where the soldier goes. */
+  private poseFollowCamera(u: SimUnit): void {
+    const heading = this.view.heading;
+    this.camera.position.copy(this.view.eye(u, heading, this.terrain, this.eyeAt));
+    this.camera.lookAt(this.view.look(u, heading, this.lookAt));
+    this.camera.updateMatrixWorld();
+    this.view.switched = false;
+  }
+
+  /** The listener follows whoever the player looks through; the overview hears from its aim point. */
+  private setListener(fromCamera: boolean): void {
+    if (!fromCamera) return this.audio.setListener(this.rts.target.x, this.rts.target.z, this.rts.yaw);
+    const dir = this.camera.getWorldDirection(this.xrA);
+    const at = this.xrB.setFromMatrixPosition(this.camera.matrixWorld);
+    this.audio.setListener(at.x, at.z, Math.atan2(-dir.z, -dir.x));
+  }
+
+  private emitView(u: SimUnit | null, vr: boolean): void {
+    const key = `${this.view.mode}|${u?.id ?? -1}|${vr}`;
+    if (key === this.viewKey) return;
+    this.viewKey = key;
+    this.events.onView?.({ mode: this.view.mode, unit: u?.def.name ?? null, vr });
+  }
+
+  /**
+   * VR: places the rig. A unit view puts the player's head on the view's eye at life size; the overview is a
+   * sandbox table — the battlefield shrunk to a few real metres at waist height, the player at its own edge.
+   */
+  private updateRig(u: SimUnit | null): void {
+    const rig = this.xr.rig;
+    // After a switch, whatever spot the head is at becomes the spot that lands on the new eye.
+    if (u && this.view.switched) {
+      this.view.switched = false;
+      this.xrRecenter = Math.max(this.xrRecenter, 1);
+      this.xrTurn = 0;
+      this.xrYaw = this.view.heading;
+    }
+    if (this.xrRecenter > 0) {
+      this.xrRecenter--;
+      this.headCalib.copy(this.camera.position);
+      this.tablePlaced = false;
+    }
+    if (u) {
+      // The facing only catches up with the soldier once it turned well away: smooth turning makes people sick.
+      if (Math.abs(angleDiff(this.view.heading, this.xrYaw)) > 1) this.xrYaw = this.view.heading;
+      const yaw = this.xrYaw;
+      // The camera looks down its −Z: rotating by heading + π points it along the soldier's heading.
+      const face = (this.view.mode === 'second' ? yaw : yaw + Math.PI) + this.xrTurn;
+      this.view.eye(u, yaw, this.terrain, this.eyeAt);
+      rig.scale.setScalar(1);
+      rig.rotation.set(0, face, 0);
+      rig.position.copy(this.eyeAt).sub(this.xrA.copy(this.headCalib).applyAxisAngle(THREE.Object3D.DEFAULT_UP, face));
+      this.tablePlaced = false;
+      return;
+    }
+    if (this.tablePlaced || !this.terrain) return;
+    const t = this.terrain;
+    this.tablePlaced = true;
+    if (!this.tableScale) this.tableScale = t.size / 2.5;
+    const scale = this.tableScale;
+    // Stand just outside the own deployment edge, facing the map centre.
+    const s = Math.sign(this.zoneCenter(this.director.side).x) || 1;
+    const face = (s * Math.PI) / 2 + this.xrTurn;
+    const x = s * (t.half + 0.35 * scale);
+    rig.scale.setScalar(scale);
+    rig.rotation.set(0, face, 0);
+    const head = this.xrA.set(this.headCalib.x, 0, this.headCalib.z).multiplyScalar(scale).applyAxisAngle(THREE.Object3D.DEFAULT_UP, face);
+    rig.position.set(x - head.x, this.tableFloor(scale, t.height(s * t.half, 0)), -head.z);
+  }
+
+  /** Rig height for a table scale: the ground sits ~0.9 m above the real floor, and on the floor at life size. */
+  private tableFloor(scale: number, ground: number): number {
+    return ground - 0.9 * (scale - 1);
+  }
+
+  /** Runs `change` on the rig, then moves the rig so the player's head keeps its place in the world. */
+  private aroundHead(change: () => void): void {
+    const rig = this.xr.rig;
+    rig.updateMatrixWorld(true);
+    const before = this.xrA.copy(this.camera.position).applyMatrix4(rig.matrixWorld);
+    change();
+    rig.updateMatrixWorld(true);
+    const after = this.xrB.copy(this.camera.position).applyMatrix4(rig.matrixWorld);
+    rig.position.x += before.x - after.x;
+    rig.position.z += before.z - after.z;
+  }
+
+  private xrTurnBy(radians: number): void {
+    if (this.following) this.xrTurn += radians;
+    else this.aroundHead(() => (this.xr.rig.rotation.y += radians));
+  }
+
+  /** Table mode: grow or shrink the table around the player, down to life size on the battlefield. */
+  private xrZoom(amount: number): void {
+    const t = this.terrain;
+    if (this.following || !t) return;
+    const rig = this.xr.rig;
+    const scale = THREE.MathUtils.clamp(rig.scale.x * Math.exp(-amount * 1.5), 1, t.size / 0.8);
+    this.aroundHead(() => rig.scale.setScalar(scale));
+    rig.updateMatrixWorld(true);
+    const head = this.xrA.copy(this.camera.position).applyMatrix4(rig.matrixWorld);
+    const ground = t.height(THREE.MathUtils.clamp(head.x, -t.half, t.half), THREE.MathUtils.clamp(head.z, -t.half, t.half));
+    rig.position.y = this.tableFloor(scale, ground);
+    this.tableScale = scale;
+  }
+
+  /** Trigger in VR: follow the soldier the controller ray points at. */
+  private xrSelect(origin: THREE.Vector3, direction: THREE.Vector3): void {
+    const sim = this.sim;
+    if (!sim || this.mode !== 'battle') return;
+    const g = this.groundOnRay(origin, direction);
+    // ~5 real cm of slack around the ray's ground hit, whatever the table scale.
+    const u = g && this.view.unitAt(sim, g.x, g.z, Math.max(2, this.xr.rig.scale.x * 0.05));
+    if (!u) return;
+    this.view.select(u.id);
+    if (this.view.mode === 'overview') this.setViewMode('third');
+  }
+
   private resize(): void {
+    // The headset owns the framebuffer size while presenting.
+    if (this.renderer.xr.isPresenting) return;
     const w = this.host.clientWidth || 800;
     const h = this.host.clientHeight || 600;
     this.renderer.setSize(w, h);
@@ -756,12 +1002,17 @@ export class BattleEngine {
   }
 
   private groundAt(clientX: number, clientY: number): THREE.Vector3 | null {
+    if (!this.terrain || !this.heights) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.raycaster.setFromCamera(this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
+    return this.groundOnRay(this.raycaster.ray.origin, this.raycaster.ray.direction);
+  }
+
+  /** First terrain (or deployment wall top) hit along a world-space ray. */
+  private groundOnRay(origin: THREE.Vector3, direction: THREE.Vector3): THREE.Vector3 | null {
     const terrain = this.terrain;
     const heights = this.heights;
     if (!terrain || !heights) return null;
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.raycaster.setFromCamera(this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), this.camera);
-    const { origin, direction } = this.raycaster.ray;
     const at = (t: number) => this.tmp.copy(origin).addScaledVector(direction, t);
     // Skip the stretch of ray above the highest possible terrain.
     const top = terrain.maxHeight + 0.5;
@@ -818,7 +1069,10 @@ export class BattleEngine {
       press = null;
       if (p && this.mode === 'battle' && !this.cine && Math.hypot(e.clientX - p.x, e.clientY - p.y) < p.slack && performance.now() - p.at < 400) {
         const g = this.groundAt(e.clientX, e.clientY);
-        if (g) this.director.focusAt(g.x, g.z);
+        // Following a soldier: a click on another one follows that one instead.
+        const u = g && this.following && this.sim ? this.view.unitAt(this.sim, g.x, g.z, 3) : null;
+        if (u) this.view.select(u.id);
+        else if (g && !this.following) this.director.focusAt(g.x, g.z);
       }
       this.dispatchPointer('up', e.clientX, e.clientY, e);
     });
@@ -886,7 +1140,7 @@ export class BattleEngine {
   }
 
   private frame(): void {
-    if (this.frameCap) {
+    if (this.frameCap && !this.renderer.xr.isPresenting) {
       const now = performance.now();
       // Skip display frames until the cap's interval has passed (a little slack for vsync jitter).
       if (now - this.lastFrameAt < 1000 / this.frameCap - 4) return;
@@ -904,11 +1158,13 @@ export class BattleEngine {
       }
     }
     this.flushPointerMove();
-    if (!this.cine) {
-      this.director.update(dt, this.mode === 'battle' ? this.sim : null);
-      this.rts.update(dt);
-    } else if (!this.cine.run.update(dt, this.camera)) this.finishCinematic();
-    this.audio.setListener(this.rts.target.x, this.rts.target.z, this.rts.yaw);
+    const vr = this.renderer.xr.isPresenting;
+    // A unit view needs the soldier where this frame's sim steps leave it, so it poses the camera further down.
+    const unitView = this.view.mode !== 'overview' && this.mode === 'battle' && !!this.sim && !this.cine;
+    if (vr) this.xr.update(dt);
+    else if (this.cine) {
+      if (!this.cine.run.update(dt, this.camera)) this.finishCinematic();
+    } else if (!unitView) this.overviewCamera(dt);
     const sim = this.sim;
     let simDt = 0;
     if (sim && this.mode === 'battle' && !this.paused && !this.holdSim) {
@@ -931,11 +1187,20 @@ export class BattleEngine {
     const animDt = this.mode === 'battle' && !this.holdSim ? simDt : dt;
     this.time += animDt;
     this.alpha = this.acc / SIM_DT;
+    const followed = unitView && sim ? this.view.track(sim, this.director.side, this.alpha, dt, this.rts.target) : null;
+    this.following = !!followed;
+    if (vr) this.updateRig(followed);
+    else if (followed) this.poseFollowCamera(followed);
+    else if (unitView) this.overviewCamera(dt); // nobody left to follow
+    this.rts.enabled = !this.cine && !followed && !vr;
+    this.units.hideId = followed && this.view.mode === 'first' ? followed.id : -1;
+    // Cinematics move the camera without refreshing its matrices; culling needs this frame's view.
+    this.xr.rig.updateMatrixWorld(true);
+    this.setListener(vr || !!followed);
+    this.emitView(followed, vr);
     if (sim) {
       this.ragdolls?.step(simDt);
       this.units.manage(simDt, this.unitSettings);
-      // Cinematics move the camera without refreshing its matrices; culling needs this frame's view.
-      this.camera.updateMatrixWorld();
       this.units.update(sim, this.mode === 'battle' ? this.alpha : 1, animDt, this.hidden, this.camera);
       this.walls.update(animDt, this.hidden);
       this.projectiles.update(sim, this.alpha, simDt, this.particles);
@@ -947,7 +1212,8 @@ export class BattleEngine {
     this.fireworks.update(dt);
     this.updateDusk(dt);
     this.water?.update(this.time);
-    this.sky.position.copy(this.camera.position);
+    this.sky.position.setFromMatrixPosition(this.camera.matrixWorld);
+    if (vr) this.shakeAmount = 0;
     if (this.shakeAmount > 0.002) {
       const s = this.shakeAmount * this.shakeAmount * (0.15 + this.camera.position.distanceTo(this.rts.target) * 0.01);
       this.camera.position.x += (Math.random() * 2 - 1) * s;
