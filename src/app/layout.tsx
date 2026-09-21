@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Paytone_One } from 'next/font/google';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import { Analytics } from '@vercel/analytics/next';
 import AuthProvider from '@/components/auth/AuthProvider';
 import PlayerProvider from '@/components/player/PlayerProvider';
 import './globals.css';
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <PlayerProvider>{children}</PlayerProvider>
         </AuthProvider>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
