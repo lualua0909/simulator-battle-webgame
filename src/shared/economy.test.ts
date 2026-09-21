@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Rng } from '@/game/sim/rng';
-import { adjustCoins, botBoxTier, boxStatus, buyCards, EconomyError, emptyPlayer, isUnlocked, liveBoxes, openBox, rollBox, starScale, unlockUnit, upgradeUnit, vnDay, winBotBattle, type PlayerState } from './economy';
+import { adjustCoins, botBoxTier, boxStatus, buyCards, EconomyError, emptyPlayer, isUnlocked, liveBoxes, openBox, rollBox, starScale, startBotBattle, unlockUnit, upgradeUnit, vnDay, winBotBattle, type PlayerState } from './economy';
 import { SEED } from './seed';
 
 const HOUR = 3_600_000;
@@ -147,20 +147,49 @@ test('admin adjustments never leave a negative balance', () => {
   assert.equal(adjustCoins(p, -5000, 'hoàn', 'root').state.coins, 0);
 });
 
-test('beating a bot pays its difficulty tier, scaled up for extra bots, then cools down', () => {
+test('beating a bot pays the pending battle\'s difficulty tier, scaled up for extra bots, then cools down', () => {
   const easy = economy.botBoxes['1'];
   const legendary = economy.botBoxes['5'];
-  const won = winBotBattle(emptyPlayer(), { id: 'de', difficulty: 1 }, 1, SEED.units, economy, MORNING, random());
+  const bots = [{ id: 'de', difficulty: 1 }, { id: 'huyen-thoai', difficulty: 5 }];
+  const claimAt = MORNING + economy.botWinMinSeconds * 1000;
+  const started = startBotBattle(emptyPlayer(), bots[0], 1, MORNING).state;
+  const won = winBotBattle(started, bots, SEED.units, economy, claimAt, random());
   assert.equal(won.entry.type, 'bot-win');
   assert.ok(won.reward!.coins >= easy.coins[0] && won.reward!.coins <= easy.coins[1]);
-  assert.throws(() => winBotBattle(won.state, { id: 'de', difficulty: 1 }, 1, SEED.units, economy, MORNING + 1000, random()), /Đợi/);
-  const afterCooldown = winBotBattle(won.state, { id: 'de', difficulty: 1 }, 1, SEED.units, economy, MORNING + economy.botWinCooldown * 1000, random());
+  assert.equal(won.state.botTicket, null);
+  assert.equal(won.state.botWinTotal, 1);
+  const again = startBotBattle(won.state, bots[0], 1, claimAt).state;
+  assert.throws(() => winBotBattle(again, bots, SEED.units, economy, claimAt + 1000, random()), /Đợi/);
+  const afterCooldown = winBotBattle(again, bots, SEED.units, economy, claimAt + economy.botWinCooldown * 1000, random());
   assert.equal(afterCooldown.entry.coins >= easy.coins[0] && afterCooldown.entry.coins <= easy.coins[1], true);
-  const solo = winBotBattle(emptyPlayer(), { id: 'huyen-thoai', difficulty: 5 }, 1, SEED.units, economy, MORNING, () => 0.999).reward!;
-  const trio = winBotBattle(emptyPlayer(), { id: 'huyen-thoai', difficulty: 5 }, 3, SEED.units, economy, MORNING, () => 0.999).reward!;
+  const solo = winBotBattle(startBotBattle(emptyPlayer(), bots[1], 1, MORNING).state, bots, SEED.units, economy, claimAt, () => 0.999).reward!;
+  const trio = winBotBattle(startBotBattle(emptyPlayer(), bots[1], 3, MORNING).state, bots, SEED.units, economy, claimAt, () => 0.999).reward!;
   assert.equal(solo.coins, legendary.coins[1]);
   assert.equal(trio.coins, Math.round(legendary.coins[1] * (1 + economy.botWinBonusPerExtra * 2)));
   assert.ok(trio.coins > solo.coins);
+});
+
+test('a bot-win reward needs a battle the server saw start, long enough ago, and is used up by the claim', () => {
+  const bots = [{ id: 'de', difficulty: 1 }];
+  assert.throws(() => winBotBattle(emptyPlayer(), bots, SEED.units, economy, MORNING, random()), /Không có trận/);
+  const started = startBotBattle(emptyPlayer(), bots[0], 1, MORNING).state;
+  assert.throws(() => winBotBattle(started, bots, SEED.units, economy, MORNING + 1000, random()), /quá ngắn/);
+  const won = winBotBattle(started, bots, SEED.units, economy, MORNING + economy.botWinMinSeconds * 1000, random());
+  // The ticket is spent: claiming twice (a replayed request) is refused even after the cooldown.
+  assert.throws(() => winBotBattle(won.state, bots, SEED.units, economy, MORNING + 3600_000, random()), /Không có trận/);
+});
+
+test('bot-win rewards stop at the daily cap and start again the next Vietnam day', () => {
+  const bots = [{ id: 'de', difficulty: 1 }];
+  const capped = { ...economy, botWinDailyCap: 2, botWinCooldown: 0, botWinMinSeconds: 0 };
+  let p = emptyPlayer();
+  for (let i = 0; i < 2; i++) p = winBotBattle(startBotBattle(p, bots[0], 1, MORNING + i).state, bots, SEED.units, capped, MORNING + i, random()).state;
+  assert.equal(p.botWinsToday, 2);
+  assert.throws(() => winBotBattle(startBotBattle(p, bots[0], 1, MORNING + 5).state, bots, SEED.units, capped, MORNING + 5, random()), /đủ 2 lần/);
+  const tomorrow = MORNING + 24 * HOUR;
+  const next = winBotBattle(startBotBattle(p, bots[0], 1, tomorrow).state, bots, SEED.units, capped, tomorrow, random()).state;
+  assert.equal(next.botWinsToday, 1);
+  assert.equal(next.botWinTotal, 3);
 });
 
 test('botBoxTier picks the chest for a difficulty, clamped to 1–5', () => {

@@ -1,16 +1,17 @@
 // Default game content, inserted into the CMS database on first run
 // (and restorable from the admin dashboard).
-import type {
-  AssetDef,
-  BotDef,
-  ContentBundle,
-  Faction,
-  MapDef,
-  ParticleDef,
-  ProjectileDef,
-  Settings,
-  UnitDef,
-  WeaponDef,
+import {
+  rankedSchema,
+  type AssetDef,
+  type BotDef,
+  type ContentBundle,
+  type Faction,
+  type MapDef,
+  type ParticleDef,
+  type ProjectileDef,
+  type Settings,
+  type UnitDef,
+  type WeaponDef,
 } from './schema';
 
 const factions: Faction[] = [
@@ -402,6 +403,8 @@ const settings: Settings = {
     },
     botWinBonusPerExtra: 0.5,
     botWinCooldown: 20,
+    botWinMinSeconds: 15,
+    botWinDailyCap: 30,
   },
   siege: {
     defenseBudget: 1,
@@ -421,6 +424,7 @@ const settings: Settings = {
     botTowerShare: 0.28,
     botCastleHalf: 6,
   },
+  ranked: rankedSchema.parse({}),
 };
 
 export const SEED: ContentBundle = { factions, units, weapons, projectiles, particles, assets, maps, bots, settings };

@@ -4,7 +4,7 @@
 // write the wallet and its ledger line together — two concurrent requests cannot spend the same
 // coins or open the same box twice. Prices, rewards and time come from the server, never the client.
 import { randomInt } from 'node:crypto';
-import { FieldValue, Timestamp, type DocumentData } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, type DocumentData, type DocumentReference, type DocumentSnapshot, type Transaction } from 'firebase-admin/firestore';
 import {
   adjustCoins,
   boxStatus,
@@ -15,6 +15,7 @@ import {
   openBox,
   PLAYERS_COLLECTION,
   playerStateSchema,
+  startBotBattle,
   unlockUnit,
   upgradeUnit,
   winBotBattle,
@@ -24,13 +25,15 @@ import {
   type LedgerEntry,
   type PlayerAction,
   type PlayerState,
+  type Quiet,
 } from '@/shared/economy';
+import { claimSeasonReward, currentSeason } from '@/shared/ranked';
 import type { ContentBundle } from '@/shared/schema';
 import { getContent, getSettings } from './content';
 import { firestore } from './firebase';
 
-const players = () => firestore().collection(PLAYERS_COLLECTION);
-const random = () => randomInt(0, 2 ** 32) / 2 ** 32;
+export const players = () => firestore().collection(PLAYERS_COLLECTION);
+export const random = () => randomInt(0, 2 ** 32) / 2 ** 32;
 
 export interface PlayerView {
   player: PlayerState;
@@ -39,7 +42,7 @@ export interface PlayerView {
 
 export type LedgerLine = LedgerEntry & { id: string; at: number | null };
 
-function parse(data: DocumentData | undefined): PlayerState {
+export function parse(data: DocumentData | undefined): PlayerState {
   if (!data) return emptyPlayer();
   const parsed = playerStateSchema.safeParse(data);
   if (parsed.success) return parsed.data;
@@ -56,20 +59,25 @@ export async function getPlayerView(uid: string): Promise<PlayerView> {
   return { player, boxes: boxStatus(player, settings.economy, Date.now()) };
 }
 
+/** Writes a wallet read in `tx` (as `snap`) with its change, plus the ledger line when coins or cards moved. */
+export function writeChange(tx: Transaction, ref: DocumentReference, snap: DocumentSnapshot, out: Change | Quiet): void {
+  tx.set(ref, { ...out.state, createdAt: snap.get('createdAt') ?? FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  // Firestore refuses undefined fields.
+  if ('entry' in out) tx.create(ref.collection(LEDGER_COLLECTION).doc(), { ...JSON.parse(JSON.stringify(out.entry)), at: FieldValue.serverTimestamp() });
+}
+
 /** Runs one change in a transaction; the rule may throw EconomyError (nothing is written then). */
-async function change(uid: string, rule: (player: PlayerState, content: ContentBundle, now: number) => Change): Promise<PlayerView & { reward?: BoxReward }> {
+async function change(uid: string, rule: (player: PlayerState, content: ContentBundle, now: number) => Change | Quiet): Promise<PlayerView & { reward?: BoxReward }> {
   const content = await getContent();
   const now = Date.now();
   const ref = players().doc(uid);
   const result = await firestore().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const out = rule(parse(snap.data()), content, now);
-    tx.set(ref, { ...out.state, createdAt: snap.get('createdAt') ?? FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-    // Firestore refuses undefined fields.
-    tx.create(ref.collection(LEDGER_COLLECTION).doc(), { ...JSON.parse(JSON.stringify(out.entry)), at: FieldValue.serverTimestamp() });
+    writeChange(tx, ref, snap, out);
     return out;
   });
-  return { player: result.state, boxes: boxStatus(result.state, content.settings.economy, now), reward: result.reward };
+  return { player: result.state, boxes: boxStatus(result.state, content.settings.economy, now), reward: 'reward' in result ? result.reward : undefined };
 }
 
 function unitOf(content: ContentBundle, unitId: string) {
@@ -88,8 +96,12 @@ export function runPlayerAction(uid: string, action: PlayerAction): Promise<Play
   switch (action.action) {
     case 'open-box':
       return change(uid, (p, c, now) => openBox(p, action.kind, c.units, c.settings.economy, now, random));
+    case 'bot-start':
+      return change(uid, (p, c, now) => startBotBattle(p, botOf(c, action.botId), action.botCount, now));
     case 'bot-win':
-      return change(uid, (p, c, now) => winBotBattle(p, botOf(c, action.botId), action.botCount, c.units, c.settings.economy, now, random));
+      return change(uid, (p, c, now) => winBotBattle(p, c.bots, c.units, c.settings.economy, now, random));
+    case 'rank-claim':
+      return change(uid, (p, c, now) => claimSeasonReward(p, currentSeason(c.settings.ranked, now), c.settings.ranked, c.units, random));
     case 'unlock':
       return change(uid, (p, c) => unlockUnit(p, unitOf(c, action.unitId)));
     case 'upgrade':

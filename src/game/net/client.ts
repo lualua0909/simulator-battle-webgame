@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { Placement } from '../sim/army';
 import type { Side } from '../sim/terrain';
-import { UNAUTHORIZED, type AckResult, type BattleOutcome, type BattleStart, type ClientToServer, type RoomSettings, type RoomState, type ServerToClient } from '@/shared/net';
+import { UNAUTHORIZED, type AckResult, type BattleOutcome, type BattleStart, type ClientToServer, type RankMatched, type RoomSettings, type RoomState, type ServerToClient } from '@/shared/net';
+import type { RankResult } from '@/shared/ranked';
 
 type GameSocket = Socket<ServerToClient, ClientToServer>;
 
@@ -13,6 +14,10 @@ export interface OnlineHandlers {
   onDesync(tick: number): void;
   onResult(res: AckResult<{ winner: Side | 'draw' }>): void;
   onEliminate(side: Side, tick: number): void;
+  /** Ranked: matchmaking seated you in a room (the seat is already set). */
+  onMatched?(match: RankMatched): void;
+  onRankCancelled?(reason: string): void;
+  onRankResult?(res: AckResult<RankResult>): void;
 }
 
 export interface Seat {
@@ -58,6 +63,13 @@ export function useOnline(uid: string | null, handlers: OnlineHandlers) {
     s.on('battle:desync', ({ tick }) => handlersRef.current.onDesync(tick));
     s.on('battle:eliminate', ({ side, tick }) => handlersRef.current.onEliminate(side, tick));
     s.on('battle:result', (res) => handlersRef.current.onResult(res));
+    s.on('rank:matched', (m) => {
+      rejoin.current = m.code;
+      setSeat({ code: m.code, side: m.side });
+      handlersRef.current.onMatched?.(m);
+    });
+    s.on('rank:cancelled', ({ reason }) => handlersRef.current.onRankCancelled?.(reason));
+    s.on('rank:result', (res) => handlersRef.current.onRankResult?.(res));
     setSocket(s);
     return () => {
       rejoin.current = null;
@@ -93,6 +105,19 @@ export function useOnline(uid: string | null, handlers: OnlineHandlers) {
     [socket],
   );
 
+  const queue = useCallback(
+    () => new Promise<AckResult>((resolve) => (socket ? socket.emit('rank:queue', resolve) : resolve({ ok: false, error: 'Chưa kết nối' }))),
+    [socket],
+  );
+
+  /** Leaves the current room (ranked: back to the queue screen after the one battle). */
+  const leave = useCallback(() => {
+    socket?.emit('room:leave');
+    rejoin.current = null;
+    setSeat(null);
+    setRoom(null);
+  }, [socket]);
+
   return {
     connected,
     error,
@@ -101,6 +126,9 @@ export function useOnline(uid: string | null, handlers: OnlineHandlers) {
     create,
     join,
     ready,
+    queue,
+    cancelQueue: () => socket?.emit('rank:cancel'),
+    leave,
     unready: () => socket?.emit('room:unready'),
     /** Live army edits while still deploying, so a 30s timeout can force-start with the latest draft. */
     draft: (army: Placement[]) => socket?.emit('room:draft', { army }),

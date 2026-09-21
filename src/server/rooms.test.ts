@@ -7,16 +7,20 @@ import { Server } from 'socket.io';
 import { io as connect, type Socket } from 'socket.io-client';
 import { ALL_SIDES, Terrain, type Side } from '@/game/sim/terrain';
 import { emptyPlayer, type PlayerState } from '@/shared/economy';
-import type { AckResult, BattleStart, ClientToServer, ServerToClient } from '@/shared/net';
+import { freshRank } from '@/shared/ranked';
+import type { AckResult, BattleStart, ClientToServer, RankMatched, RoomState, ServerToClient } from '@/shared/net';
 import { SEED } from '@/shared/seed';
 import { ROLE, type AppUser } from '@/shared/users';
 import type { BattleRecord } from './matches';
+import type { RankSettleInput } from './ranked';
 import { allowSocketRequest, attachRooms, MAX_PACKET_BYTES, type RoomServer } from './rooms';
 
 type Client = Socket<ServerToClient, ClientToServer>;
 
 const user = (uid: string): AppUser => ({ uid, email: `${uid}@test.dev`, displayName: uid, photoURL: null, role: ROLE.user, providers: [], disabled: false, fcmTokens: [], createdAt: null, updatedAt: null, lastLoginAt: null, lastActiveAt: null });
 const USERS: Record<string, AppUser> = { 'cookie-alice': user('alice'), 'cookie-bob': user('bob'), 'cookie-carol': user('carol'), 'cookie-dave': user('dave'), 'cookie-eve': user('eve') };
+/** Ranked battles the fake settleRanked was asked to apply. */
+const ranked: RankSettleInput[] = [];
 const WALLETS: Record<string, PlayerState> = {
   alice: { ...emptyPlayer(), stars: { clubber: 3, archer: 2 } },
   carol: { ...emptyPlayer(), unlocked: ['knight'] },
@@ -36,6 +40,12 @@ before(async () => {
     authenticate: async (cookie) => (cookie ? USERS[cookie] ?? null : null),
     saveMatch: async (battle, winner, tick) => void saved.push({ battle, winner, tick }),
     loadPlayer: async (uid) => WALLETS[uid] ?? emptyPlayer(),
+    rankEntry: async (u) => ({ season: 's1', rank: null, steps: 0, gate: u.uid === 'eve' ? 'Thắng bot và nhận thưởng 10 lần để mở khóa xếp hạng' : null }),
+    settleRanked: async (input) => {
+      ranked.push(input);
+      const result = (outcome: 'win' | 'lose') => ({ season: input.season, before: freshRank('s1'), after: freshRank('s1'), verdict: { outcome, move: true }, flags: [] });
+      return { sides: { blue: result('win'), red: result('lose') }, pairCount: 1 };
+    },
     deployMs: TEST_DEPLOY_MS,
   });
   await new Promise<void>((resolve) => http.listen(0, resolve));
@@ -49,8 +59,8 @@ after(() => {
   setImmediate(() => process.exit(0));
 });
 
-function open(cookie: string | null, origin = url): Client {
-  const c: Client = connect(url, { transports: ['websocket'], forceNew: true, reconnection: false, extraHeaders: { origin, ...(cookie && { cookie: `sb_session=${cookie}` }) } });
+function open(cookie: string | null, origin = url, ip?: string): Client {
+  const c: Client = connect(url, { transports: ['websocket'], forceNew: true, reconnection: false, extraHeaders: { origin, ...(cookie && { cookie: `sb_session=${cookie}` }), ...(ip && { 'cf-connecting-ip': ip }) } });
   clients.push(c);
   return c;
 }
@@ -59,8 +69,8 @@ const connected = (c: Client) => new Promise<void>((resolve, reject) => (c.once(
 const once = <E extends keyof ServerToClient>(c: Client, event: E) => new Promise<Parameters<ServerToClient[E]>[0]>((resolve) => c.once(event, ((arg: never) => resolve(arg)) as never));
 const create = (c: Client) => new Promise<AckResult<{ code: string; side: string }>>((resolve) => c.emit('room:create', resolve));
 const join = (c: Client, code: string) => new Promise<AckResult<{ code: string; side: string }>>((resolve) => c.emit('room:join', { code }, resolve));
-const ready = (c: Client, side: Side, unitId = SEED.units[0].id, activeSides: readonly Side[] = ['blue', 'red']) => {
-  const zone = new Terrain(SEED.maps[0], SEED.assets, null, activeSides).zoneOf(side);
+const ready = (c: Client, side: Side, unitId = SEED.units[0].id, activeSides: readonly Side[] = ['blue', 'red'], mapId = SEED.maps[0].id) => {
+  const zone = new Terrain(SEED.maps.find((m) => m.id === mapId)!, SEED.assets, null, activeSides).zoneOf(side);
   const army = [{ unitId, x: (zone.x0 + zone.x1) / 2, z: (zone.z0 + zone.z1) / 2 }];
   return new Promise<AckResult>((resolve) => c.emit('room:ready', { army }, resolve));
 };
@@ -405,4 +415,101 @@ test('3-4 player free-for-all: one surrendering does not end the match for the r
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(resultFired, false, 'the fight must continue for alice and bob after only one of three is eliminated');
   close(alice, bob, carol);
+});
+
+// ---------------------------------------------------------------- ranked
+
+const queueUp = (c: Client) => new Promise<AckResult>((resolve) => c.emit('rank:queue', resolve));
+
+/** Alice and Bob (different IPs) queue for ranked and get matched into a fresh room. */
+async function matchRanked() {
+  const alice = open('cookie-alice', url, '10.0.0.1');
+  const bob = open('cookie-bob', url, '10.0.0.2');
+  await Promise.all([connected(alice), connected(bob)]);
+  const matched = Promise.all([once(alice, 'rank:matched'), once(bob, 'rank:matched')]) as Promise<RankMatched[]>;
+  const state = once(alice, 'room:state') as Promise<RoomState>;
+  assert.deepEqual(await queueUp(alice), { ok: true });
+  assert.deepEqual(await queueUp(bob), { ok: true });
+  const [ma, mb] = await matched;
+  return { alice, bob, ma, mb, room: await state };
+}
+
+test('ranked: two queued players are matched into a fixed room and the battle settles both standings', async () => {
+  const { alice, bob, ma, mb, room } = await matchRanked();
+  assert.equal(ma.code, mb.code);
+  assert.deepEqual([ma.side, mb.side], ['blue', 'red']);
+  assert.deepEqual(ma.opponent, { name: 'bob', rank: null });
+  assert.equal(room.ranked, 's1');
+  assert.equal(room.useStars, true);
+  assert.equal(room.defense, null);
+  // Nobody else gets in by code.
+  const carol = open('cookie-carol', url, '10.0.0.3');
+  await connected(carol);
+  assert.deepEqual(await join(carol, ma.code), { ok: false, error: 'Không thể vào phòng xếp hạng bằng mã' });
+  const started = Promise.all([once(alice, 'battle:start'), once(bob, 'battle:start')]);
+  assert.deepEqual(await ready(alice, 'blue', undefined, undefined, room.mapId), { ok: true });
+  assert.deepEqual(await ready(bob, 'red', undefined, undefined, room.mapId), { ok: true });
+  await started;
+  for (const tick of [30, 60]) {
+    alice.emit('battle:checksum', { tick, hash: 1 });
+    bob.emit('battle:checksum', { tick, hash: 1 });
+  }
+  const results = Promise.all([once(alice, 'rank:result'), once(bob, 'rank:result')]);
+  alice.emit('battle:end', { outcome: 'win', tick: 75 });
+  bob.emit('battle:end', { outcome: 'lose', tick: 75 });
+  const [ra, rb] = await results;
+  assert.ok(ra.ok && ra.verdict.outcome === 'win');
+  assert.ok(rb.ok && rb.verdict.outcome === 'lose');
+  const settled = ranked.at(-1)!;
+  assert.equal(settled.season, 's1');
+  assert.equal(settled.room, ma.code);
+  assert.equal(settled.match.winner, 'blue');
+  assert.equal(settled.match.ended, 'report');
+  assert.deepEqual(settled.match.sides.blue?.ip, '10.0.0.1');
+  assert.deepEqual(settled.match.sides.red?.ip, '10.0.0.2');
+  assert.ok(settled.match.sides.blue!.armyCost > 0);
+  assert.equal(saved.at(-1)!.battle.ranked, 's1');
+  // One battle per ranked room.
+  assert.deepEqual(await ready(alice, 'blue', undefined, undefined, room.mapId), { ok: false, error: 'Trận xếp hạng đã kết thúc — hãy tìm trận mới' });
+  close(alice, bob, carol);
+});
+
+test('ranked: a surrender is settled as a forfeit', async () => {
+  const { alice, bob, room } = await matchRanked();
+  const started = Promise.all([once(alice, 'battle:start'), once(bob, 'battle:start')]);
+  await ready(alice, 'blue', undefined, undefined, room.mapId);
+  await ready(bob, 'red', undefined, undefined, room.mapId);
+  await started;
+  const result = once(alice, 'rank:result');
+  bob.emit('battle:surrender');
+  assert.ok((await result).ok);
+  assert.equal(ranked.at(-1)!.match.winner, 'blue');
+  assert.equal(ranked.at(-1)!.match.ended, 'forfeit');
+  close(alice, bob);
+});
+
+test('ranked: leaving the matched room before the battle calls it off for the opponent', async () => {
+  const { alice, bob } = await matchRanked();
+  const cancelled = once(bob, 'rank:cancelled');
+  alice.emit('room:leave');
+  assert.deepEqual(await cancelled, { reason: 'Đối thủ đã rời trận trước khi bắt đầu' });
+  close(alice, bob);
+});
+
+test('ranked: the gate refuses the queue, and two players on one IP are never matched', async () => {
+  const eve = open('cookie-eve', url, '10.0.0.9');
+  await connected(eve);
+  assert.deepEqual(await queueUp(eve), { ok: false, error: 'Thắng bot và nhận thưởng 10 lần để mở khóa xếp hạng' });
+  const carol = open('cookie-carol', url, '10.0.0.5');
+  const dave = open('cookie-dave', url, '10.0.0.5');
+  await Promise.all([connected(carol), connected(dave)]);
+  let matched = false;
+  carol.once('rank:matched', () => (matched = true));
+  assert.deepEqual(await queueUp(carol), { ok: true });
+  assert.deepEqual(await queueUp(dave), { ok: true });
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(matched, false);
+  carol.emit('rank:cancel');
+  dave.emit('rank:cancel');
+  close(eve, carol, dave);
 });

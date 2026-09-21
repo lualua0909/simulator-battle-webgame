@@ -2,7 +2,7 @@
 // Pure rules shared by the server — the only place coins move, inside Firestore transactions
 // (src/server/players.ts) — the browser (display, countdowns) and the tests.
 import { z } from 'zod';
-import { idSchema, STAR_MAX, type BotDef, type BoxConfig, type Economy, type UnitDef } from './schema';
+import { idSchema, RANK_TIERS, STAR_MAX, type BotDef, type BoxConfig, type Economy, type UnitDef } from './schema';
 
 export const PLAYERS_COLLECTION = 'players';
 export const LEDGER_COLLECTION = 'ledger';
@@ -15,6 +15,28 @@ const VN_OFFSET_MS = 7 * HOUR_MS;
 // ---------------------------------------------------------------- state
 
 const count = z.number().int().min(0);
+
+/** Ranked standing in one season (rules in ranked.ts). */
+export const rankStateSchema = z.object({
+  /** Season id ('s1', 's2', …) of this standing. */
+  season: z.string(),
+  tier: z.enum(RANK_TIERS),
+  /** Class 1 … tier.classes (always 1 in master). */
+  cls: z.number().int().min(1),
+  diamonds: count,
+  /** Master points. */
+  points: count.default(0),
+  wins: count.default(0),
+  losses: count.default(0),
+  draws: count.default(0),
+  /** Results of this season that were voided because the reports disagreed (too many locks ranked). */
+  disputes: count.default(0),
+  /** Vietnam date of `rewardsToday` (ranked win boxes). */
+  rewardDay: z.string().nullable().default(null),
+  rewardsToday: count.default(0),
+});
+
+export type RankState = z.infer<typeof rankStateSchema>;
 
 /** `players/{uid}` without timestamps. Invalid stored data is refused, never reset: a reset would wipe the coins. */
 export const playerStateSchema = z.object({
@@ -35,6 +57,15 @@ export const playerStateSchema = z.object({
   weekClaims: z.array(z.boolean()).length(7).default(() => Array(7).fill(false)),
   /** Epoch ms of the last bot-win reward (anti-farm cooldown, see `economy.botWinCooldown`). */
   lastBotWinAt: z.number().nullable().default(null),
+  /** The bot battle the server saw start (bot-start): the next bot-win reward consumes it. */
+  botTicket: z.object({ botId: idSchema, botCount: z.number().int().min(1).max(3), at: z.number() }).nullable().default(null),
+  /** Vietnam date of `botWinsToday` (see `economy.botWinDailyCap`). */
+  botWinDay: z.string().nullable().default(null),
+  botWinsToday: count.default(0),
+  /** Bot-win rewards ever claimed (ranked entry requirement). */
+  botWinTotal: count.default(0),
+  /** Ranked standing; null before the first ranked battle. */
+  ranked: rankStateSchema.nullable().default(null),
 });
 
 export type PlayerState = z.infer<typeof playerStateSchema>;
@@ -167,7 +198,7 @@ export function rollBox(units: readonly Pick<UnitDef, 'id' | 'cost'>[], box: Box
 
 // ---------------------------------------------------------------- changes
 
-export const LEDGER_TYPES = ['daily-box', 'hourly-box', 'bot-win', 'unlock', 'upgrade', 'buy-cards', 'admin', 'topup'] as const;
+export const LEDGER_TYPES = ['daily-box', 'hourly-box', 'bot-win', 'rank-win', 'rank-season', 'unlock', 'upgrade', 'buy-cards', 'admin', 'topup'] as const;
 export type LedgerType = (typeof LEDGER_TYPES)[number];
 
 /** One audit line in `players/{uid}/ledger`. */
@@ -196,9 +227,16 @@ export interface Change {
   reward?: BoxReward;
 }
 
+/** A change that moves no coins or cards (bookkeeping only): nothing goes in the ledger. */
+export interface Quiet {
+  state: PlayerState;
+}
+
 export const playerActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('open-box'), kind: z.enum(['daily', 'hourly']) }),
-  z.object({ action: z.literal('bot-win'), botId: idSchema, botCount: z.number().int().min(1).max(3) }),
+  z.object({ action: z.literal('bot-start'), botId: idSchema, botCount: z.number().int().min(1).max(3) }),
+  z.object({ action: z.literal('bot-win') }),
+  z.object({ action: z.literal('rank-claim') }),
   z.object({ action: z.literal('unlock'), unitId: idSchema }),
   z.object({ action: z.literal('upgrade'), unitId: idSchema }),
   z.object({ action: z.literal('buy-cards'), unitId: idSchema, count: z.number().int().min(1).max(1000) }),
@@ -247,20 +285,38 @@ export function botBoxTier(economy: Pick<Economy, 'botBoxes'>, difficulty: numbe
   return economy.botBoxes[String(Math.max(1, Math.min(5, Math.round(difficulty)))) as '1' | '2' | '3' | '4' | '5'];
 }
 
-/** Coins and cards for beating `bot` (× `botCount` bot sides), gated by `economy.botWinCooldown`. */
-export function winBotBattle(p: PlayerState, bot: Pick<BotDef, 'id' | 'difficulty'>, botCount: number, units: readonly UnitDef[], economy: Economy, now: number, random: Random): Change {
+/** A bot battle is starting: the server remembers which bot and when (one pending battle; a new start replaces it). */
+export function startBotBattle(p: PlayerState, bot: Pick<BotDef, 'id'>, botCount: number, now: number): Quiet {
+  return { state: { ...p, botTicket: { botId: bot.id, botCount, at: now } } };
+}
+
+/**
+ * Coins and cards for beating the bot of the pending battle (× its bot count). Needs a battle the
+ * server saw start at least `botWinMinSeconds` earlier, and is gated by `botWinCooldown` and
+ * `botWinDailyCap`. The server cannot see who won (the battle runs in the browser): these bound
+ * what a scripted claim can farm, they do not prove the win.
+ */
+export function winBotBattle(p: PlayerState, bots: readonly Pick<BotDef, 'id' | 'difficulty'>[], units: readonly UnitDef[], economy: Economy, now: number, random: Random): Change {
+  const ticket = p.botTicket;
+  if (!ticket) throw new EconomyError('Không có trận đấu bot nào để nhận thưởng');
+  const bot = bots.find((b) => b.id === ticket.botId);
+  if (!bot) throw new EconomyError('Bot không tồn tại');
   if (p.lastBotWinAt !== null && now - p.lastBotWinAt < economy.botWinCooldown * 1000) {
     const wait = Math.ceil((economy.botWinCooldown * 1000 - (now - p.lastBotWinAt)) / 1000);
     throw new EconomyError(`Đợi ${wait}s nữa để nhận thưởng trận tiếp theo`);
   }
+  if (now - ticket.at < economy.botWinMinSeconds * 1000) throw new EconomyError('Trận đấu quá ngắn để nhận thưởng');
+  const today = vnDay(now);
+  const winsToday = p.botWinDay === today ? p.botWinsToday : 0;
+  if (economy.botWinDailyCap > 0 && winsToday >= economy.botWinDailyCap) throw new EconomyError(`Hôm nay bạn đã nhận đủ ${economy.botWinDailyCap} lần thưởng đánh bot, mai quay lại nhé`);
   const tier = botBoxTier(economy, bot.difficulty);
-  const mult = 1 + economy.botWinBonusPerExtra * (botCount - 1);
+  const mult = 1 + economy.botWinBonusPerExtra * (ticket.botCount - 1);
   const box: BoxConfig = { chest: tier.chest, coins: [Math.round(tier.coins[0] * mult), Math.round(tier.coins[1] * mult)], cards: Math.round(tier.cards * mult), kinds: tier.kinds };
   const reward = rollBox(units, box, random);
   const cards = { ...p.cards };
   for (const c of reward.cards) cards[c.unitId] = (cards[c.unitId] ?? 0) + c.count;
-  const state: PlayerState = { ...p, coins: p.coins + reward.coins, cards, lastBotWinAt: now };
-  const entry: LedgerEntry = { type: 'bot-win', coins: reward.coins, balance: state.coins, cards: Object.fromEntries(reward.cards.map((c) => [c.unitId, c.count])), note: `Thắng bot ${bot.id} (độ khó ${bot.difficulty}) ×${botCount}` };
+  const state: PlayerState = { ...p, coins: p.coins + reward.coins, cards, lastBotWinAt: now, botTicket: null, botWinDay: today, botWinsToday: winsToday + 1, botWinTotal: p.botWinTotal + 1 };
+  const entry: LedgerEntry = { type: 'bot-win', coins: reward.coins, balance: state.coins, cards: Object.fromEntries(reward.cards.map((c) => [c.unitId, c.count])), note: `Thắng bot ${bot.id} (độ khó ${bot.difficulty}) ×${ticket.botCount}` };
   return { state, entry, reward };
 }
 

@@ -5,7 +5,7 @@ import HeroBanner from '@/components/home/HeroBanner';
 import Reveal from '@/components/home/Reveal';
 import PlayerHud from '@/components/player/PlayerHud';
 
-// Bố cục giữ như cũ: nav (PlayerHud góc phải) + 3 nút chế độ + Xưởng + chat.
+// Bố cục giữ như cũ: nav (PlayerHud góc phải) + 4 nút chế độ + Xưởng + chat.
 // Chỉ khoác áo mới kiểu Unite: hero tím rực, dải zigzag, thẻ chế độ nổi khối.
 const MODES = [
   {
@@ -40,6 +40,17 @@ const MODES = [
     ring: 'hover:shadow-[#d8373a]/40',
     iconBg: 'bg-gradient-to-b from-[#ff7a7a] to-[#d8373a]',
     cta: 'text-[#d8373a]',
+  },
+  {
+    href: '/play?mode=ranked',
+    title: 'Xếp hạng',
+    desc: 'Tìm đối thủ ngang tài, leo 6 bậc từ Tân Binh tới Bậc Thầy, nhận thưởng cuối mùa.',
+    icon: '🏆',
+    ribbon: 'LEO HẠNG',
+    ribbonCls: 'bg-[#7c3aed] text-white',
+    ring: 'hover:shadow-[#7c3aed]/40',
+    iconBg: 'bg-gradient-to-b from-[#c084fc] to-[#7c3aed]',
+    cta: 'text-[#7c3aed]',
   },
 ];
 
@@ -117,18 +128,18 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ===== 3 CHẾ ĐỘ (giữ nguyên bố cục grid + href) ===== */}
+      {/* ===== 4 CHẾ ĐỘ (giữ nguyên bố cục grid + href) ===== */}
       <section id="choi-ngay" className="relative bg-gradient-to-b from-[#ff8a1e] via-[#ff9d2e] to-[#ffb300] pb-14 pt-10">
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
             <h2 className="text-outline text-center text-4xl sm:text-5xl">CHỌN CHẾ ĐỘ CHIẾN ĐẤU</h2>
             <p className="mx-auto mt-2 max-w-xl text-center text-lg text-white drop-shadow-[0_2px_0_#2d3232]">
-              Ba đấu trường, một mục tiêu: đội quân cuối cùng còn đứng vững!
+              Bốn đấu trường, một mục tiêu: đội quân cuối cùng còn đứng vững!
             </p>
           </Reveal>
-          <div className="mt-8 grid w-full gap-6 sm:grid-cols-3">
+          <div className="mt-8 grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {MODES.map((m, i) => (
-              <Reveal key={m.href} variant="up" delay={(i % 3) * 110} className="h-full">
+              <Reveal key={m.href} variant="up" delay={(i % 4) * 110} className="h-full">
               <Link
                 href={m.href}
                 className={`mode-card group relative flex h-full flex-col overflow-hidden rounded-3xl border-[3px] border-[#2d3232] bg-white shadow-[0_8px_0_0_#2d3232] hover:shadow-[0_14px_0_0_#2d3232] ${m.ring}`}

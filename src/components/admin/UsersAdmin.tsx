@@ -266,6 +266,8 @@ const LEDGER_LABELS: Record<LedgerType, string> = {
   'daily-box': 'Hộp hằng ngày',
   'hourly-box': 'Hộp x giờ',
   'bot-win': 'Thắng bot',
+  'rank-win': 'Thắng xếp hạng',
+  'rank-season': 'Thưởng mùa xếp hạng',
   unlock: 'Mở khóa lính',
   upgrade: 'Nâng sao',
   'buy-cards': 'Mua thẻ',

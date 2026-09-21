@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import type { RoomSettings, RoomState } from '@/shared/net';
 import { ALL_SIDES, type Side } from '@/game/sim/terrain';
@@ -315,7 +315,7 @@ export function OnlineLobby(props: {
 }
 
 /** Live "Ns" readout of a deployment deadline (or null once it's stopped counting down). */
-function useCountdown(deadline: number | null): number | null {
+export function useCountdown(deadline: number | null): number | null {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (deadline === null) return;
@@ -494,7 +494,7 @@ function TeamBar({ side, alive, total, flip }: { side: Side; alive: number; tota
   );
 }
 
-export function ResultModal(props: { result: BattleResult; mySide?: Side; siege: boolean; onRematch(): void; onEdit(): void; rematchLabel?: string }) {
+export function ResultModal(props: { result: BattleResult; mySide?: Side; siege: boolean; onRematch(): void; onEdit?(): void; rematchLabel?: string; children?: ReactNode }) {
   const { result } = props;
   const title = resultTitle(result, props.mySide);
   const color = result.winner !== 'draw' ? SIDE_TEXT[result.winner] : 'text-ink';
@@ -525,13 +525,16 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
           ))}{' '}
           · {(result.tick / 30).toFixed(0)} giây
         </p>
+        {props.children}
         <div className="flex flex-wrap justify-center gap-2">
           <button className="btn btn-gold" onClick={props.onRematch}>
             {props.rematchLabel ?? 'Đấu lại'}
           </button>
-          <button className="btn" onClick={props.onEdit}>
-            Sửa đội hình
-          </button>
+          {props.onEdit && (
+            <button className="btn" onClick={props.onEdit}>
+              Sửa đội hình
+            </button>
+          )}
           <Link href="/" className="btn">
             Menu
           </Link>

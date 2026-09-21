@@ -524,6 +524,10 @@ export const economySchema = z.object({
   botWinBonusPerExtra: z.number().min(0).max(2).default(0.5),
   /** Minimum seconds between two bot-win rewards (anti-farm). */
   botWinCooldown: z.number().min(0).max(3600).default(20),
+  /** A bot-win reward needs a bot battle the server saw start (bot-start ticket) at least this many seconds earlier. */
+  botWinMinSeconds: z.number().min(0).max(3600).default(15),
+  /** Bot-win rewards per Vietnam day (0 = unlimited). */
+  botWinDailyCap: z.number().int().min(0).max(1000).default(30),
 });
 
 export const siegeSettingsSchema = z.object({
@@ -555,6 +559,72 @@ export const siegeSettingsSchema = z.object({
   botCastleHalf: z.number().int().min(2).max(20).default(6),
 });
 
+/** Ranked tiers, lowest first (Pokemon Unite style). The last one counts points instead of classes and diamonds. */
+export const RANK_TIERS = ['beginner', 'great', 'expert', 'veteran', 'ultra', 'master'] as const;
+export type RankTier = (typeof RANK_TIERS)[number];
+
+const rankTierSchema = z.object({
+  name: z.string().trim().min(1).max(30),
+  /** Classes in the tier (Class 1 … N); unused by master. */
+  classes: z.number().int().min(1).max(10),
+  /** Diamonds to fill in each class; unused by master. */
+  diamonds: z.number().int().min(1).max(10),
+  /** A loss takes a diamond (off = losing costs nothing in this tier). */
+  loseDiamond: z.boolean(),
+  /** Reward for finishing a season in this tier. */
+  seasonBox: boxRewardSchema,
+});
+
+const RANK_TIER_DEFAULTS: Record<RankTier, z.infer<typeof rankTierSchema>> = {
+  beginner: { name: 'Tân Binh', classes: 3, diamonds: 3, loseDiamond: false, seasonBox: { chest: 'wooden', coins: [5, 10], cards: 20, kinds: 2 } },
+  great: { name: 'Tinh Nhuệ', classes: 4, diamonds: 4, loseDiamond: true, seasonBox: { chest: 'silver', coins: [10, 20], cards: 40, kinds: 3 } },
+  expert: { name: 'Cao Thủ', classes: 5, diamonds: 4, loseDiamond: true, seasonBox: { chest: 'golden', coins: [20, 40], cards: 60, kinds: 3 } },
+  veteran: { name: 'Kỳ Cựu', classes: 5, diamonds: 5, loseDiamond: true, seasonBox: { chest: 'giant', coins: [40, 80], cards: 100, kinds: 4 } },
+  ultra: { name: 'Siêu Việt', classes: 5, diamonds: 5, loseDiamond: true, seasonBox: { chest: 'magical', coins: [80, 150], cards: 160, kinds: 4 } },
+  master: { name: 'Bậc Thầy', classes: 1, diamonds: 1, loseDiamond: true, seasonBox: { chest: 'super-magical', coins: [150, 300], cards: 250, kinds: 5 } },
+};
+
+export const rankedSchema = z.object({
+  enabled: z.boolean().default(true),
+  /** First day of season 1 (YYYY-MM-DD, Vietnam time); seasons follow back to back, `seasonDays` long each. */
+  seasonStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'dạng YYYY-MM-DD').default('2026-09-01'),
+  seasonDays: z.number().int().min(1).max(365).default(30),
+  /** Tiers a player drops at the start of the next season (0 = same tier, back to class 1). */
+  seasonResetTiers: z.number().int().min(0).max(5).default(1),
+  /** Keyed by tier (a plain object, never an array: the CMS field editor clones with `{...obj}`). */
+  tiers: z
+    .object({ beginner: rankTierSchema, great: rankTierSchema, expert: rankTierSchema, veteran: rankTierSchema, ultra: rankTierSchema, master: rankTierSchema })
+    .default(() => structuredClone(RANK_TIER_DEFAULTS)),
+  /** Master points won / lost per battle (master has no classes; 0 points and a loss drops back to the tier below). */
+  masterWin: z.number().int().min(0).max(1000).default(20),
+  masterLoss: z.number().int().min(0).max(1000).default(20),
+  /** Maps ranked battles are drawn from (empty = every map). */
+  mapIds: z.array(idSchema).default([]),
+  /** Reward box for each ranked win that moved the winner up. */
+  winBox: boxRewardSchema.default(() => ({ chest: 'wooden' as const, coins: [2, 5] as [number, number], cards: 10, kinds: 2 })),
+  /** Ranked win boxes per Vietnam day (0 = unlimited). */
+  winRewardDailyCap: z.number().int().min(0).max(1000).default(20),
+  // Anti win-trading (two accounts of one person fighting each other).
+  /** Account age (days) needed to queue. */
+  minAccountDays: z.number().min(0).max(365).default(3),
+  /** Bot-win rewards claimed needed to queue. */
+  minBotWins: z.number().int().min(0).max(1000).default(10),
+  /** Ranked battles per Vietnam day between the same two accounts that count; later ones change nothing. */
+  pairDailyLimit: z.number().int().min(1).max(100).default(2),
+  /** A surrender/disconnect earlier than this (seconds after the battle started): the loser still loses, the winner gains nothing. */
+  minBattleSeconds: z.number().min(0).max(600).default(30),
+  /** Loser's army cost below this share of the budget: the winner gains nothing (throwing with a token army). */
+  minArmyShare: z.number().min(0).max(1).default(0.5),
+  /** Never pair two players connecting from the same IP. */
+  blockSameIp: z.boolean().default(true),
+  /** Disputed results (reports disagree, desync) a player may collect in a season before ranked is locked for them. */
+  maxDisputes: z.number().int().min(1).max(100).default(5),
+  /** Matchmaking: widest rank gap (in diamond steps) paired right away… */
+  matchGap: z.number().int().min(0).max(1000).default(6),
+  /** …widened by this many steps for every 10 s the longer-waiting player has queued. */
+  matchGapGrowth: z.number().min(0).max(100).default(3),
+});
+
 export const settingsSchema = z.object({
   maxUnitsPerSide: z.number().int().min(1).max(500).default(150),
   /** Seconds; at the end a battle is a draw, a siege is won by the defenders. */
@@ -576,6 +646,7 @@ export const settingsSchema = z.object({
   /** Reward boxes and star upgrades. */
   economy: economySchema.default(() => economySchema.parse({})),
   siege: siegeSettingsSchema.default(() => siegeSettingsSchema.parse({})),
+  ranked: rankedSchema.default(() => rankedSchema.parse({})),
 });
 
 // ---------------------------------------------------------------- bundle
@@ -591,6 +662,7 @@ export type BotDef = z.infer<typeof botSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
 export type Economy = Settings['economy'];
 export type SiegeSettings = Settings['siege'];
+export type RankedSettings = Settings['ranked'];
 export type BoxConfig = Economy['dailyBox'];
 export type ChestVariant = (typeof CHEST_VARIANTS)[number];
 

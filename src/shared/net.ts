@@ -1,6 +1,8 @@
 // Socket.IO protocol shared by the online room server and the browser client.
 import type { Armies, Placement } from '@/game/sim/army';
 import type { Side } from '@/game/sim/terrain';
+import type { RankState } from './economy';
+import type { RankResult } from './ranked';
 
 export interface NetPlayer {
   name: string;
@@ -22,6 +24,8 @@ export interface RoomState {
   players: Partial<Record<Side, NetPlayer>>;
   /** Deployment countdown deadline (epoch ms); null before 2 players are connected or once the battle has started. */
   deadline: number | null;
+  /** Season id of a matchmade ranked room (fixed settings, one battle); null for a room joined by code. */
+  ranked: string | null;
 }
 
 export interface RoomSettings {
@@ -51,6 +55,13 @@ export interface BattleStart {
 
 export type AckResult<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
+/** Ranked matchmaking found an opponent: the server has already seated you in the room. */
+export interface RankMatched {
+  code: string;
+  side: Side;
+  opponent: { name: string; rank: RankState | null };
+}
+
 /** A battle's end as seen by the reporting player. */
 export type BattleOutcome = 'win' | 'lose' | 'draw';
 
@@ -72,6 +83,9 @@ export interface ClientToServer {
   'battle:end': (req: { outcome: BattleOutcome; tick: number }) => void;
   /** Concedes the running battle: that side is eliminated, the rest keep fighting. */
   'battle:surrender': () => void;
+  /** Ranked matchmaking queue (refused with the reason when the player may not queue). */
+  'rank:queue': (ack: (res: AckResult) => void) => void;
+  'rank:cancel': () => void;
 }
 
 export interface ServerToClient {
@@ -82,4 +96,9 @@ export interface ServerToClient {
   'battle:eliminate': (info: { side: Side; tick: number }) => void;
   /** Saved once every side's report agrees; otherwise the result is voided with the reason. */
   'battle:result': (res: AckResult<{ winner: Side | 'draw' }>) => void;
+  'rank:matched': (match: RankMatched) => void;
+  /** The matched ranked battle was called off before it started (the opponent left). */
+  'rank:cancelled': (info: { reason: string }) => void;
+  /** What the ranked battle did to your standing, or why it did not count. */
+  'rank:result': (res: AckResult<RankResult>) => void;
 }

@@ -2,7 +2,7 @@ import GameClient, { type Mode } from '@/components/game/GameClient';
 
 export const metadata = { title: 'Chiến trường — Mini Battle Simulator' };
 
-const MODES: Mode[] = ['bot', 'local', 'online'];
+const MODES: Mode[] = ['bot', 'local', 'online', 'ranked'];
 
 export default async function PlayPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;

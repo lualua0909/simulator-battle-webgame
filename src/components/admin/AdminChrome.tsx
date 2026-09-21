@@ -31,6 +31,7 @@ export function AdminNav() {
       {item('/admin/settings', '⚙️ Cài đặt & khắc chế')}
       {item('/admin/users', '👥 Người dùng')}
       {item('/admin/topups', '💳 Nạp xu')}
+      {item('/admin/ranked', '🏆 Xếp hạng & gian lận')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
       {item('/play?mode=bot', '⚔️ Mở game')}
       <button

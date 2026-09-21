@@ -647,6 +647,15 @@ const BOT_BOX_TIERS = [
   ['5', 'Thưởng bot độ khó 5 (huyền thoại)'],
 ] as const;
 
+const RANK_TIER_LABELS = [
+  ['beginner', 'Tân Binh (bậc 1)'],
+  ['great', 'Tinh Nhuệ (bậc 2)'],
+  ['expert', 'Cao Thủ (bậc 3)'],
+  ['veteran', 'Kỳ Cựu (bậc 4)'],
+  ['ultra', 'Siêu Việt (bậc 5)'],
+  ['master', 'Bậc Thầy (bậc 6, tính điểm)'],
+] as const;
+
 export const SETTINGS_FIELDS: Field[] = [
   { type: 'number', key: 'maxUnitsPerSide', label: 'Số lính tối đa mỗi phe', min: 1, max: 500, step: 1 },
   { type: 'number', key: 'battleTimeLimit', label: 'Giới hạn thời gian trận (s)', min: 30, max: 3600, step: 10, help: 'hết giờ: đại chiến tính hòa, thủ thành thì phe thủ thắng' },
@@ -674,11 +683,51 @@ export const SETTINGS_FIELDS: Field[] = [
   { type: 'section', label: 'Thưởng đánh bot (theo độ khó 1-5 của bot)' },
   { type: 'slider', key: 'economy.botWinBonusPerExtra', label: 'Thưởng thêm mỗi bot phụ (đấu nhiều bot cùng lúc)', min: 0, max: 2, step: 0.05, help: '0.5 = +50% coin & thẻ cho mỗi bot ngoài bot đầu tiên' },
   { type: 'number', key: 'economy.botWinCooldown', label: 'Thời gian chờ giữa 2 lần nhận thưởng (giây)', min: 0, max: 3600, step: 5, help: 'chống cày thưởng liên tục' },
+  { type: 'number', key: 'economy.botWinMinSeconds', label: 'Trận bot phải kéo dài ít nhất (giây) mới nhận thưởng', min: 0, max: 3600, step: 5, help: 'tính từ lúc máy chủ ghi nhận trận bắt đầu; lưu ý người chơi có thể tua nhanh ×4' },
+  { type: 'number', key: 'economy.botWinDailyCap', label: 'Số lần nhận thưởng đánh bot mỗi ngày', min: 0, max: 1000, step: 1, help: '0 = không giới hạn; máy chủ không tự xem trận nên đây là chốt chặn chính chống script cày thưởng' },
   ...BOT_BOX_TIERS.flatMap(([i, label]) => [
     { type: 'select' as const, key: `economy.botBoxes.${i}.chest`, label: `${label}: kiểu rương`, options: CHEST_VARIANTS },
     { type: 'range2' as const, key: `economy.botBoxes.${i}.coins`, label: `${label}: coin (thấp nhất – cao nhất)`, min: 0, max: 1_000_000, step: 10 },
     { type: 'number' as const, key: `economy.botBoxes.${i}.cards`, label: `${label}: tổng số thẻ`, min: 0, max: 10_000, step: 1 },
     { type: 'number' as const, key: `economy.botBoxes.${i}.kinds`, label: `${label}: số loại lính`, min: 1, max: 20, step: 1 },
+  ]),
+  { type: 'section', label: 'Xếp hạng: mùa giải & thưởng' },
+  { type: 'bool', key: 'ranked.enabled', label: 'Bật chế độ xếp hạng' },
+  { type: 'text', key: 'ranked.seasonStart', label: 'Ngày bắt đầu Mùa 1 (YYYY-MM-DD, giờ VN)', help: 'các mùa nối tiếp nhau tự động; đổi ngày này hoặc độ dài mùa sẽ đổi số mùa hiện tại' },
+  { type: 'number', key: 'ranked.seasonDays', label: 'Độ dài mỗi mùa (ngày)', min: 1, max: 365, step: 1 },
+  { type: 'number', key: 'ranked.seasonResetTiers', label: 'Sang mùa mới tụt bao nhiêu bậc', min: 0, max: 5, step: 1, help: '0 = giữ bậc, về hạng 1' },
+  { type: 'number', key: 'ranked.masterWin', label: 'Bậc Thầy: điểm cộng mỗi trận thắng', min: 0, max: 1000, step: 1 },
+  { type: 'number', key: 'ranked.masterLoss', label: 'Bậc Thầy: điểm trừ mỗi trận thua', min: 0, max: 1000, step: 1, help: 'về 0 điểm mà thua tiếp thì rớt về bậc dưới' },
+  { type: 'refs', key: 'ranked.mapIds', label: 'Bản đồ trận xếp hạng (bỏ trống = tất cả)', collection: 'maps' },
+  { type: 'select', key: 'ranked.winBox.chest', label: 'Thưởng mỗi trận thắng: kiểu rương', options: CHEST_VARIANTS },
+  { type: 'range2', key: 'ranked.winBox.coins', label: 'Thưởng mỗi trận thắng: coin (thấp nhất – cao nhất)', min: 0, max: 1_000_000, step: 1 },
+  { type: 'number', key: 'ranked.winBox.cards', label: 'Thưởng mỗi trận thắng: tổng số thẻ', min: 0, max: 10_000, step: 1 },
+  { type: 'number', key: 'ranked.winBox.kinds', label: 'Thưởng mỗi trận thắng: số loại lính', min: 1, max: 20, step: 1 },
+  { type: 'number', key: 'ranked.winRewardDailyCap', label: 'Số hộp thưởng thắng xếp hạng mỗi ngày', min: 0, max: 1000, step: 1, help: '0 = không giới hạn' },
+  { type: 'section', label: 'Xếp hạng: chống acc phụ & nhường trận' },
+  { type: 'number', key: 'ranked.minAccountDays', label: 'Tuổi tài khoản tối thiểu để đánh xếp hạng (ngày)', min: 0, max: 365, step: 1 },
+  { type: 'number', key: 'ranked.minBotWins', label: 'Số lần nhận thưởng thắng bot để mở khóa xếp hạng', min: 0, max: 1000, step: 1 },
+  { type: 'number', key: 'ranked.pairDailyLimit', label: 'Số trận/ngày giữa cùng 2 tài khoản còn được tính', min: 1, max: 100, step: 1, help: 'trận vượt mức vẫn ghi thắng/thua nhưng không đổi ♦' },
+  { type: 'number', key: 'ranked.minBattleSeconds', label: 'Đầu hàng/thoát sớm hơn (giây): bên thắng không được ♦', min: 0, max: 600, step: 5 },
+  { type: 'slider', key: 'ranked.minArmyShare', label: 'Đội thua rẻ hơn tỉ lệ ngân sách này: bên thắng không được ♦', min: 0, max: 1, step: 0.05, help: 'chặn nhường trận bằng đội hình vài lính' },
+  { type: 'bool', key: 'ranked.blockSameIp', label: 'Không ghép 2 người chơi cùng địa chỉ IP' },
+  { type: 'number', key: 'ranked.maxDisputes', label: 'Số trận tranh chấp/mùa trước khi khóa xếp hạng', min: 1, max: 100, step: 1, help: 'tranh chấp = 2 máy báo kết quả khác nhau hoặc lệch trận; mở khóa ở trang Xếp hạng & gian lận' },
+  { type: 'number', key: 'ranked.matchGap', label: 'Ghép trận: chênh lệch tối đa (số ♦)', min: 0, max: 1000, step: 1 },
+  { type: 'slider', key: 'ranked.matchGapGrowth', label: 'Ghép trận: nới thêm bao nhiêu ♦ mỗi 10 giây chờ', min: 0, max: 20, step: 0.5 },
+  { type: 'section', label: 'Xếp hạng: các bậc' },
+  ...RANK_TIER_LABELS.flatMap(([tier, label]) => [
+    { type: 'text' as const, key: `ranked.tiers.${tier}.name`, label: `${label}: tên bậc` },
+    ...(tier === 'master'
+      ? []
+      : [
+          { type: 'number' as const, key: `ranked.tiers.${tier}.classes`, label: `${label}: số hạng`, min: 1, max: 10, step: 1 },
+          { type: 'number' as const, key: `ranked.tiers.${tier}.diamonds`, label: `${label}: số ♦ mỗi hạng`, min: 1, max: 10, step: 1 },
+        ]),
+    { type: 'bool' as const, key: `ranked.tiers.${tier}.loseDiamond`, label: `${label}: thua bị trừ ♦/điểm` },
+    { type: 'select' as const, key: `ranked.tiers.${tier}.seasonBox.chest`, label: `${label}: thưởng cuối mùa — kiểu rương`, options: CHEST_VARIANTS },
+    { type: 'range2' as const, key: `ranked.tiers.${tier}.seasonBox.coins`, label: `${label}: thưởng cuối mùa — coin`, min: 0, max: 1_000_000, step: 1 },
+    { type: 'number' as const, key: `ranked.tiers.${tier}.seasonBox.cards`, label: `${label}: thưởng cuối mùa — tổng số thẻ`, min: 0, max: 10_000, step: 1 },
+    { type: 'number' as const, key: `ranked.tiers.${tier}.seasonBox.kinds`, label: `${label}: thưởng cuối mùa — số loại lính`, min: 1, max: 20, step: 1 },
   ]),
   { type: 'section', label: 'Thủ thành' },
   { type: 'slider', key: 'siege.defenseBudget', label: 'Ngân sách phe thủ (× ngân sách trận)', min: 0.1, max: 5, step: 0.05 },

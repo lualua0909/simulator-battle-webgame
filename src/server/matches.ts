@@ -27,6 +27,8 @@ export interface BattleRecord {
   useStars: boolean;
   /** Siege mode: the defending side (null = open battle). */
   defense: Side | null;
+  /** Season id of a ranked battle (null = casual room). */
+  ranked: string | null;
   stars: ArmyStars;
   players: Partial<Record<Side, MatchPlayer>>;
   startedAt: number;
@@ -85,6 +87,7 @@ export async function saveMatch(b: BattleRecord, winner: Side | 'draw', tick: nu
       armies: b.armies,
       useStars: b.useStars,
       defense: b.defense,
+      ranked: b.ranked,
       stars: b.stars,
       winner,
       endTick: tick,

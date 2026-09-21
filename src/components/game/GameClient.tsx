@@ -8,7 +8,8 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import BoxOpening from '@/components/player/BoxOpening';
 import PlayerHud from '@/components/player/PlayerHud';
 import { usePlayer } from '@/components/player/PlayerProvider';
-import type { ArmyStars, BattleStart } from '@/shared/net';
+import type { AckResult, ArmyStars, BattleStart, RankMatched } from '@/shared/net';
+import type { RankResult } from '@/shared/ranked';
 import { generateBotArmy } from '@/game/bot/generate';
 import { generateSiegeDefense } from '@/game/bot/siege';
 import { useOnline } from '@/game/net/client';
@@ -20,8 +21,9 @@ import type { BattleResult } from '@/game/sim/world';
 import { useConfig } from '@/game/useConfig';
 import UnitPalette from './UnitPalette';
 import { BattleHud, CinematicBars, Handoff, HelpHint, OnlineLobby, orderedBots, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_BG, SIDE_NAME, type ModeChoice } from './panels';
+import { RankedBar, RankedLobby, RankResultPanel } from './ranked';
 
-export type Mode = 'bot' | 'local' | 'online';
+export type Mode = 'bot' | 'local' | 'online' | 'ranked';
 type Phase = 'setup' | 'lobby' | 'deploy' | 'handoff' | 'battle' | 'result';
 
 const TWO_SIDES: Side[] = ['blue', 'red'];
@@ -55,7 +57,9 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const hostRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<BattleEngine | null>(null);
   const [mapVersion, setMapVersion] = useState(0);
-  const [phase, setPhase] = useState<Phase>(mode === 'online' ? 'lobby' : 'setup');
+  /** Room-based modes over the socket: rooms joined by code, and matchmade ranked rooms. */
+  const online = mode === 'online' || mode === 'ranked';
+  const [phase, setPhase] = useState<Phase>(online ? 'lobby' : 'setup');
   const [mapId, setMapId] = useState('');
   const [budget, setBudget] = useState(3000);
   const [botId, setBotId] = useState('');
@@ -91,6 +95,9 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const cineRef = useRef<CinematicKind | null>(null);
   /** Set on a fresh entry into deployment (not a return from battle) → establishing flight. */
   const introPending = useRef(false);
+  /** Ranked: the matched opponent, and what the last battle did to the standing (null while waiting). */
+  const [opponent, setOpponent] = useState<RankMatched['opponent'] | null>(null);
+  const [rankResult, setRankResult] = useState<AckResult<RankResult> | null>(null);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -111,11 +118,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   // ------------------------------------------------------------------ online
   const { user, loading: authLoading, openAuth } = useAuth();
-  const { player } = usePlayer();
+  const { player, act, refresh } = usePlayer();
   const onStartRef = useRef<(s: BattleStart) => void>(() => {});
   /** A `battle:result` that arrives while still in `battle` phase means the other side surrendered: force the transition. */
   const endOnlineRef = useRef<(winner: Side | 'draw') => void>(() => {});
-  const net = useOnline(mode === 'online' ? user?.uid ?? null : null, {
+  const net = useOnline(online ? user?.uid ?? null : null, {
     onStart: (s) => onStartRef.current(s),
     onDesync: () => setDesync(true),
     onResult: (res) => {
@@ -123,6 +130,20 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       if (res.ok) endOnlineRef.current(res.winner);
     },
     onEliminate: (side, tick) => engine?.eliminate(side, tick),
+    onMatched: (m) => {
+      setOpponent(m.opponent);
+      setRankResult(null);
+      introPending.current = true;
+      setPhase('deploy');
+    },
+    onRankCancelled: (reason) => {
+      flash(reason);
+      backToRankedLobby();
+    },
+    onRankResult: (res) => {
+      setRankResult(res);
+      if (res.ok && res.reward) void refresh();
+    },
   });
 
   useEffect(() => {
@@ -166,32 +187,32 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   // online room drives map + budget
   useEffect(() => {
-    if (mode !== 'online' || !net.room) return;
+    if (!online || !net.room) return;
     setMapId(net.room.mapId);
     setBudget(net.room.budget);
-  }, [mode, net.room?.mapId, net.room?.budget]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [online, net.room?.mapId, net.room?.budget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lost the seat (signed out, or the room is gone after a reconnect) → back to the lobby.
   useEffect(() => {
-    if (mode === 'online' && !net.seat && phase === 'deploy') setPhase('lobby');
-  }, [mode, net.seat, phase]);
+    if (online && !net.seat && phase === 'deploy') setPhase('lobby');
+  }, [online, net.seat, phase]);
 
   /** Siege mode: the defending side (null = open battle). */
-  const defense: Side | null = mode === 'online' ? net.room?.defense ?? null : choice === 'battle' ? null : choice;
+  const defense: Side | null = online ? net.room?.defense ?? null : choice === 'battle' ? null : choice;
   /** Bot mode opponents: 1-3 bots on an open battle; siege is always the lone 'red'. */
   const botSides = mode === 'bot' ? (choice === 'battle' ? BOT_OPPONENT_SIDES[botCount] ?? SIEGE_BOT_SIDES : SIEGE_BOT_SIDES) : SIEGE_BOT_SIDES;
 
   // Seats currently occupied in the room, as a primitive key so the map only rebuilds when someone
   // actually joins/leaves (not on every ready/draft update, which also re-broadcasts room:state).
-  const seatKey = mode === 'online' ? ALL_SIDES.map((s) => (net.room?.players[s] ? '1' : '0')).join('') : '';
+  const seatKey = online ? ALL_SIDES.map((s) => (net.room?.players[s] ? '1' : '0')).join('') : '';
   const deploySides = useMemo<Side[] | undefined>(() => {
-    if (mode === 'online') {
+    if (online) {
       const list = ALL_SIDES.filter((_, i) => seatKey[i] === '1');
       return list.length >= 2 ? list : undefined;
     }
     if (mode === 'bot' && botSides.length > 1) return ['blue', ...botSides];
     return undefined;
-  }, [mode, seatKey, botSides]);
+  }, [mode, online, seatKey, botSides]);
 
   useEffect(() => {
     if (!engine || !mapId) return;
@@ -211,7 +232,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const owned = useMemo(() => (bundle?.units ?? []).filter((u) => isUnlocked(u, player)), [bundle, player]);
 
   const maxUnits = bundle?.settings.maxUnitsPerSide ?? 150;
-  const mySide: Side = mode === 'online' ? net.seat?.side ?? 'blue' : side;
+  const mySide: Side = online ? net.seat?.side ?? 'blue' : side;
   const myArmy = armies[mySide];
   const spent = bundle ? armyCost(bundle, myArmy) : 0;
   const myBudget = bundle ? sideBudget(bundle.settings, budget, mySide, defense) : budget;
@@ -223,17 +244,17 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     if (selected && usable.some((u) => u.id === selected)) return;
     setSelected([...usable].sort((a, b) => a.cost - b.cost)[0]?.id ?? null);
   }, [owned, selected, mySide, defense]);
-  const me = mode === 'online' && net.seat ? net.room?.players[net.seat.side] : undefined;
-  const locked = mode === 'online' && !!me?.ready;
+  const me = online && net.seat ? net.room?.players[net.seat.side] : undefined;
+  const locked = online && !!me?.ready;
 
   // Live-sync the in-progress army while deploying, so a 30s deploy timeout can force-start with
   // whatever was drafted so far instead of an empty army.
   useEffect(() => {
-    if (mode !== 'online' || phase !== 'deploy' || locked) return;
+    if (!online || phase !== 'deploy' || locked) return;
     const id = window.setTimeout(() => net.draft(myArmy), 500);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, phase, locked, myArmy]);
+  }, [online, phase, locked, myArmy]);
 
   const canPlace = useCallback(
     (x: number, z: number): boolean => {
@@ -530,14 +551,14 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       setPaused(false);
       setDesync(false);
       engine.startBattle(a, seed, stars);
-      engine.playBattleIntro(mode === 'online' ? mySide : 'blue');
+      engine.playBattleIntro(online ? mySide : 'blue');
       setPhase('battle');
     },
-    [engine, setArmies, mode, mySide],
+    [engine, setArmies, online, mySide],
   );
 
   resultRef.current = (r) => {
-    if (mode === 'online') net.end(r.winner === 'draw' ? 'draw' : r.winner === mySide ? 'win' : 'lose', r.tick);
+    if (online) net.end(r.winner === 'draw' ? 'draw' : r.winner === mySide ? 'win' : 'lose', r.tick);
     setResult(r);
     const show = () => setPhase((p) => (p === 'battle' ? 'result' : p));
     const winner = r.winner;
@@ -548,7 +569,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     }, 900);
   };
   checksumRef.current = (tick, hash) => {
-    if (mode === 'online') net.checksum(tick, hash);
+    if (online) net.checksum(tick, hash);
   };
   endOnlineRef.current = (winner) => {
     if (phase !== 'battle') return; // already ended locally (normal finish) — this ack is just a confirmation
@@ -559,6 +580,16 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     window.setTimeout(() => (engine ? engine.playVictory(winner, show) : show()), 400);
   };
   const surrenderOnline = () => net.surrender();
+  /** Ranked: out of the finished (or called-off) room, back to the queue screen. */
+  function backToRankedLobby() {
+    net.leave();
+    setResult(null);
+    setRankResult(null);
+    setOpponent(null);
+    setPaused(false);
+    setArmies(EMPTY);
+    setPhase('lobby');
+  }
   onStartRef.current = (s) => {
     if (bundle && s.configVersion !== bundle.version) flash('Cảnh báo: cấu hình game khác máy chủ — hãy tải lại trang để đồng bộ.');
     const loaded = engine?.terrain?.activeSides;
@@ -583,12 +614,18 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   /** Against the bot the player's upgraded units fight with their stars (local 2-player: none). */
   const botStars = useMemo<Partial<ArmyStars>>(() => ({ blue: player?.stars ?? {} }), [player]);
 
+  /** Tells the server a bot battle starts: its win reward needs this ticket. */
+  const startBotTicket = () => {
+    if (user && bot) void act({ action: 'bot-start', botId: bot.id, botCount: botSides.length }).catch(() => {});
+  };
+
   const primaryAction = async () => {
     if (!bundle) return;
     if (myArmy.length === 0) return flash('Hãy đặt ít nhất 1 lính');
     if (mode === 'bot') {
       const next = fullArmies({ blue: armiesRef.current.blue });
       for (const s of botSides) next[s] = bot?.reactive ? botArmy(s, armiesRef.current.blue) : armiesRef.current[s];
+      startBotTicket();
       startBattle(next, randomSeed(), botStars, ['blue', ...botSides]);
     } else if (mode === 'local') {
       if (side === 'blue') setPhase('handoff');
@@ -657,7 +694,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     for (const s of matchSides) out[s] = count(armies[s]);
     return out;
   }, [armies, units, matchSides]);
-  const resultSide: Side | undefined = mode === 'online' ? net.seat?.side : mode === 'bot' ? 'blue' : undefined;
+  const resultSide: Side | undefined = online ? net.seat?.side : mode === 'bot' ? 'blue' : undefined;
 
   // ------------------------------------------------------------------ render
   return (
@@ -672,13 +709,30 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           </div>
         )}
 
-        {bundle && phase === 'setup' && mode !== 'online' && (
+        {bundle && phase === 'setup' && !online && (
           <div className="pointer-events-auto m-auto flex max-h-full min-h-0 w-full justify-center overflow-y-auto overscroll-contain touch-pan-y">
             <SetupPanel bundle={bundle} mode={mode} mapId={mapId} setMapId={setMapId} budget={budget} setBudget={setBudget} botId={botId} setBotId={setBotId} botCount={botCount} setBotCount={setBotCount} blind={blind} setBlind={setBlind} choice={choice} setChoice={setChoice} onStart={enterDeploy} />
           </div>
         )}
 
-        {bundle && phase === 'lobby' && (
+        {bundle && phase === 'lobby' && mode === 'ranked' && (
+          <div className="pointer-events-auto m-auto flex max-h-full min-h-0 w-full justify-center overflow-y-auto overscroll-contain touch-pan-y">
+            <RankedLobby
+              bundle={bundle}
+              thumbs={thumbs}
+              playerName={user ? user.displayName || user.email || '' : null}
+              authLoading={authLoading}
+              onSignIn={() => openAuth('signin')}
+              connected={net.connected}
+              error={net.error}
+              queue={net.queue}
+              cancel={net.cancelQueue}
+              flash={flash}
+            />
+          </div>
+        )}
+
+        {bundle && phase === 'lobby' && mode === 'online' && (
           <div className="pointer-events-auto m-auto flex max-h-full min-h-0 w-full justify-center overflow-y-auto overscroll-contain touch-pan-y">
             <OnlineLobby
               playerName={user ? user.displayName || user.email || '' : null}
@@ -792,6 +846,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   )}
                 </button>
                 {mode === 'online' && net.room && net.seat && <RoomBar bundle={bundle} room={net.room} mySide={net.seat.side} onSettings={net.settings} />}
+                {mode === 'ranked' && net.room && net.seat && <RankedBar bundle={bundle} room={net.room} opponent={opponent} mySide={net.seat.side} />}
                 {mode === 'bot' && bot && (
                   <div className="panel pointer-events-auto hidden max-w-[calc(100vw-1.5rem)] p-2 text-xs sm:block">
                     Đối thủ: <b>{bot.name}</b>
@@ -820,7 +875,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   budgetLeft={myBudget - spent}
                   available={(u) => canField(u, mySide, defense)}
                   player={player}
-                  stars={mode === 'bot' || (mode === 'online' && net.room?.useStars) ? player?.stars : undefined}
+                  stars={mode === 'bot' || (online && net.room?.useStars) ? player?.stars : undefined}
                 />
               </div>
             </div>
@@ -838,8 +893,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             onMute={toggleMuted}
             onSpeed={setSpeed}
             onPause={() => setPaused((p) => !p)}
-            onStop={mode === 'online' && phase === 'battle' ? surrenderOnline : backToDeploy}
-            stopLabel={mode === 'online' ? (phase === 'battle' ? 'Dừng trận' : 'Về xếp quân') : 'Dừng trận'}
+            onStop={online && phase === 'battle' ? surrenderOnline : mode === 'ranked' ? backToRankedLobby : backToDeploy}
+            stopLabel={online ? (phase === 'battle' ? 'Dừng trận' : mode === 'ranked' ? 'Về sảnh xếp hạng' : 'Về xếp quân') : 'Dừng trận'}
             timeLimit={bundle.settings.battleTimeLimit}
             defense={engine?.sim?.defense ?? defense}
           />
@@ -852,15 +907,26 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           result={result}
           mySide={resultSide}
           siege={!!(engine?.sim?.defense ?? defense)}
-          onRematch={mode === 'online' ? backToDeploy : () => startBattle(armiesRef.current, randomSeed(), mode === 'bot' ? botStars : undefined, mode === 'bot' ? ['blue', ...botSides] : TWO_SIDES)}
-          rematchLabel={mode === 'online' ? 'Trận mới' : 'Đấu lại'}
-          onEdit={backToDeploy}
-        />
+          onRematch={
+            mode === 'ranked'
+              ? backToRankedLobby
+              : mode === 'online'
+                ? backToDeploy
+                : () => {
+                    if (mode === 'bot') startBotTicket();
+                    startBattle(armiesRef.current, randomSeed(), mode === 'bot' ? botStars : undefined, mode === 'bot' ? ['blue', ...botSides] : TWO_SIDES);
+                  }
+          }
+          rematchLabel={mode === 'ranked' ? 'Tìm trận mới' : mode === 'online' ? 'Trận mới' : 'Đấu lại'}
+          onEdit={mode === 'ranked' ? undefined : backToDeploy}
+        >
+          {mode === 'ranked' && bundle && <RankResultPanel bundle={bundle} res={rankResult} />}
+        </ResultModal>
       )}
       {bundle && user && mode === 'bot' && bot && phase === 'result' && result && result.winner === 'blue' && !rewardClosed && (
         <BoxOpening
           bundle={bundle}
-          action={{ action: 'bot-win', botId: bot.id, botCount: botSides.length }}
+          action={{ action: 'bot-win' }}
           title={`Chiến lợi phẩm: ${bot.name}`}
           chest={botBoxTier(bundle.settings.economy, bot.difficulty).chest}
           thumbs={thumbs}
