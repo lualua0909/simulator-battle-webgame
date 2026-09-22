@@ -36,7 +36,7 @@ const randomSeed = () => 1 + Math.floor(Math.random() * (2 ** 31 - 2));
 
 const RANDOM_FILL: BotDef = {
   id: 'random-fill',
-  name: 'Ngẫu nhiên',
+  name: 'Random',
   description: '',
   difficulty: 3,
   budgetMultiplier: 1,
@@ -50,7 +50,7 @@ const RANDOM_FILL: BotDef = {
 
 export default function GameClient({ mode, initialRoom }: { mode: Mode; initialRoom?: string }) {
   const { bundle, error } = useConfig();
-  if (error) return <p className="p-6 text-red-700">Không tải được cấu hình game: {error}</p>;
+  if (error) return <p className="p-6 text-red-700">Could not load game config: {error}</p>;
   return <Game mode={mode} initialRoom={initialRoom} bundle={bundle} />;
 }
 

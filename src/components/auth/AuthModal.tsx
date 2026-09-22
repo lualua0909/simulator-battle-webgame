@@ -6,13 +6,14 @@ import { useEffect, useState } from 'react';
 import { authErrorMessage, firebaseAuth, googleProvider } from '@/lib/firebase';
 import type { AppUser } from '@/shared/users';
 import { useAuth } from './AuthProvider';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export type AuthView = 'signin' | 'signup' | 'forgot';
 
-const TITLES: Record<AuthView, string> = { signin: 'Đăng nhập', signup: 'Tạo tài khoản', forgot: 'Quên mật khẩu' };
-
 /** Centered dialog on desktop, fullscreen sheet below `sm`. Without onClose it cannot be dismissed. */
 export default function AuthModal({ initialView = 'signin', onClose, onSignedIn }: { initialView?: AuthView; onClose?: () => void; onSignedIn?: (user: AppUser) => void }) {
+  const { t, locale } = useLanguage();
+  const TITLES: Record<AuthView, string> = { signin: t('auth.signin'), signup: t('auth.signup'), forgot: t('auth.forgot') };
   const { completeSignIn } = useAuth();
   const [view, setView] = useState<AuthView>(initialView);
   const [name, setName] = useState('');
@@ -67,7 +68,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
         done(await completeSignIn(cred.user));
       });
     } else if (view === 'signup') {
-      if (password !== confirm) return setError('Mật khẩu nhập lại không khớp');
+      if (password !== confirm) return setError(t('auth.passwordMismatch'));
       void run(async () => {
         const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
         if (name.trim()) await updateProfile(cred.user, { displayName: name.trim() });
@@ -76,7 +77,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
     } else {
       void run(async () => {
         await sendPasswordResetEmail(auth, email.trim());
-        setNotice('Đã gửi email đặt lại mật khẩu. Kiểm tra hộp thư (cả mục spam).');
+        setNotice(t('auth.resetSent'));
       });
     }
   };
@@ -95,7 +96,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
       >
         <div className="mb-4 flex items-center gap-2">
           {view === 'forgot' && (
-            <button type="button" className="rounded-lg px-2 py-1 text-lg font-bold hover:bg-white" onClick={() => go('signin')} aria-label="Quay lại">
+            <button type="button" className="rounded-lg px-2 py-1 text-lg font-bold hover:bg-white" onClick={() => go('signin')} aria-label={t('common.back')}>
               <ArrowLeft />
             </button>
           )}
@@ -103,7 +104,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
             {TITLES[view]}
           </h2>
           {onClose && (
-            <button type="button" className="ml-auto rounded-lg px-2 py-1 text-xl font-bold hover:bg-white" onClick={onClose} aria-label="Đóng">
+            <button type="button" className="ml-auto rounded-lg px-2 py-1 text-xl font-bold hover:bg-white" onClick={onClose} aria-label={t('common.close')}>
               <X />
             </button>
           )}
@@ -120,24 +121,24 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
         )}
 
         <form className="flex flex-col gap-3" onSubmit={submit}>
-          {view === 'forgot' && <p className="text-sm opacity-80">Nhập email đã đăng ký, chúng tôi sẽ gửi link đặt lại mật khẩu.</p>}
+          {view === 'forgot' && <p className="text-sm opacity-80">{t('auth.forgot')}: {t('auth.email')}</p>}
           {view === 'signup' && (
             <label className="flex flex-col gap-1 text-sm font-bold">
-              Tên hiển thị
+              {t('auth.name')}
               <input className="field py-2 text-base" autoComplete="nickname" maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
             </label>
           )}
           <label className="flex flex-col gap-1 text-sm font-bold">
-            Email
+            {t('auth.email')}
             <input className="field py-2 text-base" type="email" required autoComplete="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
           {view !== 'forgot' && (
             <label className="flex flex-col gap-1 text-sm font-bold">
               <span className="flex items-center">
-                Mật khẩu
+                {t('auth.password')}
                 {view === 'signin' && (
                   <button type="button" className="ml-auto text-xs font-bold underline" onClick={() => go('forgot')}>
-                    Quên mật khẩu?
+                    {t('auth.forgotLink')}
                   </button>
                 )}
               </span>
@@ -154,7 +155,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
           )}
           {view === 'signup' && (
             <label className="flex flex-col gap-1 text-sm font-bold">
-              Nhập lại mật khẩu
+              {t('auth.confirmPassword')}
               <input className="field py-2 text-base" type="password" required minLength={6} autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
             </label>
           )}
@@ -163,7 +164,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
           {notice && <p className="text-sm font-bold text-green-700">{notice}</p>}
 
           <button className="btn btn-gold mt-1" disabled={busy}>
-            {busy ? 'Đang xử lý…' : view === 'forgot' ? 'Gửi email đặt lại' : TITLES[view]}
+            {busy ? t('common.loading') : view === 'forgot' ? t('auth.resetBtn') : TITLES[view]}
           </button>
         </form>
 
@@ -171,7 +172,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
           <>
             <div className="my-4 flex items-center gap-3 text-xs font-bold opacity-50">
               <span className="h-px flex-1 bg-ink" />
-              hoặc
+              {locale === 'vi' ? 'hoặc' : 'or'}
               <span className="h-px flex-1 bg-ink" />
             </div>
             <button type="button" className="btn" disabled={busy} onClick={() => void google()}>
@@ -181,7 +182,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
                 <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
                 <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
               </svg>
-              Tiếp tục với Google
+              {t('auth.continueGoogle')}
             </button>
           </>
         )}

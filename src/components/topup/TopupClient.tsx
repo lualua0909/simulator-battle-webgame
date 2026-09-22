@@ -2,12 +2,12 @@
 
 // Trang nạp xu: chọn gói → tạo đơn → quét QR VietQR động (số tiền + nội dung CK của đơn).
 // Giao diện bám ảnh mẫu: nền tối, 2 thẻ (trái: gói + thông tin CK, phải: hướng dẫn + QR).
-import { ArrowRight, Bot, Check, Diamond, Gift, Globe, Palette, Swords, Trophy, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Bot, Check, Diamond, Gift, Palette, Swords, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import PlayerHud from '@/components/player/PlayerHud';
-import { IS_VERCEL } from '@/shared/deploy';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { formatTopupCoins, formatVnd, vietqrImageUrl, type TopupOrder, type TopupPackage } from '@/shared/topup';
 
 interface Config {
@@ -22,15 +22,18 @@ const STATUS_CLS: Record<string, string> = {
   confirmed: 'bg-emerald-400/15 text-emerald-300 border-emerald-300/30',
   cancelled: 'bg-white/5 text-white/40 border-white/15',
 };
-const STATUS_TXT: Record<string, string> = { pending: 'Đang chờ duyệt', confirmed: 'Đã cộng xu', cancelled: 'Đã huỷ' };
 
-const TICKER: Array<[LucideIcon, string]> = [
+const TICKER_EN: Array<[LucideIcon, string]> = [
+  [Swords, 'DEPLOY ARMY'],
+  [Bot, 'AI 5 LEVELS'],
+  [Palette, 'MODEL WORKSHOP'],
+  [Gift, 'DAILY GIFTS'],
+];
+const TICKER_VI: Array<[LucideIcon, string]> = [
   [Swords, 'XẾP QUÂN'],
   [Bot, 'AI 5 CẤP ĐỘ'],
-  ...(IS_VERCEL ? [] : [[Globe, 'ONLINE REAL-TIME'] as [LucideIcon, string]]),
   [Palette, 'XƯỞNG MÔ HÌNH'],
   [Gift, 'QUÀ HẰNG NGÀY'],
-  ...(IS_VERCEL ? [] : [[Trophy, 'BẢNG XẾP HẠNG'] as [LucideIcon, string]]),
 ];
 
 async function copy(text: string): Promise<boolean> {
@@ -43,6 +46,8 @@ async function copy(text: string): Promise<boolean> {
 }
 
 export default function TopupClient() {
+  const { t, locale } = useLanguage();
+  const STATUS_TXT: Record<string, string> = { pending: t('topup.pending'), confirmed: t('topup.approved'), cancelled: t('topup.rejected') };
   const { user, loading: authLoading, openAuth } = useAuth();
   const [cfg, setCfg] = useState<Config | null>(null);
   const [pkg, setPkg] = useState(0);
@@ -56,7 +61,7 @@ export default function TopupClient() {
     try {
       const res = await fetch('/api/topup', { cache: 'no-store' });
       const data = (await res.json()) as Config & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? 'Không tải được');
+      if (!res.ok) throw new Error(data.error ?? t('topup.loadError'));
       setCfg(data);
       if (data.pending) {
         setOrder(data.pending);
@@ -66,7 +71,7 @@ export default function TopupClient() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -80,7 +85,7 @@ export default function TopupClient() {
     try {
       const res = await fetch('/api/topup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ packageIndex: pkg }) });
       const data = (await res.json()) as { order?: TopupOrder; error?: string };
-      if (!res.ok || !data.order) throw new Error(data.error ?? 'Chưa tạo được đơn');
+      if (!res.ok || !data.order) throw new Error(data.error ?? t('topup.loadError'));
       setOrder(data.order);
       void load();
     } catch (e) {
@@ -306,18 +311,18 @@ export default function TopupClient() {
         </div>
       </section>
 
-      {/* ===== DẢI TICKER (giống trang chủ) ===== */}
+      {/* ===== TICKER (same as home) ===== */}
       <div className="overflow-hidden border-y-[3px] border-[#2d3232] bg-[#ffc233] py-2" aria-hidden>
         <div className="marquee-track gap-8 pr-8">
-          {[...TICKER, ...TICKER].map(([Icon, t], i) => (
+          {[...(locale === 'vi' ? TICKER_VI : TICKER_EN), ...(locale === 'vi' ? TICKER_VI : TICKER_EN)].map(([Icon, txt], i) => (
             <span key={i} className="whitespace-nowrap text-xl text-[#2d3232]">
-              <Icon /> {t} <span className="ml-6">•</span>
+              <Icon /> {txt} <span className="ml-6">•</span>
             </span>
           ))}
         </div>
       </div>
       <footer className="border-t-[3px] border-[#2d3232] bg-[#14102e] py-5 text-center text-white/80">
-        <p><Swords /> MINI BATTLE SIMULATOR — xếp quân • mô phỏng • hỗn loạn vui vẻ</p>
+        <p><Swords /> {t('home.footer')}</p>
       </footer>
     </main>
   );

@@ -3,7 +3,7 @@ import ModelsGallery from '@/components/ModelsGallery';
 import { cmsUser } from '@/server/admin';
 import { CHEST_VARIANTS, type ChestVariant } from '@/shared/schema';
 
-export const metadata = { title: 'Xưởng mô hình — Mini Battle Simulator' };
+export const metadata = { title: 'Model workshop' };
 
 type Search = Record<string, string | string[] | undefined>;
 

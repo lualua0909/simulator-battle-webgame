@@ -14,6 +14,8 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { chestThumbnail } from '@/game/render/chestThumbnails';
 import { unitThumbnails } from '@/game/render/thumbnails';
 import { useConfig } from '@/game/useConfig';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
+import LanguageToggle from '@/lib/i18n/LanguageToggle';
 import BoxOpening from './BoxOpening';
 import Collection from './Collection';
 import { CoinIcon } from './icons';
@@ -22,8 +24,9 @@ import { usePlayer, useTick } from './PlayerProvider';
 import WeeklyReward from './WeeklyReward';
 
 export function CoinBar({ value, loading }: { value: number; loading?: boolean }) {
+  const { t } = useLanguage();
   return (
-    <Link href="/nap-xu" className="coin-bar" title="Nạp xu (bấm để nạp)">
+    <Link href="/nap-xu" className="coin-bar" title={t('hud.topupTitle')}>
       <span className="text-outline ml-auto text-xl leading-none tabular-nums">{loading ? '…' : formatCoins(value)}</span>
       <CoinIcon size={42} className="absolute -right-4 top-1/2 -translate-y-1/2 drop-shadow" />
     </Link>
@@ -55,6 +58,7 @@ export function ChestThumb({ variant, wobble, size = 72 }: { variant: ChestVaria
 }
 
 export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigBundle | null } = {}) {
+  const { t } = useLanguage();
   const { user, loading, openAuth, signOut } = useAuth();
   const { player, boxes, now, loading: walletLoading, error } = usePlayer();
   const [menu, setMenu] = useState(false);
@@ -86,29 +90,31 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
   if (!user) {
     return (
       <div className="pointer-events-auto flex max-w-full items-center gap-2">
-        <button className="reward-slot" onClick={() => setCollection(true)} title="Bộ sưu tập thẻ" aria-label="Bộ sưu tập thẻ">
+        <LanguageToggle compact />
+        <button className="reward-slot" onClick={() => setCollection(true)} title={t('hud.collection')} aria-label={t('hud.collection')}>
           <span className="text-2xl">
             <WalletCards />
           </span>
         </button>
         <button className="btn btn-gold" onClick={() => openAuth('signin')}>
-          <User /> Đăng nhập
+          <User /> {t('hud.signin')}
         </button>
         {bundle && collection && <Collection bundle={bundle} thumbs={thumbs} onClose={() => setCollection(false)} />}
       </div>
     );
   }
 
-  const name = user.displayName || user.email?.split('@')[0] || 'Tướng quân';
+  const name = user.displayName || user.email?.split('@')[0] || t('hud.defaultName');
   const status = boxes ? liveBoxes(boxes, now()) : null;
   const economy = bundle?.settings.economy;
 
   return (
     <div ref={box} className="pointer-events-auto relative flex max-w-full items-center gap-2 sm:gap-3">
+      <LanguageToggle compact />
       <div className="mr-1 shrink-0 sm:mr-4">
         <CoinBar value={player?.coins ?? 0} loading={walletLoading && !player} />
       </div>
-      <button className="reward-slot" onClick={() => setCollection(true)} title="Bộ sưu tập thẻ" aria-label="Bộ sưu tập thẻ">
+      <button className="reward-slot" onClick={() => setCollection(true)} title={t('hud.collection')} aria-label={t('hud.collection')}>
         <span className="text-2xl">
             <WalletCards />
           </span>
@@ -116,16 +122,16 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
       {economy &&
         status &&
         (status.daily.ready ? (
-          <button className="reward-slot reward-slot-ready" onClick={() => setWeekly(true)} title="Hộp quà hằng ngày">
+          <button className="reward-slot reward-slot-ready" onClick={() => setWeekly(true)} title={t('hud.dailyBox')}>
             <ChestThumb variant={economy.dailyBox.chest} wobble size={46} />
           </button>
         ) : (
-          <button className={`reward-slot ${status.hourly.ready ? 'reward-slot-ready' : ''}`} onClick={() => status.hourly.ready && setOpening('hourly')} title={`Hộp ${economy.boxHours.toLocaleString('en-US')} giờ`}>
+          <button className={`reward-slot ${status.hourly.ready ? 'reward-slot-ready' : ''}`} onClick={() => status.hourly.ready && setOpening('hourly')} title={`${economy.boxHours.toLocaleString('en-US')} ${t('hud.hourlyBox')}`}>
             <ChestThumb variant={economy.hourlyBox.chest} wobble={status.hourly.ready} size={46} />
             {!status.hourly.ready && <span className="reward-badge">{countdown((status.hourly.readyAt ?? 0) - now())}</span>}
           </button>
         ))}
-      <button className="flex min-w-0 items-center gap-2" onClick={() => setMenu((m) => !m)} title="Tài khoản">
+      <button className="flex min-w-0 items-center gap-2" onClick={() => setMenu((m) => !m)} title={t('hud.account')}>
         <PlayerAvatar user={user} size={46} className="shrink-0 rounded-full border-[3px] border-white bg-[#bfe3ff] shadow-[0_0_0_2px_#2d3232,0_3px_0_2px_#2d3232]" />
         <span className="hidden max-w-40 truncate text-lg text-outline sm:block sm:max-w-56">{name}</span>
       </button>
@@ -134,11 +140,11 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
         <div className="panel absolute right-0 top-full z-30 mt-3 flex min-w-52 flex-col gap-1 p-2">
           {canAccessCms(user) && (
             <Link href="/admin" className="btn justify-start">
-              <Wrench /> CMS quản trị
+              <Wrench /> {t('hud.admin')}
             </Link>
           )}
           <button className="btn justify-start" onClick={() => void signOut().then(() => setMenu(false))}>
-            <LogOut /> Đăng xuất
+            <LogOut /> {t('hud.signout')}
           </button>
         </div>
       )}
@@ -157,7 +163,7 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
         <BoxOpening
           bundle={bundle}
           action={{ action: 'open-box', kind: opening }}
-          title={opening === 'daily' ? 'Hộp quà hằng ngày' : `Hộp ${economy.boxHours.toLocaleString('en-US')} giờ`}
+          title={opening === 'daily' ? t('hud.dailyBox') : `${economy.boxHours.toLocaleString('en-US')} ${t('hud.hourlyBox')}`}
           chest={opening === 'daily' ? economy.dailyBox.chest : economy.hourlyBox.chest}
           thumbs={thumbs}
           onClose={() => setOpening(null)}

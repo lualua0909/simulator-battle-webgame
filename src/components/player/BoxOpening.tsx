@@ -12,6 +12,7 @@ import { CoinIcon } from './icons';
 import { CoinBar } from './PlayerHud';
 import { usePlayer } from './PlayerProvider';
 import UnitCard from './UnitCard';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface Props {
   bundle: ConfigBundle;
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function BoxOpening({ bundle, action, title, chest, thumbs, onClose }: Props) {
+  const { t, locale } = useLanguage();
   const { player, act } = usePlayer();
   const [mode, setMode] = useState<ChestMode>('idle');
   const [reward, setReward] = useState<BoxReward | null>(null);
@@ -45,7 +47,7 @@ export default function BoxOpening({ bundle, action, title, chest, thumbs, onClo
       setReward(result.value.reward);
       setMode('open');
     } else {
-      setError(result.status === 'rejected' ? (result.reason as Error).message : 'Không mở được hộp');
+      setError(result.status === 'rejected' ? (result.reason as Error).message : locale === 'vi' ? 'Không mở được hộp' : 'Could not open the box');
       setMode('idle');
     }
   };
@@ -61,20 +63,20 @@ export default function BoxOpening({ bundle, action, title, chest, thumbs, onClo
       <h2 className="text-outline mt-14 text-center text-4xl sm:mt-2">{title}</h2>
       <div className={`relative w-full max-w-xl shrink-0 ${revealed ? 'h-[32vh]' : 'h-[56vh]'} transition-[height] duration-500`}>
         <ChestStage variant={chest} mode={mode} onOpened={() => setRevealed(true)} />
-        {mode === 'idle' && <button className="absolute inset-0 cursor-pointer" aria-label="Mở hộp" onClick={() => void open()} />}
+        {mode === 'idle' && <button className="absolute inset-0 cursor-pointer" aria-label={locale === 'vi' ? 'Mở hộp' : 'Open box'} onClick={() => void open()} />}
       </div>
       {mode === 'idle' && (
         <div className="flex flex-col items-center gap-3">
           <button className="btn btn-gold animate-bounce px-8 py-3 text-2xl" onClick={() => void open()}>
-            Chạm để mở!
+            {t('box.tapToOpen')}
           </button>
           {error && <p className="rounded-lg bg-white/90 px-3 py-1 text-red-team">{error}</p>}
           <button className="text-outline underline" onClick={onClose}>
-            Để sau
+            {locale === 'vi' ? 'Để sau' : 'Later'}
           </button>
         </div>
       )}
-      {mode === 'shake' && <p className="text-outline text-2xl">Đang mở…</p>}
+      {mode === 'shake' && <p className="text-outline text-2xl">{t('box.opening')}</p>}
       {revealed && reward && (
         <div className="flex w-full max-w-4xl flex-col items-center gap-4">
           <div className="reward-pop flex items-center gap-2 rounded-2xl border-2 border-[#16181b] bg-[#1d2f55cc] px-5 py-2" style={{ animationDelay: '0ms' }}>
@@ -94,7 +96,7 @@ export default function BoxOpening({ bundle, action, title, chest, thumbs, onClo
             })}
           </div>
           <button className="btn btn-gold px-10 py-3 text-2xl" onClick={onClose}>
-            Nhận
+            {t('box.claim')}
           </button>
         </div>
       )}

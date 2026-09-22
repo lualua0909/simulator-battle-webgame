@@ -9,8 +9,13 @@ import { ALL_SIDES, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import type { BattleStats, ViewState } from '@/game/render/engine';
 import type { ViewMode } from '@/game/render/unitView';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
-export const SIDE_NAME: Record<Side, string> = { blue: 'Xanh', red: 'Đỏ', green: 'Lục', yellow: 'Vàng' };
+export const SIDE_NAME: Record<Side, string> = { blue: 'Blue', red: 'Red', green: 'Green', yellow: 'Yellow' };
+export function sideName(side: Side, locale?: string): string {
+  if (locale === 'vi') return { blue: 'Xanh', red: 'Đỏ', green: 'Lục', yellow: 'Vàng' }[side];
+  return SIDE_NAME[side];
+}
 export const SIDE_BG: Record<Side, string> = { blue: 'bg-blue-team', red: 'bg-red-team', green: 'bg-green-team', yellow: 'bg-yellow-team' };
 export const SIDE_TEXT: Record<Side, string> = { blue: 'text-blue-team', red: 'text-red-team', green: 'text-green-team', yellow: 'text-yellow-team' };
 
@@ -18,17 +23,18 @@ export const SIDE_TEXT: Record<Side, string> = { blue: 'text-blue-team', red: 't
 export type ModeChoice = 'battle' | Side;
 
 export function ModePicker(props: { mode: 'bot' | 'local' | 'online'; value: ModeChoice; onChange(v: ModeChoice): void; disabled?: boolean }) {
+  const { t } = useLanguage();
   const options: Array<{ value: ModeChoice; label: ReactNode; hint: string }> =
     props.mode === 'bot'
       ? [
-          { value: 'battle', label: <><Swords /> Đại chiến</>, hint: 'hai đạo quân lao vào nhau' },
-          { value: 'blue', label: <><Castle /> Bạn thủ thành</>, hint: 'xây tường, tháp; máy công thành' },
-          { value: 'red', label: <><Flame /> Bạn công thành</>, hint: 'máy xây thành, bạn phá' },
+          { value: 'battle', label: <><Swords /> {t('panels.battle')}</>, hint: t('panels.battleHint') },
+          { value: 'blue', label: <><Castle /> {t('panels.defendYou')}</>, hint: t('panels.defendYouHint') },
+          { value: 'red', label: <><Flame /> {t('panels.attackYou')}</>, hint: t('panels.attackYouHint') },
         ]
       : [
-          { value: 'battle', label: <><Swords /> Đại chiến</>, hint: 'hai đạo quân lao vào nhau' },
-          { value: 'blue', label: <><Castle /> Thủ thành: Xanh thủ</>, hint: 'Đỏ công thành' },
-          { value: 'red', label: <><Castle /> Thủ thành: Đỏ thủ</>, hint: 'Xanh công thành' },
+          { value: 'battle', label: <><Swords /> {t('panels.battle')}</>, hint: t('panels.battleHint') },
+          { value: 'blue', label: <><Castle /> {t('panels.defendBlue')}</>, hint: t('panels.defendBlueHint') },
+          { value: 'red', label: <><Castle /> {t('panels.defendRed')}</>, hint: t('panels.defendRedHint') },
         ];
   return (
     <div className="grid gap-2 sm:grid-cols-3">
@@ -42,21 +48,26 @@ export function ModePicker(props: { mode: 'bot' | 'local' | 'online'; value: Mod
   );
 }
 
-export function resultTitle(result: BattleResult, mySide?: Side): string {
-  if (result.winner === 'draw') return 'HÒA!';
-  if (mySide) return result.winner === mySide ? 'CHIẾN THẮNG!' : 'THẤT BẠI!';
-  return `${SIDE_NAME[result.winner].toUpperCase()} THẮNG!`;
+export function resultTitle(result: BattleResult, mySide?: Side, locale: string = 'en'): string {
+  if (result.winner === 'draw') return locale === 'vi' ? 'HÒA!' : 'DRAW!';
+  if (mySide) {
+    if (result.winner === mySide) return locale === 'vi' ? 'CHIẾN THẮNG!' : 'VICTORY!';
+    return locale === 'vi' ? 'THẤT BẠI!' : 'DEFEAT!';
+  }
+  const name = sideName(result.winner, locale).toUpperCase();
+  return locale === 'vi' ? `${name} THẮNG!` : `${name} WINS!`;
 }
 
 /** Letterbox bars + skip button while a cinematic owns the camera. */
 export function CinematicBars({ title, winner, onSkip }: { title?: string; winner?: Side | 'draw'; onSkip(): void }) {
+  const { t } = useLanguage();
   const color = winner && winner !== 'draw' ? SIDE_TEXT[winner] : 'text-ink';
   return (
     <div className="pointer-events-none absolute inset-0">
       <div className="cine-bar absolute inset-x-0 top-0 h-[9vh] origin-top bg-black/85" />
       <div className="cine-bar absolute inset-x-0 bottom-0 flex h-[9vh] origin-bottom items-center justify-end bg-black/85 px-4">
         <button className="pointer-events-auto rounded-lg border-2 border-white/70 px-3 py-1 text-sm font-bold text-white hover:bg-white/15" onClick={onSkip}>
-          Bỏ qua <ChevronRight />
+          {t('panels.skip')} <ChevronRight />
         </button>
       </div>
       {title && <div className={`cine-title absolute inset-x-0 top-[13vh] text-center font-display text-5xl sm:text-6xl ${color}`}>{title}</div>}
@@ -175,16 +186,18 @@ export function SetupPanel(props: {
   onStart(): void;
 }) {
   const { bundle, mode } = props;
+  const { t, locale, mapName, botName } = useLanguage();
+  const modeTitle = mode === 'bot' ? t('modes.botTitle') : t('modes.localTitle');
   return (
     <div className="panel pointer-events-auto m-auto flex w-[min(760px,94vw)] flex-col gap-2 p-3 sm:max-h-[88vh] sm:gap-3 sm:overflow-y-auto sm:overscroll-contain sm:touch-pan-y sm:p-4">
-      <h2 className="font-display text-2xl">{mode === 'bot' ? 'Đấu với máy' : '2 người 1 máy'}</h2>
+      <h2 className="font-display text-2xl">{modeTitle}</h2>
       <section>
-        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">Chế độ</h3>
+        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{locale === 'vi' ? 'Chế độ' : 'Mode'}</h3>
         <ModePicker mode={mode} value={props.choice} onChange={props.setChoice} />
-        {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">Phe thủ chỉ đứng trong vùng của mình, cần 1 Nhà chính. Phe công phá Nhà chính để thắng; hết giờ thì phe thủ thắng.</p>}
+        {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">{locale === 'vi' ? 'Phe thủ chỉ đứng trong vùng của mình, cần 1 Nhà chính. Phe công phá Nhà chính để thắng; hết giờ thì phe thủ thắng.' : 'Defenders stay in their zone and need 1 Keep. Attackers win by destroying the Keep; defenders win on timeout.'}</p>}
       </section>
       <section>
-        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">Bản đồ</h3>
+        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{locale === 'vi' ? 'Bản đồ' : 'Map'}</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {bundle.maps.map((m) => (
             <button
@@ -196,16 +209,16 @@ export function SetupPanel(props: {
               className={`rounded-xl border-2 p-2 text-left ${props.mapId === m.id ? 'border-ink bg-gold' : 'border-ink/30 bg-white'}`}
             >
               <div className="h-8 rounded-md" style={{ background: `linear-gradient(180deg, ${m.skyTop}, ${m.skyBottom} 55%, ${m.grassColor} 56%, ${m.dirtColor})` }} />
-              <div className="mt-1 font-bold">{m.name}</div>
+              <div className="mt-1 font-bold">{mapName(m.id, m.name)}</div>
               <div className="text-xs opacity-70">
-                {m.size}m {m.river.enabled ? '· có sông' : ''} {m.defenseDepth > 0 && <>· <Castle /></>}
+                {m.size}m {m.river.enabled ? (locale === 'vi' ? '· có sông' : '· river') : ''} {m.defenseDepth > 0 && <>· <Castle /></>}
               </div>
             </button>
           ))}
         </div>
       </section>
       <section className="flex items-center gap-2 sm:gap-3">
-        <h3 className="shrink-0 text-sm font-extrabold uppercase opacity-70">Ngân sách</h3>
+        <h3 className="shrink-0 text-sm font-extrabold uppercase opacity-70">{t('game.budget')}</h3>
         <input type="range" min={300} max={30000} step={100} value={props.budget} onChange={(e) => props.setBudget(Number(e.target.value))} className="min-w-0 flex-1" />
         <input type="number" min={100} step={100} value={props.budget} onChange={(e) => props.setBudget(Math.max(100, Number(e.target.value) || 0))} className="field flex-none shrink-0" style={{ width: '5.5rem' }} />
         {mode === 'bot' && props.choice === 'battle' && (
@@ -220,7 +233,7 @@ export function SetupPanel(props: {
       </section>
       {mode === 'bot' ? (
         <section>
-          <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">Đối thủ</h3>
+          <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{t('game.opponent')}</h3>
           <div className="grid grid-cols-4 gap-1 sm:gap-2">
             {orderedBots(bundle).map((b) => {
               const active = props.botId === b.id;
@@ -233,18 +246,18 @@ export function SetupPanel(props: {
                   >
                     <RankIcon rank={BOT_ORDER.indexOf(b.id)} />
                   </span>
-                  <span className={`whitespace-nowrap text-[11px] leading-tight sm:text-base ${active ? '' : 'opacity-70 group-hover:opacity-100'}`}>{b.name}</span>
+                  <span className={`whitespace-nowrap text-[11px] leading-tight sm:text-base ${active ? '' : 'opacity-70 group-hover:opacity-100'}`}>{botName(b.id, b.name)}</span>
                   <span className={`h-1 w-8 rounded-full transition-colors sm:w-10 ${active ? 'bg-gold' : 'bg-transparent group-hover:bg-ink/20'}`} />
                 </button>
               );
             })}
           </div>
-          {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">Thủ/công thành chỉ đấu 1 bot.</p>}
+          {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">{locale === 'vi' ? 'Thủ/công thành chỉ đấu 1 bot.' : 'Siege battles use 1 bot.'}</p>}
         </section>
       ) : (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={props.blind} onChange={(e) => props.setBlind(e.target.checked)} />
-          Xếp quân bí mật (không thấy quân đối phương khi đặt)
+          {locale === 'vi' ? 'Xếp quân bí mật (không thấy quân đối phương khi đặt)' : 'Secret deployment (hide enemy army while placing)'}
         </label>
       )}
       <div className="flex justify-between">
@@ -252,7 +265,7 @@ export function SetupPanel(props: {
           <ArrowLeft /> Menu
         </Link>
         <button className="btn btn-gold text-lg" onClick={props.onStart}>
-          Vào xếp quân <ArrowRight />
+          {locale === 'vi' ? 'Vào xếp quân' : 'Deploy'} <ArrowRight />
         </button>
       </div>
     </div>

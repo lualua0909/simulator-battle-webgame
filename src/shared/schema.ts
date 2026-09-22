@@ -576,12 +576,12 @@ const rankTierSchema = z.object({
 });
 
 const RANK_TIER_DEFAULTS: Record<RankTier, z.infer<typeof rankTierSchema>> = {
-  beginner: { name: 'Tân Binh', classes: 3, diamonds: 3, loseDiamond: false, seasonBox: { chest: 'wooden', coins: [5, 10], cards: 20, kinds: 2 } },
-  great: { name: 'Tinh Nhuệ', classes: 4, diamonds: 4, loseDiamond: true, seasonBox: { chest: 'silver', coins: [10, 20], cards: 40, kinds: 3 } },
-  expert: { name: 'Cao Thủ', classes: 5, diamonds: 4, loseDiamond: true, seasonBox: { chest: 'golden', coins: [20, 40], cards: 60, kinds: 3 } },
-  veteran: { name: 'Kỳ Cựu', classes: 5, diamonds: 5, loseDiamond: true, seasonBox: { chest: 'giant', coins: [40, 80], cards: 100, kinds: 4 } },
-  ultra: { name: 'Siêu Việt', classes: 5, diamonds: 5, loseDiamond: true, seasonBox: { chest: 'magical', coins: [80, 150], cards: 160, kinds: 4 } },
-  master: { name: 'Bậc Thầy', classes: 1, diamonds: 1, loseDiamond: true, seasonBox: { chest: 'super-magical', coins: [150, 300], cards: 250, kinds: 5 } },
+  beginner: { name: 'Rookie', classes: 3, diamonds: 3, loseDiamond: false, seasonBox: { chest: 'wooden', coins: [5, 10], cards: 20, kinds: 2 } },
+  great: { name: 'Elite', classes: 4, diamonds: 4, loseDiamond: true, seasonBox: { chest: 'silver', coins: [10, 20], cards: 40, kinds: 3 } },
+  expert: { name: 'Master', classes: 5, diamonds: 4, loseDiamond: true, seasonBox: { chest: 'golden', coins: [20, 40], cards: 60, kinds: 3 } },
+  veteran: { name: 'Veteran', classes: 5, diamonds: 5, loseDiamond: true, seasonBox: { chest: 'giant', coins: [40, 80], cards: 100, kinds: 4 } },
+  ultra: { name: 'Legend', classes: 5, diamonds: 5, loseDiamond: true, seasonBox: { chest: 'magical', coins: [80, 150], cards: 160, kinds: 4 } },
+  master: { name: 'Grandmaster', classes: 1, diamonds: 1, loseDiamond: true, seasonBox: { chest: 'super-magical', coins: [150, 300], cards: 250, kinds: 5 } },
 };
 
 export const rankedSchema = z.object({

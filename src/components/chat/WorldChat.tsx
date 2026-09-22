@@ -9,10 +9,12 @@ import { CHAT_COLLECTION, CHAT_MAX_CHARS, parseMessages, WORLD_CHAT_DOC, type Ch
 import { useAuth } from '@/components/auth/AuthProvider';
 import PlayerAvatar from '@/components/player/PlayerAvatar';
 import { firebaseApp } from '@/lib/firebase';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
-const time = (at: number) => new Date(at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+const time = (at: number, locale: string) => new Date(at).toLocaleTimeString(locale === 'vi' ? 'vi-VN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
 
 export default function WorldChat() {
+  const { t, locale } = useLanguage();
   const { user, openAuth } = useAuth();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -26,9 +28,9 @@ export default function WorldChat() {
     return onSnapshot(
       doc(getFirestore(firebaseApp()), CHAT_COLLECTION, WORLD_CHAT_DOC),
       (snap) => setMessages(parseMessages(snap.data())),
-      (e) => setError(`Không tải được phòng chat: ${e.message}`),
+      (e) => setError(`${locale === 'vi' ? 'Không tải được phòng chat' : 'Could not load chat'}: ${e.message}`),
     );
-  }, [open]);
+  }, [open, locale]);
 
   // New messages (and opening the panel) scroll to the bottom.
   useEffect(() => {
@@ -45,7 +47,7 @@ export default function WorldChat() {
     try {
       const res = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: body }) });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? 'Chưa gửi được tin nhắn');
+      if (!res.ok) throw new Error(data.error ?? (locale === 'vi' ? 'Chưa gửi được tin nhắn' : 'Could not send message'));
       setText('');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -59,13 +61,13 @@ export default function WorldChat() {
       {open && (
         <div className="panel flex bg-paper h-[min(32rem,70vh)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b-2 border-ink/20 px-3 py-2">
-            <span className="text-outline text-xl"><Earth /> Chat thế giới</span>
-            <button className="btn px-2 py-0" onClick={() => setOpen(false)} aria-label="Đóng">
+            <span className="text-outline text-xl"><Earth /> {t('chat.title')}</span>
+            <button className="btn px-2 py-0" onClick={() => setOpen(false)} aria-label={t('common.close')}>
               <X />
             </button>
           </div>
           <div ref={list} className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-2">
-            {messages.length === 0 && <p className="m-auto opacity-60">Chưa có tin nhắn nào.</p>}
+            {messages.length === 0 && <p className="m-auto opacity-60">{locale === 'vi' ? 'Chưa có tin nhắn nào.' : 'No messages yet.'}</p>}
             {messages.map((m) => {
               const mine = m.uid === user?.uid;
               return (
@@ -74,7 +76,7 @@ export default function WorldChat() {
                   <div className={`max-w-[75%] rounded-xl border-2 border-ink/70 px-2 py-1 ${mine ? 'bg-[#cfe8ff]' : 'bg-white'}`}>
                     <div className="flex items-baseline gap-2 text-xs opacity-70">
                       <span className="truncate">{m.name}</span>
-                      <span className="shrink-0">{time(m.at)}</span>
+                      <span className="shrink-0">{time(m.at, locale)}</span>
                     </div>
                     <p className="whitespace-pre-wrap break-words">{m.text}</p>
                   </div>
@@ -86,25 +88,25 @@ export default function WorldChat() {
           {user ? (
             <form onSubmit={send} className="flex items-center gap-2 border-t-2 border-ink/20 p-2">
               <div className="relative flex-1">
-                <input className="field pr-14" value={text} maxLength={CHAT_MAX_CHARS} onChange={(e) => setText(e.target.value)} placeholder="Nhắn gì đó…" />
+                <input className="field pr-14" value={text} maxLength={CHAT_MAX_CHARS} onChange={(e) => setText(e.target.value)} placeholder={t('chat.placeholder')} />
                 <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50">
                   {text.length}/{CHAT_MAX_CHARS}
                 </span>
               </div>
               <button className="btn btn-gold px-3 py-1" disabled={sending || !text.trim()}>
-                Gửi
+                {t('chat.send')}
               </button>
             </form>
           ) : (
             <div className="border-t-2 border-ink/20 p-2">
               <button className="btn btn-gold w-full" onClick={() => openAuth('signin')}>
-                <User /> Đăng nhập để chat
+                <User /> {t('chat.signinToChat')}
               </button>
             </div>
           )}
         </div>
       )}
-      <button className="btn btn-blue h-14 w-14 rounded-full p-0 text-2xl" onClick={() => setOpen((o) => !o)} aria-label="Chat thế giới" title="Chat thế giới">
+      <button className="btn btn-blue h-14 w-14 rounded-full p-0 text-2xl" onClick={() => setOpen((o) => !o)} aria-label={t('chat.title')} title={t('chat.title')}>
         <MessageCircle />
       </button>
     </div>

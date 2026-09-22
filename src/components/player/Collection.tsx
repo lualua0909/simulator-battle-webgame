@@ -14,8 +14,7 @@ import { CoinIcon, Stars } from './icons';
 import { CoinBar } from './PlayerHud';
 import { usePlayer } from './PlayerProvider';
 import UnitCard from './UnitCard';
-
-const ROLE_LABEL: Record<UnitDef['role'], string> = { melee: 'Cận chiến', ranged: 'Tầm xa', support: 'Hỗ trợ', siege: 'Công thành' };
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface Props {
   bundle: ConfigBundle;
@@ -24,6 +23,8 @@ interface Props {
 }
 
 export default function Collection({ bundle, thumbs, onClose }: Props) {
+  const { t, locale, factionName } = useLanguage();
+  const ROLE_LABEL: Record<UnitDef['role'], string> = { melee: t('palette.melee'), ranged: t('palette.ranged'), support: t('palette.support'), siege: t('palette.siege') };
   const { user, openAuth } = useAuth();
   const { player } = usePlayer();
   const factions = useMemo(() => [...bundle.factions].sort((a, b) => a.order - b.order), [bundle]);
@@ -63,17 +64,17 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
     <>
       <div className="game-ui box-backdrop fixed inset-0 z-40 flex flex-col overflow-hidden">
         <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-3 pt-3 sm:px-4">
-          <h2 className="text-outline min-w-0 text-xl sm:text-2xl md:text-3xl">Bộ sưu tập thẻ</h2>
+          <h2 className="text-outline min-w-0 text-xl sm:text-2xl md:text-3xl">{t('collection.title')}</h2>
           <div className="order-1 ml-auto mr-4 flex min-w-0 shrink-0 items-center gap-3">
             {user && <CoinBar value={player?.coins ?? 0} />}
           </div>
-          <button className="btn order-2 shrink-0 px-2.5 py-1 text-xl" onClick={onClose} aria-label="Đóng">
+          <button className="btn order-2 shrink-0 px-2.5 py-1 text-xl" onClick={onClose} aria-label={t('common.close')}>
             <X />
           </button>
           <div className="order-3 flex max-w-full basis-full flex-nowrap gap-1 overflow-x-auto pb-1 md:order-none md:basis-auto md:flex-1 md:flex-wrap md:overflow-visible md:pb-0">
-            {[{ id: 'all', name: 'Tất cả', icon: '', color: '' }, ...factions].map((f) => (
+            {[{ id: 'all', name: t('collection.all'), icon: '', color: '' }, ...factions].map((f) => (
               <button key={f.id} className={`shrink-0 rounded-full border-2 border-[#16181b] px-3 py-0.5 ${tab === f.id ? 'bg-gold' : 'bg-white/85'}`} onClick={() => { setTab(f.id); setSelectedId(null); }}>
-                <NamedIcon name={f.icon} /> {f.name}
+                <NamedIcon name={f.icon} /> {f.id === 'all' ? f.name : factionName(f.id, f.name)}
               </button>
             ))}
           </div>
@@ -145,6 +146,8 @@ function GuestDetail({ unit, onSignIn }: { unit: UnitDef; onSignIn(): void }) {
 }
 
 function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitDef; thumb?: string }) {
+  const { t, locale, unitName, unitDesc } = useLanguage();
+  const ROLE_LABEL: Record<UnitDef['role'], string> = { melee: t('palette.melee'), ranged: t('palette.ranged'), support: t('palette.support'), siege: t('palette.siege') };
   const { player, act } = usePlayer();
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -202,45 +205,45 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
       <div className="flex gap-3">
         <UnitCard unit={unit} thumb={thumb} faction={bundle.factions.find((f) => f.id === unit.factionId)} star={star} locked={!unlocked} width={128} />
         <div className="flex min-w-0 flex-col gap-1">
-          <h3 className="text-2xl leading-tight">{unit.name}</h3>
+          <h3 className="text-2xl leading-tight">{unitName(unit.id, unit.name)}</h3>
           <span className="opacity-75">{ROLE_LABEL[unit.role]}</span>
           <Stars value={star} size={22} />
           <span>
-            Thẻ: <b>{cards}</b>
+            {locale === 'vi' ? 'Thẻ' : 'Cards'}: <b>{cards}</b>
             {next ? ` / ${next.cards}` : ''}
           </span>
         </div>
       </div>
-      {unit.description && <p className="opacity-80">{unit.description}</p>}
+      {unitDesc(unit.id, unit.description) && <p className="opacity-80">{unitDesc(unit.id, unit.description)}</p>}
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 rounded-xl bg-white/70 p-2">
-        <dt>Máu</dt>
+        <dt>{t('collection.hp')}</dt>
         <dd className="text-right">
           {Math.round(unit.hp * scale)}
           {next && <span className="text-green-700"> <ArrowRight /> {Math.round(unit.hp * nextScale)}</span>}
         </dd>
-        <dt>Sát thương/giây</dt>
+        <dt>{t('collection.dps')}</dt>
         <dd className="text-right">
           {Math.round(power.dps * scale)}
           {next && <span className="text-green-700"> <ArrowRight /> {Math.round(power.dps * nextScale)}</span>}
         </dd>
-        <dt>Mỗi sao</dt>
-        <dd className="text-right">+{Math.round(bonus * 100)}% máu, sát thương</dd>
+        <dt>{locale === 'vi' ? 'Mỗi sao' : 'Per star'}</dt>
+        <dd className="text-right">+{Math.round(bonus * 100)}% {locale === 'vi' ? 'máu, sát thương' : 'HP, damage'}</dd>
       </dl>
       {!unlocked ? (
-        spendButton('unlock', <><LockOpen /> Mở khóa {unit.name}</>, unit.unlockCost, { action: 'unlock', unitId: unit.id }, `Đã mở khóa ${unit.name}!`)
+        spendButton('unlock', <><LockOpen /> {t('collection.unlock')} {unitName(unit.id, unit.name)}</>, unit.unlockCost, { action: 'unlock', unitId: unit.id }, `${unitName(unit.id, unit.name)} ${locale === 'vi' ? 'đã mở khóa!' : 'unlocked!'}`)
       ) : next ? (
-        spendButton('upgrade', <><ArrowUp /> Nâng lên {next.star} sao ({next.cards} thẻ)</>, next.coins, { action: 'upgrade', unitId: unit.id }, `${unit.name} đã lên ${next.star} sao!`, cards < next.cards ? `Cần thêm ${next.cards - cards} thẻ` : undefined)
+        spendButton('upgrade', <><ArrowUp /> {t('collection.upgrade')} {next.star} {t('collection.stars')} ({next.cards} {locale === 'vi' ? 'thẻ' : 'cards'})</>, next.coins, { action: 'upgrade', unitId: unit.id }, `${unitName(unit.id, unit.name)} ${locale === 'vi' ? 'đã lên' : 'reached'} ${next.star} ${t('collection.stars')}!`, cards < next.cards ? `${locale === 'vi' ? 'Cần thêm' : 'Need'} ${next.cards - cards} ${locale === 'vi' ? 'thẻ' : 'cards'}` : undefined)
       ) : (
-        <p className="rounded-xl bg-gold/60 p-2 text-center">Đã đạt {STAR_MAX} sao</p>
+        <p className="rounded-xl bg-gold/60 p-2 text-center">{locale === 'vi' ? `Đã đạt ${STAR_MAX} sao` : `Max ${STAR_MAX} stars`}</p>
       )}
       {unlocked && unit.cardPrice > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {[10, 50].map((n) => (
-            <div key={n}>{spendButton(`buy-${n}`, `Mua ${n} thẻ`, unit.cardPrice * n, { action: 'buy-cards', unitId: unit.id, count: n }, `Đã mua ${n} thẻ ${unit.name}`)}</div>
+            <div key={n}>{spendButton(`buy-${n}`, `${locale === 'vi' ? 'Mua' : 'Buy'} ${n} ${locale === 'vi' ? 'thẻ' : 'cards'}`, unit.cardPrice * n, { action: 'buy-cards', unitId: unit.id, count: n }, `${locale === 'vi' ? 'Đã mua' : 'Bought'} ${n} ${locale === 'vi' ? 'thẻ' : 'cards'} ${unitName(unit.id, unit.name)}`)}</div>
           ))}
         </div>
       )}
-      {!unlocked && <p className="opacity-75">Thẻ rơi từ hộp quà vẫn được cộng dồn; mở khóa để dùng lính trong trận và nâng sao.</p>}
+      {!unlocked && <p className="opacity-75">{locale === 'vi' ? 'Thẻ rơi từ hộp quà vẫn được cộng dồn; mở khóa để dùng lính trong trận và nâng sao.' : 'Cards from boxes still accumulate; unlock to use this unit in battle and upgrade stars.'}</p>}
       {message && <p className={`rounded-lg px-2 py-1 ${message.ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-team'}`}>{message.text}</p>}
     </div>
   );

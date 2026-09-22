@@ -31,7 +31,7 @@ export interface Season {
 }
 
 export function seasonName(id: string): string {
-  return `Mùa ${id.replace(/^s/, '')}`;
+  return `Season ${id.replace(/^s/, '')}`;
 }
 
 /** The season running at `now`: back-to-back `seasonDays` periods from `seasonStart`. Null while ranked is off or before season 1. */
@@ -176,7 +176,7 @@ export function rankScore(from: RankState, cfg: Pick<RankedSettings, 'tiers'>): 
 
 export function rankLabel(s: Pick<RankState, 'tier' | 'cls' | 'points'>, cfg: Pick<RankedSettings, 'tiers'>): string {
   const name = cfg.tiers[s.tier].name;
-  return s.tier === 'master' ? `${name} · ${s.points} điểm` : `${name} · Hạng ${s.cls}`;
+  return s.tier === 'master' ? `${name} · ${s.points} pts` : `${name} · Class ${s.cls}`;
 }
 
 // ---------------------------------------------------------------- queue

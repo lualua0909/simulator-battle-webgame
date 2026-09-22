@@ -3,7 +3,7 @@ import { AdminNav } from '@/components/admin/AdminChrome';
 import { cmsUser } from '@/server/admin';
 import { ROLE_LABELS } from '@/shared/users';
 
-export const metadata = { title: 'CMS — Mini Battle Simulator' };
+export const metadata = { title: 'CMS' };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await cmsUser();

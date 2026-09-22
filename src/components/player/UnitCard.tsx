@@ -5,10 +5,11 @@
 import { useId } from 'react';
 import type { Faction, UnitDef } from '@/shared/schema';
 import { formatCoins } from '@/shared/economy';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { CoinIcon, LockIcon, Stars } from './icons';
 
 interface Props {
-  unit: Pick<UnitDef, 'name' | 'cost' | 'unlockCost'>;
+  unit: Pick<UnitDef, 'id' | 'name' | 'cost' | 'unlockCost'>;
   thumb?: string;
   faction?: Pick<Faction, 'color'>;
   /** Star level; hidden when undefined. */
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default function UnitCard({ unit, thumb, faction, star, progress, locked, count, width = 140, selected, onClick, className }: Props) {
+  const { locale, unitName } = useLanguage();
   const ready = progress && progress.need !== null && progress.have >= progress.need;
   const Tag = onClick ? 'button' : 'div';
   // useId contains colons that break svg url(#…) references, so strip them.
@@ -34,7 +36,7 @@ export default function UnitCard({ unit, thumb, faction, star, progress, locked,
       {progress && (
         <div className={`cr-progress ${ready ? 'cr-progress-ready' : ''}`}>
           <div className="cr-progress-fill" style={{ width: `${progress.need === null ? 100 : Math.min(100, (progress.have / Math.max(1, progress.need)) * 100)}%` }} />
-          <span className="text-outline relative">{progress.need === null ? 'TỐI ĐA' : `${progress.have}/${progress.need}`}</span>
+          <span className="text-outline relative">{progress.need === null ? (locale === 'vi' ? 'TỐI ĐA' : 'MAX') : `${progress.have}/${progress.need}`}</span>
         </div>
       )}
       <div className="cr-frame">
@@ -53,7 +55,7 @@ export default function UnitCard({ unit, thumb, faction, star, progress, locked,
           {count !== undefined && <span className="text-outline absolute right-1 top-0 text-2xl">+{count}</span>}
         </div>
         <div className="cr-plank">
-          <span className="text-outline">{unit.name}</span>
+          <span className="text-outline">{unitName((unit as { id?: string }).id ?? unit.name, unit.name)}</span>
         </div>
       </div>
       <div className="cr-tail" />

@@ -1,3 +1,5 @@
+'use client';
+
 import { ArrowRight, Bot, Gamepad2, Gift, Globe, Palette, Shield, Star, Swords, Trophy, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import WorldChat from '@/components/chat/WorldChat';
@@ -5,78 +7,80 @@ import GameTitle from '@/components/home/GameTitle';
 import HeroBanner from '@/components/home/HeroBanner';
 import Reveal from '@/components/home/Reveal';
 import PlayerHud from '@/components/player/PlayerHud';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
+import LanguageToggle from '@/lib/i18n/LanguageToggle';
 import { IS_VERCEL } from '@/shared/deploy';
 
-// Bố cục giữ như cũ: nav (PlayerHud góc phải) + 4 nút chế độ + Xưởng + chat.
-// Chỉ khoác áo mới kiểu Unite: hero tím rực, dải zigzag, thẻ chế độ nổi khối.
-const MODES = [
-  {
-    href: '/play?mode=bot',
-    title: 'Đấu với máy',
-    desc: 'Chọn đối thủ AI — từ Dễ tới Huyền thoại biết khắc chế đội hình của bạn.',
-    icon: Bot,
-    ribbon: 'PHỔ BIẾN NHẤT',
-    ribbonCls: 'bg-[#ffc233] text-[#2d3232]',
-    ring: 'hover:shadow-[#ffc233]/40',
-    iconBg: 'bg-gradient-to-b from-[#ffd76a] to-[#f59e0b]',
-    cta: 'text-[#b25b00]',
-  },
-  {
-    href: '/play?mode=local',
-    title: '2 người 1 máy',
-    desc: 'Lần lượt xếp quân bí mật rồi xem hai đạo quân lao vào nhau.',
-    icon: Gamepad2,
-    ribbon: 'VUI CÙNG BẠN BÈ',
-    ribbonCls: 'bg-[#2f6fe0] text-white',
-    ring: 'hover:shadow-[#2f6fe0]/40',
-    iconBg: 'bg-gradient-to-b from-[#6aa6ff] to-[#2f6fe0]',
-    cta: 'text-[#2f6fe0]',
-  },
-  {
-    href: '/play?mode=online',
-    title: 'Đấu online',
-    desc: 'Tạo phòng, gửi mã cho bạn bè, trận đấu mô phỏng đồng bộ trên hai máy.',
-    icon: Globe,
-    online: true,
-    ribbon: 'THỬ THÁCH THẬT',
-    ribbonCls: 'bg-[#d8373a] text-white',
-    ring: 'hover:shadow-[#d8373a]/40',
-    iconBg: 'bg-gradient-to-b from-[#ff7a7a] to-[#d8373a]',
-    cta: 'text-[#d8373a]',
-  },
-  {
-    href: '/play?mode=ranked',
-    title: 'Xếp hạng',
-    desc: 'Tìm đối thủ ngang tài, leo 6 bậc từ Tân Binh tới Bậc Thầy, nhận thưởng cuối mùa.',
-    icon: Trophy,
-    online: true,
-    ribbon: 'LEO HẠNG',
-    ribbonCls: 'bg-[#7c3aed] text-white',
-    ring: 'hover:shadow-[#7c3aed]/40',
-    iconBg: 'bg-gradient-to-b from-[#c084fc] to-[#7c3aed]',
-    cta: 'text-[#7c3aed]',
-  },
-].filter((m) => !(IS_VERCEL && m.online));
-
-const STEPS = [
-  { n: '01', icon: Shield, title: 'Xếp quân', desc: 'Kéo thả tướng low-poly lên bàn cờ, xoay đội hình theo ý bạn.' },
-  { n: '02', icon: Swords, title: 'Bấm bắt đầu', desc: 'AI điều khiển cả hai phe — không cần micro, chỉ cần chiến thuật.' },
-  { n: '03', icon: Trophy, title: 'Xem hỗn loạn', desc: 'Wobbly ragdoll lao vào nhau, phe còn đứng vững thắng trận.' },
-];
-
-const TICKER: Array<[LucideIcon, string]> = [
-  [Swords, 'XẾP QUÂN'],
-  [Bot, 'AI 4 CẤP ĐỘ'],
-  ...(IS_VERCEL ? [] : [[Globe, 'ONLINE REAL-TIME'] as [LucideIcon, string]]),
-  [Palette, 'XƯỞNG MÔ HÌNH'],
-  [Gift, 'QUÀ HẰNG NGÀY'],
-  ...(IS_VERCEL ? [] : [[Trophy, 'BẢNG XẾP HẠNG'] as [LucideIcon, string]]),
-];
-
 export default function Home() {
+  const { t } = useLanguage();
+
+  const MODES = [
+    {
+      href: '/play?mode=bot',
+      title: t('modes.botTitle'),
+      desc: t('modes.botDesc'),
+      icon: Bot,
+      ribbon: t('modes.botRibbon'),
+      ribbonCls: 'bg-[#ffc233] text-[#2d3232]',
+      ring: 'hover:shadow-[#ffc233]/40',
+      iconBg: 'bg-gradient-to-b from-[#ffd76a] to-[#f59e0b]',
+      cta: 'text-[#b25b00]',
+    },
+    {
+      href: '/play?mode=local',
+      title: t('modes.localTitle'),
+      desc: t('modes.localDesc'),
+      icon: Gamepad2,
+      ribbon: t('modes.localRibbon'),
+      ribbonCls: 'bg-[#2f6fe0] text-white',
+      ring: 'hover:shadow-[#2f6fe0]/40',
+      iconBg: 'bg-gradient-to-b from-[#6aa6ff] to-[#2f6fe0]',
+      cta: 'text-[#2f6fe0]',
+    },
+    {
+      href: '/play?mode=online',
+      title: t('modes.onlineTitle'),
+      desc: t('modes.onlineDesc'),
+      icon: Globe,
+      online: true,
+      ribbon: t('modes.onlineRibbon'),
+      ribbonCls: 'bg-[#d8373a] text-white',
+      ring: 'hover:shadow-[#d8373a]/40',
+      iconBg: 'bg-gradient-to-b from-[#ff7a7a] to-[#d8373a]',
+      cta: 'text-[#d8373a]',
+    },
+    {
+      href: '/play?mode=ranked',
+      title: t('modes.rankedTitle'),
+      desc: t('modes.rankedDesc'),
+      icon: Trophy,
+      online: true,
+      ribbon: t('modes.rankedRibbon'),
+      ribbonCls: 'bg-[#7c3aed] text-white',
+      ring: 'hover:shadow-[#7c3aed]/40',
+      iconBg: 'bg-gradient-to-b from-[#c084fc] to-[#7c3aed]',
+      cta: 'text-[#7c3aed]',
+    },
+  ].filter((m) => !(IS_VERCEL && (m as { online?: boolean }).online));
+
+  const STEPS = [
+    { n: '01', icon: Shield, title: t('steps.s1Title'), desc: t('steps.s1Desc') },
+    { n: '02', icon: Swords, title: t('steps.s2Title'), desc: t('steps.s2Desc') },
+    { n: '03', icon: Trophy, title: t('steps.s3Title'), desc: t('steps.s3Desc') },
+  ];
+
+  const TICKER: Array<[LucideIcon, string]> = [
+    [Swords, t('home.tickerDeploy')],
+    [Bot, t('home.tickerAi')],
+    ...(IS_VERCEL ? [] : [[Globe, t('home.tickerOnline')] as [LucideIcon, string]]),
+    [Palette, t('home.tickerWorkshop')],
+    [Gift, t('home.tickerGift')],
+    ...(IS_VERCEL ? [] : [[Trophy, t('home.tickerRank')] as [LucideIcon, string]]),
+  ];
+
   return (
     <main className="game-ui relative min-h-screen bg-[#1a1446]">
-      {/* ===== NAV BAR (giữ nguyên vị trí: logo trái, PlayerHud phải) ===== */}
+      {/* ===== NAV BAR ===== */}
       <header className="sticky top-0 z-20 border-b-[3px] border-[#2d3232] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2">
           <Link href="/" className="flex items-center gap-2">
@@ -88,41 +92,41 @@ export default function Home() {
               <span className="block text-sm text-[#b25b00]">SIMULATOR</span>
             </span>
           </Link>
-          <nav className="hidden items-center gap-4 md:flex" aria-label="Điều hướng">
+          <nav className="hidden items-center gap-4 md:flex" aria-label={t('nav.navLabel')}>
             <a href="#choi-ngay" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
-              Chơi ngay
+              {t('nav.playNow')}
             </a>
             <a href="#cach-choi" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
-              Cách chơi
+              {t('nav.howTo')}
             </a>
             <a href="#tinh-nang" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
-              Tính năng
+              {t('nav.features')}
             </a>
           </nav>
-          <PlayerHud />
+          <div className="flex items-center gap-2">
+            <LanguageToggle />
+            <PlayerHud />
+          </div>
         </div>
       </header>
 
-      {/* ===== HERO (Unite: nền tím rực + chấm bi + mây trôi) =====
-          Banner ảnh (nếu có file public/images/hero-banner.png) do HeroBanner
-          tự nhận — xem HERO_BANNER_MODE trong HeroBanner.tsx để chọn làm nền
-          hay thay toàn bộ hero. */}
+      {/* ===== HERO ===== */}
       <section className="relative overflow-hidden bg-gradient-to-b from-[#241a6e] via-[#5b2ee5] to-[#8b5cf6]">
         <HeroBanner>
           <div className="relative mx-auto flex max-w-5xl flex-col items-center px-4 pb-40 pt-10 text-center sm:pb-48">
             <span className="reward-pop inline-flex items-center gap-2 rounded-full border-2 border-[#2d3232] bg-[#ffc233] px-4 py-1 shadow-[0_4px_0_0_#2d3232]">
-              <Star /> MÙA GIẢI MỚI — TƯỚNG WOBBLY ĐÃ SẴN SÀNG <Star />
+              <Star /> {t('home.badge')} <Star />
             </span>
             <GameTitle />
             <p className="mt-2 max-w-xl rounded-2xl border-2 border-white/40 bg-black/25 px-4 py-2 text-lg text-white">
-              Mô phỏng đại chiến low-poly: xếp quân, bấm bắt đầu, xem hỗn loạn.
+              {t('home.subtitle')}
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[#2d3232]">
               {(
                 [
-                  [Swords, IS_VERCEL ? '2 chế độ chơi' : '3 chế độ chơi'],
-                  [Bot, 'AI 4 cấp độ'],
-                  ...(IS_VERCEL ? [] : [[Globe, 'Online real-time']]),
+                  [Swords, IS_VERCEL ? t('home.modesBadge2') : t('home.modesBadge3')],
+                  [Bot, t('home.aiBadge')],
+                  ...(IS_VERCEL ? [] : [[Globe, t('home.onlineBadge')]]),
                 ] as Array<[LucideIcon, string]>
               ).map(([Icon, b]) => (
                 <span key={b} className="rounded-full border-2 border-[#2d3232] bg-white px-3 py-1 shadow-[0_3px_0_0_#2d3232]">
@@ -134,24 +138,24 @@ export default function Home() {
         </HeroBanner>
       </section>
 
-      {/* ===== DẢI TICKER ===== */}
+      {/* ===== TICKER ===== */}
       <div className="overflow-hidden border-y-[3px] border-[#2d3232] bg-[#ffc233] py-2" id="tinh-nang" aria-hidden>
         <div className="marquee-track gap-8 pr-8">
-          {[...TICKER, ...TICKER].map(([Icon, t], i) => (
+          {[...TICKER, ...TICKER].map(([Icon, txt], i) => (
             <span key={i} className="whitespace-nowrap text-xl text-[#2d3232]">
-              <Icon /> {t} <span className="ml-6">•</span>
+              <Icon /> {txt} <span className="ml-6">•</span>
             </span>
           ))}
         </div>
       </div>
 
-      {/* ===== 4 CHẾ ĐỘ (giữ nguyên bố cục grid + href) ===== */}
+      {/* ===== MODES ===== */}
       <section id="choi-ngay" className="relative bg-gradient-to-b from-[#ff8a1e] via-[#ff9d2e] to-[#ffb300] pb-14 pt-10">
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
-            <h2 className="text-outline text-center text-4xl sm:text-5xl">CHỌN CHẾ ĐỘ CHIẾN ĐẤU</h2>
+            <h2 className="text-outline text-center text-4xl sm:text-5xl">{t('home.modesTitle')}</h2>
             <p className="mx-auto mt-2 max-w-xl text-center text-lg text-white drop-shadow-[0_2px_0_#2d3232]">
-              {IS_VERCEL ? 'Hai' : 'Bốn'} đấu trường, một mục tiêu: đội quân cuối cùng còn đứng vững!
+              {IS_VERCEL ? t('home.modesSubtitle2') : t('home.modesSubtitle4')}
             </p>
           </Reveal>
           <div className={`mt-8 grid w-full gap-6 sm:grid-cols-2 ${IS_VERCEL ? 'mx-auto max-w-3xl' : 'lg:grid-cols-4'}`}>
@@ -173,7 +177,7 @@ export default function Home() {
                   <span className="text-2xl">{m.title}</span>
                   <span className="opacity-80">{m.desc}</span>
                   <span className={`mode-cta mt-3 inline-flex items-center gap-1 text-xl ${m.cta}`}>
-                    CHƠI NGAY <ArrowRight aria-hidden />
+                    {t('home.playNow')} <ArrowRight aria-hidden />
                   </span>
                 </span>
               </Link>
@@ -185,12 +189,12 @@ export default function Home() {
 
       <div className="zigzag bg-[#ffb300]" style={{ ['--zz' as string]: '#fff' }} aria-hidden />
 
-      {/* ===== CÁCH CHƠI ===== */}
+      {/* ===== HOW TO ===== */}
       <section id="cach-choi" className="bg-white py-12">
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
             <h2 className="text-center text-4xl">
-              <Swords /> NHẬP CUỘC <span className="text-[#f59e0b]">TRONG 3 BƯỚC</span>
+              <Swords /> {t('home.stepsTitleA')} <span className="text-[#f59e0b]">{t('home.stepsTitleB')}</span>
             </h2>
           </Reveal>
           <div className="mt-8 grid gap-6 sm:grid-cols-3">
@@ -212,21 +216,21 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== CTA CUỐI + FOOTER ===== */}
+      {/* ===== CTA + FOOTER ===== */}
       <section className="relative overflow-hidden bg-gradient-to-b from-[#5b2ee5] to-[#241a6e] py-12 text-center">
         <div className="hero-dots absolute inset-0 opacity-40" aria-hidden />
         <Reveal variant="zoom" className="relative mx-auto max-w-2xl px-4">
-          <h2 className="text-outline text-4xl sm:text-5xl">SẴN SÀNG XUẤT TRẬN?</h2>
-          <p className="mt-2 text-lg text-white">Triệu hồi đội quân wobbly của bạn — miễn phí, không cần cài đặt.</p>
+          <h2 className="text-outline text-4xl sm:text-5xl">{t('home.ctaTitle')}</h2>
+          <p className="mt-2 text-lg text-white">{t('home.ctaDesc')}</p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <Link href="/play?mode=bot" className="btn btn-gold px-8 py-3 text-2xl">
-              <Swords /> CHƠI NGAY
+              <Swords /> {t('home.ctaPlay')}
             </Link>
           </div>
         </Reveal>
       </section>
       <footer className="border-t-[3px] border-[#2d3232] bg-[#14102e] py-5 text-center text-white/80">
-        <p><Swords /> MINI BATTLE SIMULATOR — xếp quân • mô phỏng • hỗn loạn vui vẻ</p>
+        <p><Swords /> {t('home.footer')}</p>
       </footer>
 
       <WorldChat />

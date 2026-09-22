@@ -18,7 +18,7 @@ export const firebaseApp = () => (getApps().length ? getApp() : initializeApp(fi
 
 export function firebaseAuth() {
   const auth = getAuth(firebaseApp());
-  auth.languageCode = 'vi';
+  auth.languageCode = typeof localStorage !== 'undefined' && localStorage.getItem('mbs-locale') === 'vi' ? 'vi' : 'en';
   return auth;
 }
 
@@ -34,7 +34,21 @@ export async function getFcmToken(ask: boolean): Promise<string | null> {
   return getToken(getMessaging(firebaseApp()), { vapidKey, serviceWorkerRegistration: registration });
 }
 
-const AUTH_ERRORS: Record<string, string> = {
+const AUTH_ERRORS_EN: Record<string, string> = {
+  'auth/invalid-email': 'Invalid email',
+  'auth/invalid-credential': 'Wrong email or password',
+  'auth/wrong-password': 'Wrong email or password',
+  'auth/user-not-found': 'Account not found',
+  'auth/user-disabled': 'Account has been disabled',
+  'auth/email-already-in-use': 'Email already in use',
+  'auth/weak-password': 'Password must be at least 6 characters',
+  'auth/too-many-requests': 'Too many attempts, try again later',
+  'auth/network-request-failed': 'Network error',
+  'auth/popup-blocked': 'Browser blocked the Google popup',
+  'auth/account-exists-with-different-credential': 'This email was registered another way',
+};
+
+const AUTH_ERRORS_VI: Record<string, string> = {
   'auth/invalid-email': 'Email không hợp lệ',
   'auth/invalid-credential': 'Sai email hoặc mật khẩu',
   'auth/wrong-password': 'Sai email hoặc mật khẩu',
@@ -51,5 +65,7 @@ const AUTH_ERRORS: Record<string, string> = {
 export function authErrorMessage(e: unknown): string | null {
   const code = (e as { code?: string })?.code;
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return null;
-  return (code && AUTH_ERRORS[code]) || (e instanceof Error ? e.message : String(e));
+  const vi = typeof localStorage !== 'undefined' && localStorage.getItem('mbs-locale') === 'vi';
+  const table = vi ? AUTH_ERRORS_VI : AUTH_ERRORS_EN;
+  return (code && table[code]) || (e instanceof Error ? e.message : String(e));
 }

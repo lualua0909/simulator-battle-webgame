@@ -31,7 +31,7 @@ const wins = (s: RankState, n: number) => Array.from({ length: n }).reduce<RankS
 
 test('seasons run back to back from seasonStart in Vietnam time', () => {
   assert.equal(currentSeason(cfg, S1 - 1), null);
-  assert.deepEqual(currentSeason(cfg, S1), { id: 's1', number: 1, name: 'Mùa 1', startsAt: S1, endsAt: S1 + 30 * DAY });
+  assert.deepEqual(currentSeason(cfg, S1), { id: 's1', number: 1, name: 'Season 1', startsAt: S1, endsAt: S1 + 30 * DAY });
   assert.equal(currentSeason(cfg, S1 + 30 * DAY - 1)!.id, 's1');
   assert.equal(season2.id, 's2');
   assert.equal(currentSeason({ ...cfg, enabled: false }, S1 + DAY), null);
