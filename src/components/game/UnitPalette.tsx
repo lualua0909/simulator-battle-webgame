@@ -72,9 +72,8 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
                 {thumbs[u.id] ? <img src={thumbs[u.id]} alt="" className={`h-10 w-10 object-contain sm:h-14 sm:w-14 ${locked ? 'grayscale' : ''}`} draggable={false} /> : <div className="h-10 w-10 animate-pulse rounded bg-parch sm:h-14 sm:w-14" />}
                 {locked && <LockIcon size={24} className="absolute right-1 top-1" />}
                 {star > 0 && (
-                  <span className="text-outline absolute left-1 top-0.5 flex items-center gap-0.5 leading-none">
+                  <span className="absolute left-1 top-0.5 flex items-center leading-none">
                     <StarIcon size={18} />
-                    {star}
                   </span>
                 )}
                 <span className="line-clamp-2 flex min-h-[2.2em] w-full items-start justify-center break-words text-[12px] leading-tight sm:text-[13px]">{u.name}</span>

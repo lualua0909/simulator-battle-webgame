@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 // SLOT BANNER HERO — khi nào có ảnh chỉ cần thả file vào đúng đường dẫn này rồi
-// deploy lại, không cần sửa code:
+// deploy lại (dev: restart server), không cần sửa code:
 //   public/images/hero-banner.png   (PNG/JPG/WebP đều được, khuyến nghị ≥1920px rộng)
 export const HERO_BANNER_SRC = '/images/hero-banner.png';
 
@@ -159,7 +159,8 @@ function useSunsetParallax(
 // `children` = nội dung core (badge + tiêu đề + mô tả), luôn render trừ khi
 // mode 'replace' và ảnh load thành công. Ảnh lỗi/missing → tự rớt về hero CSS cũ.
 export default function HeroBanner({ children, parallax = true }: { children: React.ReactNode; parallax?: boolean }) {
-  const [missing, setMissing] = useState(false);
+  // Không có file lúc build (next.config.ts → HERO_BANNER) thì khỏi request ảnh.
+  const [missing, setMissing] = useState(!process.env.HERO_BANNER);
   // Mỏ neo để tìm <section> hero chứa banner (đo chiều cao tính parallax).
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const sunRef = useRef<HTMLDivElement | null>(null);
