@@ -2,6 +2,7 @@
 
 // World chat: a floating button in the bottom-right corner opening a panel that follows the
 // Firestore doc `chat/world` live. Sending goes through /api/chat (the server owns the log).
+import { Earth, MessageCircle, User, X } from 'lucide-react';
 import { doc, getFirestore, onSnapshot } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import { CHAT_COLLECTION, CHAT_MAX_CHARS, parseMessages, WORLD_CHAT_DOC, type ChatMessage } from '@/shared/chat';
@@ -58,9 +59,9 @@ export default function WorldChat() {
       {open && (
         <div className="panel flex bg-paper h-[min(32rem,70vh)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b-2 border-ink/20 px-3 py-2">
-            <span className="text-outline text-xl">🌍 Chat thế giới</span>
+            <span className="text-outline text-xl"><Earth /> Chat thế giới</span>
             <button className="btn px-2 py-0" onClick={() => setOpen(false)} aria-label="Đóng">
-              ✕
+              <X />
             </button>
           </div>
           <div ref={list} className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 py-2">
@@ -97,14 +98,14 @@ export default function WorldChat() {
           ) : (
             <div className="border-t-2 border-ink/20 p-2">
               <button className="btn btn-gold w-full" onClick={() => openAuth('signin')}>
-                👤 Đăng nhập để chat
+                <User /> Đăng nhập để chat
               </button>
             </div>
           )}
         </div>
       )}
       <button className="btn btn-blue h-14 w-14 rounded-full p-0 text-2xl" onClick={() => setOpen((o) => !o)} aria-label="Chat thế giới" title="Chat thế giới">
-        💬
+        <MessageCircle />
       </button>
     </div>
   );

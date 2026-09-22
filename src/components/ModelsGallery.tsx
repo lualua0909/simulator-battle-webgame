@@ -4,6 +4,7 @@
 // /admin/login). Admins browse units, abilities and assets in the turntable or the practice
 // arena, and edit them in the side panel — unit stats, abilities, price, model download and
 // Claude img2threejs regeneration — previewed live from unsaved drafts.
+import { ArrowLeft, Check, FlaskConical, Pencil, RotateCcw, Sparkles, Swords } from 'lucide-react';
 import Link from 'next/link';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { Object3D } from 'three';
@@ -172,7 +173,7 @@ export default function ModelsGallery(props: Props) {
       <aside className="w-64 shrink-0 overflow-y-auto border-r-2 border-ink bg-parch p-3">
         <div className="flex items-baseline justify-between gap-2">
           <Link href="/" className="font-display text-lg">
-            ← Mini Battle Simulator
+            <ArrowLeft /> Mini Battle Simulator
           </Link>
           {admin && (
             <Link href="/admin" className="text-xs underline">
@@ -189,7 +190,7 @@ export default function ModelsGallery(props: Props) {
           )}
         </div>
         <ul className="mt-1 space-y-0.5 text-sm">
-          {creating && <li>{item(true, () => undefined, '✏️ Lính mới')}</li>}
+          {creating && <li>{item(true, () => undefined, <><Pencil /> Lính mới</>)}</li>}
           {bundle.units.map((u) => (
             <li key={u.id}>{item(!creating && savedUnit?.id === u.id && !asset && !skill, () => select({ unit: u.id }), u.name)}</li>
           ))}
@@ -204,7 +205,7 @@ export default function ModelsGallery(props: Props) {
                   skill?.id === w.id,
                   () => select({ skill: w.id }),
                   <>
-                    {skillIds.has(w.id) ? '✨ ' : ''}
+                    {skillIds.has(w.id) && <><Sparkles />{' '}</>}
                     {w.name} <span className="text-xs opacity-60">({ENUM_LABELS[w.attack] ?? w.attack})</span>
                   </>,
                 )}
@@ -225,7 +226,7 @@ export default function ModelsGallery(props: Props) {
                 asset?.id === a.id,
                 () => select({ asset: a.id }),
                 <>
-                  {a.sculpt ? '🧪 ' : ''}
+                  {a.sculpt && <><FlaskConical />{' '}</>}
                   {a.name} <span className="text-xs opacity-60">({a.kind})</span>
                 </>,
               )}
@@ -238,12 +239,12 @@ export default function ModelsGallery(props: Props) {
         <div className="panel absolute left-3 top-3 flex flex-wrap items-center gap-2 p-2 text-sm">
           {sel.chest && (
             <button className={`btn px-2 py-1 text-xs ${chestOpen ? 'btn-gold' : ''}`} onClick={() => setChestOpen((o) => !o)}>
-              {chestOpen ? '↺ Đóng lại' : '✨ Mở thử'}
+              {chestOpen ? <><RotateCcw /> Đóng lại</> : <><Sparkles /> Mở thử</>}
             </button>
           )}
           {unit && !asset && !skill && (
             <button className={`btn px-2 py-1 text-xs ${arena ? 'btn-gold' : ''}`} onClick={() => setArena((a) => !a)}>
-              ⚔️ Đấu thử
+              <Swords /> Đấu thử
             </button>
           )}
           {!skill && !sel.chest && !(arena && unit && !asset) && !skinnedUrl && (
@@ -271,7 +272,7 @@ export default function ModelsGallery(props: Props) {
           )}
           {picked && <span className="rounded bg-white px-2 py-0.5 font-mono text-xs">{picked}</span>}
         </div>
-        {candidate && <div className="absolute bottom-3 left-3 rounded-lg border-2 border-ink bg-gold px-3 py-1 text-sm font-bold">🧪 Đang xem thử v{candidate.sculpt.version} của Claude — chưa áp dụng</div>}
+        {candidate && <div className="absolute bottom-3 left-3 rounded-lg border-2 border-ink bg-gold px-3 py-1 text-sm font-bold"><FlaskConical /> Đang xem thử v{candidate.sculpt.version} của Claude — chưa áp dụng</div>}
         {dirty && <div className="absolute right-3 top-3 rounded-lg border-2 border-ink bg-white px-2 py-1 text-xs font-bold">Xem trước bản nháp chưa lưu</div>}
       </main>
       {admin && (
@@ -312,7 +313,7 @@ export default function ModelsGallery(props: Props) {
           ) : sel.chest ? (
             <div className="flex flex-col gap-2 text-sm">
               <h2 className="font-display text-lg leading-tight">{ENUM_LABELS[sel.chest]}</h2>
-              <p>Rương của hộp quà người chơi mở (mô hình procedural theo chuẩn img2threejs: part `base`, `lid` bản lề sau, socket `glow`). Bấm ✨ Mở thử để xem hiệu ứng mở.</p>
+              <p>Rương của hộp quà người chơi mở (mô hình procedural theo chuẩn img2threejs: part `base`, `lid` bản lề sau, socket `glow`). Bấm <Sparkles /> Mở thử để xem hiệu ứng mở.</p>
               <p>
                 Đang dùng cho:{' '}
                 <b>{[bundle.settings.economy.dailyBox.chest === sel.chest && 'hộp hằng ngày', bundle.settings.economy.hourlyBox.chest === sel.chest && `hộp ${bundle.settings.economy.boxHours} giờ`].filter(Boolean).join(', ') || 'chưa dùng'}</b>
@@ -357,7 +358,7 @@ function SkillPanel({ skill, draft, setDraft, bundle, reload }: { skill: WeaponD
       await api(`/api/admin/weapons/${skill.id}`, { method: 'PUT', body: JSON.stringify(draft) });
       await reload();
       setDraft(undefined);
-      setStatus({ ok: true, text: 'Đã lưu ✓' });
+      setStatus({ ok: true, text: 'Đã lưu' });
     } catch (e) {
       const details = e instanceof ApiError && Array.isArray(e.details) ? `: ${(e.details as Array<{ path?: string; message?: string }>).map((d) => `${d.path ?? ''} ${d.message ?? ''}`).join(', ')}` : '';
       setStatus({ ok: false, text: `${e instanceof Error ? e.message : String(e)}${details}` });
@@ -373,7 +374,7 @@ function SkillPanel({ skill, draft, setDraft, bundle, reload }: { skill: WeaponD
           {saving ? 'Đang lưu…' : 'Lưu'}
         </button>
       </div>
-      {status && <p className={`text-sm font-bold ${status.ok ? 'text-green-700' : 'text-red-team'}`}>{status.text}</p>}
+      {status && <p className={`text-sm font-bold ${status.ok ? 'text-green-700' : 'text-red-team'}`}>{status.ok && <Check />} {status.text}</p>}
       <AbilityForm bundle={bundle} saved={skill} draft={draft} onChange={setDraft} />
     </div>
   );

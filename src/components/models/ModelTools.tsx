@@ -3,6 +3,7 @@
 // Model tools of the workshop: download (TypeScript / GLB / OBJ…), and regenerate a model with
 // Claude through the img2threejs pipeline. Picking a generated version previews it in the
 // workshop viewer in place of the asset; applying it overrides the asset (revertible).
+import { Ban, Bone, Check, CircleCheck, Download, FlaskConical, ImageIcon, LoaderCircle, Package, Play, Ruler, Sparkles, TriangleAlert } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createAssetModel, createUnitModel } from '@/game/models';
 import { IS_VERCEL } from '@/shared/deploy';
@@ -120,7 +121,7 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
       if (!confirm(`Hoàn tác "${asset.name}" về model procedural?${users.length ? `\nLính dùng asset này: ${users.map((u) => u.name).join(', ')}.` : ''}`)) throw new Error('Đã hủy');
       const doc = await api<AssetDef>(`/api/admin/assets/${asset.id}`);
       await api(`/api/admin/assets/${asset.id}`, { method: 'PUT', body: JSON.stringify({ ...doc, sculpt: null }) });
-    }, 'Đã hoàn tác về model procedural ✓');
+    }, 'Đã hoàn tác về model procedural');
 
   const remove = () =>
     act(async () => {
@@ -128,7 +129,7 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
       if (asset.glb) await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'DELETE', cache: 'no-store' });
       await api(`/api/admin/assets/${asset.id}`, { method: 'DELETE' });
       onDeleted?.();
-    }, 'Đã xóa asset ✓');
+    }, 'Đã xóa asset');
 
   const sources: Array<{ label: string; source: ExportSource }> = [
     ...(previewing ? [{ label: `Bản thử v${previewing.sculpt.version} (đang xem)`, source: { name: `${previewing.sculpt.spec.name}-v${previewing.sculpt.version}`, spec: previewing.sculpt.spec } }] : []),
@@ -143,7 +144,7 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
           <b>{asset.name}</b> <span className="text-xs opacity-60">({asset.id})</span> ·{' '}
           {asset.sculpt ? (
             <>
-              🧪 img2threejs <b>{asset.sculpt.spec.name}</b> v{asset.sculpt.version}
+              <FlaskConical /> img2threejs <b>{asset.sculpt.spec.name}</b> v{asset.sculpt.version}
             </>
           ) : (
             'preset procedural'
@@ -161,7 +162,11 @@ export function AssetModelTools({ bundle, reload, asset, context, candidate, set
         )}
         <span className="w-full text-xs opacity-60">{users.length ? `Dùng bởi: ${users.map((u) => u.name).join(', ')}` : 'Chưa lính nào dùng'}</span>
       </div>
-      {status && status.text !== 'Đã hủy' && <p className={`text-xs font-bold ${status.ok ? 'text-green-700' : 'text-red-team'}`}>{status.text}</p>}
+      {status && status.text !== 'Đã hủy' && (
+        <p className={`text-xs font-bold ${status.ok ? 'text-green-700' : 'text-red-team'}`}>
+          {status.ok && <Check />} {status.text}
+        </p>
+      )}
       <ScalePanel asset={asset} act={act} saving={saving} />
       {(RIG_OF_KIND[asset.kind] === 'static' || (RIGID_GLB_KINDS as readonly string[]).includes(asset.kind)) && !(asset.kind === 'structure' && ((asset.params as Record<string, unknown> | undefined)?.type === 'wall' || (asset.params as Record<string, unknown> | undefined)?.type === 'brick-wall')) && <GlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
       {(SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && <SkinnedGlbUploadPanel asset={asset} users={users} act={act} saving={saving} />}
@@ -184,7 +189,7 @@ function TintSavePanel({ asset, users, act, saving }: { asset: AssetDef; users: 
       if (!confirm(`Lưu màu mới của asset "${asset.name}"?\n\n${notes}\n\nGame dùng màu mới từ trận tiếp theo.`)) throw new Error('Đã hủy');
       const doc = await api<AssetDef>(`/api/admin/assets/${asset.id}`);
       await api(`/api/admin/assets/${asset.id}`, { method: 'PUT', body: JSON.stringify({ ...doc, glb: doc.glb ? { ...doc.glb, tint } : doc.glb }) });
-    }, 'Đã lưu màu ✓ — khung xem thử cập nhật sau khi tải lại');
+    }, 'Đã lưu màu — khung xem thử cập nhật sau khi tải lại');
 
   if (!asset.glb) return null;
   return (
@@ -207,11 +212,11 @@ function ScalePanel({ asset, act, saving }: { asset: AssetDef; act: (fn: () => P
     act(async () => {
       const doc = await api<AssetDef>(`/api/admin/assets/${asset.id}`);
       await api(`/api/admin/assets/${asset.id}`, { method: 'PUT', body: JSON.stringify({ ...doc, scale }) });
-    }, `Đã lưu tỉ lệ ${scale.toFixed(2)}× ✓`);
+    }, `Đã lưu tỉ lệ ${scale.toFixed(2)}×`);
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
-      <b>📏 Kích cỡ hiển thị</b>
+      <b><Ruler /> Kích cỡ hiển thị</b>
       <input type="range" min={0.1} max={10} step={0.05} value={scale} className="flex-1" onChange={(e) => setScale(Number(e.target.value))} />
       <input type="number" min={0.1} max={10} step={0.05} value={scale} className="field w-16 py-0.5 text-xs" onChange={(e) => setScale(Number(e.target.value) || asset.scale)} />
       <span className="opacity-70">×</span>
@@ -237,20 +242,20 @@ function GlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef; users:
       const res = await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'POST', body: form, cache: 'no-store' });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new ApiError(res.status, (data as { error?: string })?.error ?? res.statusText, (data as { details?: unknown })?.details);
-    }, 'Đã thay model bằng file upload ✓');
+    }, 'Đã thay model bằng file upload');
 
   const remove = () =>
     act(async () => {
       if (!confirm(`Xóa model upload của "${asset.name}" và hoàn tác về procedural?`)) throw new Error('Đã hủy');
       const res = await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'DELETE', cache: 'no-store' });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? res.statusText);
-    }, 'Đã xóa model upload ✓');
+    }, 'Đã xóa model upload');
 
   // Vercel has no writable disk: no new upload, only reverting one made before.
   if (IS_VERCEL && !asset.glb) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
-      <b>📦 Upload model (.glb/.gltf)</b>
+      <b><Package /> Upload model (.glb/.gltf)</b>
       {asset.glb && (
         <span className="opacity-70">
           đang dùng: <b>{asset.glb.fileName}</b>
@@ -302,20 +307,20 @@ function SkinnedGlbUploadPanel({ asset, users, act, saving }: { asset: AssetDef;
       const res = await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'POST', body: form, cache: 'no-store' });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new ApiError(res.status, (data as { error?: string })?.error ?? res.statusText, (data as { details?: unknown })?.details);
-    }, 'Đã thay model bằng file upload ✓');
+    }, 'Đã thay model bằng file upload');
 
   const remove = () =>
     act(async () => {
       if (!confirm(`Xóa model upload của "${asset.name}" và hoàn tác về procedural?`)) throw new Error('Đã hủy');
       const res = await fetch(`/api/admin/assets/${asset.id}/glb`, { method: 'DELETE', cache: 'no-store' });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? res.statusText);
-    }, 'Đã xóa model upload ✓');
+    }, 'Đã xóa model upload');
 
   // Vercel has no writable disk: no new upload, only reverting one made before.
   if (IS_VERCEL && !asset.glb) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
-      <b>🦖 Upload model animated (.glb/.gltf)</b>
+      <b><Bone /> Upload model animated (.glb/.gltf)</b>
       {asset.glb && (
         <span className="opacity-70">
           đang dùng: <b>{asset.glb.fileName}</b>
@@ -361,7 +366,7 @@ function DownloadPanel({ sources }: { sources: Array<{ label: string; source: Ex
   const sculpted = 'spec' in picked.source;
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border-2 border-ink/20 bg-white/60 p-2">
-      <b className="text-sm">⬇ Tải về</b>
+      <b className="text-sm"><Download /> Tải về</b>
       {sources.length > 1 && (
         <select className="field py-0.5 text-xs" value={index} onChange={(e) => setIndex(Number(e.target.value))}>
           {sources.map((s, i) => (
@@ -428,7 +433,7 @@ function ClaudePanel({ bundle, asset, context, users, setCandidate, act, saving,
   return (
     <div className="flex flex-col gap-2 rounded-lg border-2 border-ink bg-parch/60 p-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <b>✨ Claude tối ưu model (img2threejs)</b>
+        <b><Sparkles /> Claude tối ưu model (img2threejs)</b>
         <EngineBadge engine={engine} />
       </div>
       <select className="field py-0.5 text-xs" value={runner.selected ?? ''} disabled={running} onChange={(e) => runner.select(e.target.value || null)}>
@@ -483,7 +488,7 @@ function ClaudePanel({ bundle, asset, context, users, setCandidate, act, saving,
           <div className="flex flex-wrap gap-2">
             {!running && detail.versions.length === 0 && (
               <button className="btn btn-gold px-2 py-0.5 text-xs" disabled={Boolean(run)} onClick={() => void runner.startRun(detail.id, { kind: 'auto' })}>
-                ▶ Chạy
+                <Play /> Chạy
               </button>
             )}
             <button
@@ -586,7 +591,7 @@ function RequestForm({ asset, context, disabled, onSubmit }: { asset: AssetDef; 
             </button>
           </>
         ) : (
-          <span>🖼️ Ảnh mẫu (tuỳ chọn): bấm chọn, kéo-thả hoặc dán (Ctrl/⌘+V)</span>
+          <span><ImageIcon /> Ảnh mẫu (tuỳ chọn): bấm chọn, kéo-thả hoặc dán (Ctrl/⌘+V)</span>
         )}
         <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
       </div>
@@ -602,7 +607,7 @@ function RequestForm({ asset, context, disabled, onSubmit }: { asset: AssetDef; 
           </select>
         </span>
         <button className="btn btn-gold ml-auto px-3 py-1 text-sm" disabled={disabled || sending} onClick={() => void submit()}>
-          {sending ? 'Đang gửi…' : '✨ Yêu cầu Claude generate lại'}
+          {sending ? 'Đang gửi…' : <><Sparkles /> Yêu cầu Claude generate lại</>}
         </button>
       </div>
       {error && <p className="text-xs font-bold text-red-team">{error}</p>}
@@ -623,7 +628,7 @@ function RunBar({ job, run, onStop }: { job: StudioJobDetail; run: RunState | nu
   const progress = run?.phase === 'thinking' ? `Claude đang suy nghĩ…${run.chars > 0 ? ` (${fmt(run.chars)} ký tự)` : ''}` : run?.phase === 'writing' ? `Claude đang viết… ${fmt(run.chars)} ký tự` : null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink bg-gold/30 px-2 py-1 text-xs">
-      <span className="animate-spin">⏳</span>
+      <LoaderCircle className="animate-spin" />
       <b>{run?.text ?? `Đang chạy trên máy chủ (${job.step ?? '…'})`}</b>
       {progress && <span className="opacity-80">{progress}</span>}
       {seconds !== null && (
@@ -665,7 +670,7 @@ function VersionTools({ bundle, job, version, asset, users, busy, onRun, act, on
       const notes = [users.length ? `Đổi model cho: ${users.map((u) => u.name).join(', ')}.` : 'Chưa có lính nào dùng asset này.', version.gates.verdict === 'warn' ? 'Gate còn cảnh báo.' : ''].filter(Boolean);
       if (!confirm(`Thay model của asset "${asset.name}" bằng v${version.n}?\n\n${notes.join('\n')}\n\nGame dùng model mới từ trận tiếp theo. Hoàn tác được bất cứ lúc nào.`)) throw new Error('Đã hủy');
       await api(`/api/admin/assets/${asset.id}`, { method: 'PUT', body: JSON.stringify({ ...doc, sculpt }) });
-    }, 'Đã thay model ✓');
+    }, 'Đã thay model');
 
   const createAsset = () =>
     act(async () => {
@@ -681,7 +686,7 @@ function VersionTools({ bundle, job, version, asset, users, busy, onRun, act, on
         {stats && ` · ${stats.triangles} tam giác · ${stats.parts} part · cao ${stats.height.toFixed(2)} m`}
       </p>
       <div className="rounded border border-ink/20 bg-white/60 p-1.5 text-xs">
-        <b>Gate:</b> {{ pass: '✅ đạt', warn: '⚠️ cảnh báo', fail: '⛔ chặn' }[version.gates.verdict]}
+        <b>Gate:</b> {{ pass: <><CircleCheck /> đạt</>, warn: <><TriangleAlert /> cảnh báo</>, fail: <><Ban /> chặn</> }[version.gates.verdict]}
         {issues.length > 0 && (
           <ul className="mt-0.5 list-disc pl-4">
             {issues.map((g) => (

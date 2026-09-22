@@ -32,9 +32,24 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Lucide icons size to the surrounding text by default; utilities (size-*) still override. */
+@layer base {
+  .lucide {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    vertical-align: -0.125em;
+    stroke-width: 2.5;
+  }
+}
+
 /* Chunky game button */
 .btn {
   @apply inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-white px-4 py-2 font-bold text-ink shadow-[0_4px_0_0_var(--color-ink)] transition active:translate-y-[3px] active:shadow-[0_1px_0_0_var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-50;
+}
+.btn-icon {
+  @apply h-8 w-8 shrink-0 gap-0 rounded-lg p-0 text-sm leading-none shadow-[0_2px_0_0_var(--color-ink)] active:translate-y-[2px] active:shadow-none;
 }
 .btn-gold {
   @apply bg-gold;
@@ -80,23 +95,16 @@ body {
 }
 
 /* ---------------------------------------------------------------- web game surface
-   Everything but the CMS (/admin, /models) sits in .game-ui: Clash font, text #2D3232 and nothing
-   under 16px — the small Tailwind sizes (text-xs, text-sm) resolve to 16px in here. The font file
-   data/Clash_Regular.otf.ttf is served by /api/fonts/clash; Paytone One supplies the Vietnamese
-   letters it lacks (and everything while the file is missing). Clash has one (heavy) weight, so bold
-   classes must not fake a bolder one. */
-@font-face {
-  font-family: 'Clash';
-  src: url('/api/fonts/clash');
-  font-display: swap;
-}
+   Everything but the CMS (/admin, /models) sits in .game-ui: Paytone One, text #2D3232 and nothing
+   under 16px — the small Tailwind sizes (text-xs, text-sm) resolve to 16px in here. Paytone One has
+   one (heavy) weight, so bold classes must not fake a bolder one. */
 .game-ui {
   --color-ink: #2d3232;
   --text-xs: 1rem;
   --text-xs--line-height: 1.25;
   --text-sm: 1rem;
   --text-sm--line-height: 1.3;
-  font-family: 'Clash', var(--font-paytone), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-paytone), ui-sans-serif, system-ui, sans-serif;
   font-size: 1rem;
   color: var(--color-ink);
   font-synthesis: none;
@@ -452,7 +460,7 @@ button.cr-card {
 .title-3d {
   position: relative;
   display: inline-block;
-  font-family: var(--font-display), 'Clash', ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(2.6rem, 9vw, 5.5rem);
   line-height: 0.95;
   letter-spacing: 0.02em;

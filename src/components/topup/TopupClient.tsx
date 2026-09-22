@@ -2,6 +2,7 @@
 
 // Trang nạp xu: chọn gói → tạo đơn → quét QR VietQR động (số tiền + nội dung CK của đơn).
 // Giao diện bám ảnh mẫu: nền tối, 2 thẻ (trái: gói + thông tin CK, phải: hướng dẫn + QR).
+import { ArrowRight, Bot, Check, Diamond, Gift, Globe, Palette, Swords, Trophy, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -23,7 +24,14 @@ const STATUS_CLS: Record<string, string> = {
 };
 const STATUS_TXT: Record<string, string> = { pending: 'Đang chờ duyệt', confirmed: 'Đã cộng xu', cancelled: 'Đã huỷ' };
 
-const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 5 CẤP ĐỘ', ...(IS_VERCEL ? [] : ['🌐 ONLINE REAL-TIME']), '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', ...(IS_VERCEL ? [] : ['🏆 BẢNG XẾP HẠNG'])];
+const TICKER: Array<[LucideIcon, string]> = [
+  [Swords, 'XẾP QUÂN'],
+  [Bot, 'AI 5 CẤP ĐỘ'],
+  ...(IS_VERCEL ? [] : [[Globe, 'ONLINE REAL-TIME'] as [LucideIcon, string]]),
+  [Palette, 'XƯỞNG MÔ HÌNH'],
+  [Gift, 'QUÀ HẰNG NGÀY'],
+  ...(IS_VERCEL ? [] : [[Trophy, 'BẢNG XẾP HẠNG'] as [LucideIcon, string]]),
+];
 
 async function copy(text: string): Promise<boolean> {
   try {
@@ -116,7 +124,9 @@ export default function TopupClient() {
       <header className="sticky top-0 z-20 border-b-[3px] border-[#2d3232] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2">
           <Link href="/" className="flex items-center gap-2">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#2d3232] bg-gradient-to-b from-[#ffd76a] to-[#f59e0b] text-2xl">⚔️</span>
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#2d3232] bg-gradient-to-b from-[#ffd76a] to-[#f59e0b] text-2xl">
+              <Swords />
+            </span>
             <span className="leading-none">
               <span className="block text-lg tracking-wide">MINI BATTLE</span>
               <span className="block text-sm text-[#b25b00]">NẠP XU</span>
@@ -175,7 +185,7 @@ export default function TopupClient() {
                   <dd className="flex items-center gap-2 font-bold tracking-wider text-white">
                     {bank.accountNo}
                     <button onClick={() => void onCopy('stk', bank.accountNo)} className="rounded-md border border-white/15 px-1.5 py-0.5 text-xs text-white/70 hover:bg-white/10" title="Sao chép STK">
-                      {copied === 'stk' ? 'Đã chép ✓' : 'Chép'}
+                      {copied === 'stk' ? <><Check /> Đã chép</> : 'Chép'}
                     </button>
                   </dd>
                 </div>
@@ -185,7 +195,7 @@ export default function TopupClient() {
                     <dd className="flex items-center gap-2 font-bold tracking-widest text-[#ffd76a]">
                       {order.content}
                       <button onClick={() => void onCopy('content', order.content)} className="rounded-md border border-[#e8b34a]/40 px-1.5 py-0.5 text-xs text-[#ffd76a] hover:bg-[#e8b34a]/10" title="Sao chép nội dung">
-                        {copied === 'content' ? 'Đã chép ✓' : 'Chép'}
+                        {copied === 'content' ? <><Check /> Đã chép</> : 'Chép'}
                       </button>
                     </dd>
                   </div>
@@ -224,7 +234,7 @@ export default function TopupClient() {
                 {cfg.orders.slice(0, 5).map((o) => (
                   <li key={o.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
                     <span className="font-bold text-white">{formatVnd(o.amountVnd)}</span>
-                    <span className="text-white/45">→ {formatTopupCoins(o.coins)}</span>
+                    <span className="text-white/45"><ArrowRight /> {formatTopupCoins(o.coins)}</span>
                     <span className="font-mono text-xs text-white/60">{o.content}</span>
                     <span className={`ml-auto rounded-full border px-2 py-0.5 text-xs ${STATUS_CLS[o.status]}`}>{STATUS_TXT[o.status]}</span>
                   </li>
@@ -262,7 +272,7 @@ export default function TopupClient() {
                 <div className="mt-2 flex items-center justify-center gap-2 text-sm font-bold">
                   <span className="italic text-[#1e3a8a]">napas 247</span>
                   <span className="text-gray-300">|</span>
-                  <span className="text-xs uppercase tracking-wide text-[#d11f2d]">{order.bank.bankName} ◆</span>
+                  <span className="text-xs uppercase tracking-wide text-[#d11f2d]">{order.bank.bankName} <Diamond className="fill-current" /></span>
                 </div>
                 <div className="mt-1 text-sm font-bold uppercase">{order.bank.accountName}</div>
                 <div className="text-sm tracking-widest">{order.bank.accountNo}</div>
@@ -299,15 +309,15 @@ export default function TopupClient() {
       {/* ===== DẢI TICKER (giống trang chủ) ===== */}
       <div className="overflow-hidden border-y-[3px] border-[#2d3232] bg-[#ffc233] py-2" aria-hidden>
         <div className="marquee-track gap-8 pr-8">
-          {[...TICKER, ...TICKER].map((t, i) => (
+          {[...TICKER, ...TICKER].map(([Icon, t], i) => (
             <span key={i} className="whitespace-nowrap text-xl text-[#2d3232]">
-              {t} <span className="ml-6">•</span>
+              <Icon /> {t} <span className="ml-6">•</span>
             </span>
           ))}
         </div>
       </div>
       <footer className="border-t-[3px] border-[#2d3232] bg-[#14102e] py-5 text-center text-white/80">
-        <p>⚔️ MINI BATTLE SIMULATOR — xếp quân • mô phỏng • hỗn loạn vui vẻ</p>
+        <p><Swords /> MINI BATTLE SIMULATOR — xếp quân • mô phỏng • hỗn loạn vui vẻ</p>
       </footer>
     </main>
   );

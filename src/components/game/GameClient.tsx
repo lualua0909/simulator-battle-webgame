@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowLeft, ArrowRight, Castle, Check, Dices, Flame, Plus, Swords, Trash2, Undo2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react';
 import { botBoxTier, isUnlocked } from '@/shared/economy';
@@ -779,12 +780,12 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             <div className="flex flex-wrap items-start gap-1.5 sm:gap-2">
               <div className="panel pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-y-auto overscroll-contain p-1.5 sm:gap-2 sm:overflow-visible sm:p-2 max-h-[30vh] sm:max-h-none">
                 <Link href="/" className="btn px-2 py-1 text-sm" aria-label="Về menu">
-                  ←
+                  <ArrowLeft />
                 </Link>
                 <span className={`rounded-lg px-1.5 py-1 font-display text-white sm:px-2 ${SIDE_BG[mySide]}`}>
                   <span className="hidden sm:inline">Phe </span>
                   {SIDE_NAME[mySide]}
-                  {defense && <span className="hidden sm:inline">{defense === mySide ? ' · 🏰 Thủ thành' : ' · 🔥 Công thành'}</span>}
+                  {defense && <span className="hidden sm:inline">{defense === mySide ? <> · <Castle /> Thủ thành</> : <> · <Flame /> Công thành</>}</span>}
                 </span>
                 <div className="w-36 shrink-0 sm:w-52">
                   <div className="flex items-baseline justify-between gap-2 text-xs font-bold">
@@ -802,16 +803,16 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   {wallBlocks > 0 && ` · ${wallBlocks} khối tường`}
                 </span>
                 <button className={`btn px-2 py-1 text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')} title="Đặt" aria-label="Đặt quân">
-                  ✚<span className="hidden sm:inline"> Đặt</span>
+                  <Plus /><span className="hidden sm:inline"> Đặt</span>
                 </button>
                 <button className={`btn px-2 py-1 text-sm ${tool === 'erase' ? 'btn-gold' : ''}`} onClick={() => setTool('erase')} title="Xóa (X)" aria-label="Xóa quân">
-                  ✖<span className="hidden sm:inline"> Xóa</span>
+                  <X /><span className="hidden sm:inline"> Xóa</span>
                 </button>
                 <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={fillRandom} title="Ngẫu nhiên" aria-label="Xếp quân ngẫu nhiên">
-                  🎲<span className="hidden sm:inline"> Ngẫu nhiên</span>
+                  <Dices /><span className="hidden sm:inline"> Ngẫu nhiên</span>
                 </button>
                 <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={undo} title="Hoàn tác (Ctrl/⌘+Z)" aria-label="Hoàn tác">
-                  ↶<span className="hidden sm:inline"> Hoàn tác</span>
+                  <Undo2 /><span className="hidden sm:inline"> Hoàn tác</span>
                 </button>
                 <button
                   className="btn px-2 py-1 text-sm"
@@ -823,7 +824,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   title="Xóa hết"
                   aria-label="Xóa hết quân"
                 >
-                  🗑<span className="hidden sm:inline"> Xóa hết</span>
+                  <Trash2 /><span className="hidden sm:inline"> Xóa hết</span>
                 </button>
               </div>
               <div className="ml-auto flex min-w-0 max-w-full shrink-0 flex-col items-end gap-2">
@@ -833,25 +834,25 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 <button className={`btn pointer-events-auto max-w-full px-2 py-1 text-base sm:px-4 sm:py-2 sm:text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
                   {mode === 'bot' ? (
                     <>
-                      ⚔<span className="hidden sm:inline"> Bắt đầu!</span>
+                      <Swords /><span className="hidden sm:inline"> Bắt đầu!</span>
                     </>
                   ) : mode === 'local' ? (
                     side === 'blue' ? (
                       <>
-                        →<span className="hidden sm:inline"> Xong → Người chơi 2</span>
+                        <ArrowRight /><span className="hidden sm:inline"> Xong, tới Người chơi 2</span>
                       </>
                     ) : (
                       <>
-                        ⚔<span className="hidden sm:inline"> Bắt đầu!</span>
+                        <Swords /><span className="hidden sm:inline"> Bắt đầu!</span>
                       </>
                     )
                   ) : locked ? (
                     <>
-                      ✖<span className="hidden sm:inline"> Hủy sẵn sàng</span>
+                      <X /><span className="hidden sm:inline"> Hủy sẵn sàng</span>
                     </>
                   ) : (
                     <>
-                      ✔<span className="hidden sm:inline"> Sẵn sàng</span>
+                      <Check /><span className="hidden sm:inline"> Sẵn sàng</span>
                     </>
                   )}
                 </button>

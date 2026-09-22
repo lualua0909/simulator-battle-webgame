@@ -1,4 +1,4 @@
-// Small SVG icons of the game UI (drawn, not emoji: the Clash font has no ★ glyph).
+// Small SVG icons of the game UI (drawn, not emoji).
 
 export function CoinIcon({ size = 36, className }: { size?: number; className?: string }) {
   return (

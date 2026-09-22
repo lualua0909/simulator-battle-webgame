@@ -15,11 +15,11 @@ import {
 } from './schema';
 
 const factions: Faction[] = [
-  { id: 'bo-lac', name: 'Bộ lạc', color: '#c8692f', icon: '🪨', order: 1 },
-  { id: 'trung-co', name: 'Trung cổ', color: '#3f7fd6', icon: '🛡️', order: 2 },
-  { id: 'phuong-dong', name: 'Phương Đông', color: '#d23c3c', icon: '🏮', order: 3 },
-  { id: 'huyen-thoai', name: 'Huyền thoại', color: '#8e44ad', icon: '🐉', order: 4 },
-  { id: 'thanh-tri', name: 'Thành trì', color: '#7d776e', icon: '🏰', order: 5 },
+  { id: 'bo-lac', name: 'Bộ lạc', color: '#c8692f', icon: 'mountain', order: 1 },
+  { id: 'trung-co', name: 'Trung cổ', color: '#3f7fd6', icon: 'shield', order: 2 },
+  { id: 'phuong-dong', name: 'Phương Đông', color: '#d23c3c', icon: 'lamp', order: 3 },
+  { id: 'huyen-thoai', name: 'Huyền thoại', color: '#8e44ad', icon: 'flame', order: 4 },
+  { id: 'thanh-tri', name: 'Thành trì', color: '#7d776e', icon: 'castle', order: 5 },
 ];
 
 const P = (p: Partial<ParticleDef> & Pick<ParticleDef, 'id' | 'name'>): ParticleDef => ({

@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowLeft, Bell, Check, Circle, Coins, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -34,7 +35,7 @@ export function UserList() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="font-display text-2xl">👥 Người dùng</h1>
+        <h1 className="font-display text-2xl"><Users /> Người dùng</h1>
         <span className="text-sm opacity-60">{data ? `${data.users.length} tài khoản` : ''}</span>
         <select className="field ml-auto w-36" value={role} onChange={(e) => setRole(e.target.value === '' ? '' : (Number(e.target.value) as Role))}>
           <option value="">Mọi quyền</option>
@@ -79,7 +80,7 @@ export function UserList() {
                 <td className="px-2 py-1">{u.fcmTokens.length}</td>
                 <td className="px-2 py-1">{u.disabled ? <span className="font-bold text-red-team">Khoá</span> : 'Hoạt động'}</td>
                 <td className="px-2 py-1 text-xs" title={`Hoạt động gần nhất: ${fmt(u.lastActiveAt)}`}>
-                  {isOnline(u, data!.now) ? <span className="font-bold text-green-700">● Online</span> : <span className="opacity-60">○ Offline</span>}
+                  {isOnline(u, data!.now) ? <span className="font-bold text-green-700"><Circle className="size-2 fill-current" /> Online</span> : <span className="opacity-60"><Circle className="size-2" /> Offline</span>}
                 </td>
                 <td className="px-2 py-1 text-xs">{fmt(u.lastLoginAt)}</td>
               </tr>
@@ -188,7 +189,7 @@ export function UserEditor({ uid }: { uid: string }) {
     <div className="flex max-w-2xl flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/admin/users" className="text-sm underline">
-          ← Người dùng
+          <ArrowLeft /> Người dùng
         </Link>
         <h1 className="font-display text-2xl">{isNew ? 'Tạo người dùng' : (user?.email ?? uid)}</h1>
         {user && <RoleBadge role={user.role} />}
@@ -248,7 +249,7 @@ export function UserEditor({ uid }: { uid: string }) {
 
       {user && (
         <section className="panel flex flex-col gap-2 p-4">
-          <h2 className="font-display text-sm">🔔 Gửi thông báo FCM ({user.fcmTokens.length} thiết bị)</h2>
+          <h2 className="font-display text-sm"><Bell /> Gửi thông báo FCM ({user.fcmTokens.length} thiết bị)</h2>
           <input className="field" placeholder="Tiêu đề" maxLength={120} value={push.title} onChange={(e) => setPush((p) => ({ ...p, title: e.target.value }))} />
           <textarea className="field" rows={3} placeholder="Nội dung" maxLength={1000} value={push.body} onChange={(e) => setPush((p) => ({ ...p, body: e.target.value }))} />
           <button className="btn self-start" disabled={busy || !push.title.trim() || !user.fcmTokens.length} onClick={() => void notify()}>
@@ -314,7 +315,7 @@ function WalletPanel({ uid, editable }: { uid: string; editable: boolean }) {
   const p = wallet?.player;
   return (
     <section className="panel flex flex-col gap-2 p-4">
-      <h2 className="font-display text-sm">💰 Ví coin & bộ sưu tập</h2>
+      <h2 className="font-display text-sm"><Coins /> Ví coin & bộ sưu tập</h2>
       {p ? (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
           <dt className="opacity-60">Coin</dt>
@@ -322,14 +323,14 @@ function WalletPanel({ uid, editable }: { uid: string; editable: boolean }) {
           <dt className="opacity-60">Lính đã mua</dt>
           <dd>{p.unlocked.length ? p.unlocked.join(', ') : '—'}</dd>
           <dt className="opacity-60">Sao</dt>
-          <dd>{Object.entries(p.stars).map(([id, star]) => `${id} ${star}★`).join(', ') || '—'}</dd>
+          <dd>{Object.entries(p.stars).map(([id, star]) => `${id} ${star} sao`).join(', ') || '—'}</dd>
           <dt className="opacity-60">Thẻ</dt>
           <dd>{Object.values(p.cards).reduce((a, b) => a + b, 0)} thẻ / {Object.keys(p.cards).length} loại</dd>
           <dt className="opacity-60">Hộp hằng ngày gần nhất</dt>
           <dd>{p.dailyDay ?? '—'}</dd>
           <dt className="opacity-60">Tuần điểm danh</dt>
           <dd>
-            {p.weekStart ?? '—'} {p.weekClaims.map((c) => (c ? '✔' : '✕')).join(' ')}
+            {p.weekStart ?? '—'} {p.weekClaims.map((c, i) => (c ? <Check key={i} /> : <X key={i} />))}
           </dd>
         </dl>
       ) : (
@@ -373,7 +374,7 @@ function WalletPanel({ uid, editable }: { uid: string; editable: boolean }) {
                   <td className={`text-right font-bold ${l.coins < 0 ? 'text-red-team' : 'text-green-700'}`}>{l.coins > 0 ? '+' : ''}{formatCoins(l.coins)}</td>
                   <td className="text-right">{formatCoins(l.balance)}</td>
                   <td>
-                    {[l.unitId && `${l.unitId}${l.star ? ` → ${l.star}★` : ''}`, l.cards && Object.entries(l.cards).map(([id, n]) => `${id} ${n > 0 ? '+' : ''}${n} thẻ`).join(', '), l.note, l.by && `bởi ${l.by}`].filter(Boolean).join(' · ')}
+                    {[l.unitId && `${l.unitId}${l.star ? ` → ${l.star} sao` : ''}`, l.cards && Object.entries(l.cards).map(([id, n]) => `${id} ${n > 0 ? '+' : ''}${n} thẻ`).join(', '), l.note, l.by && `bởi ${l.by}`].filter(Boolean).join(' · ')}
                   </td>
                 </tr>
               ))}

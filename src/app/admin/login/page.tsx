@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -30,7 +31,7 @@ export default function LoginPage() {
             Đăng nhập tài khoản khác
           </button>
           <Link href="/" className="text-sm underline">
-            ← Về game
+            <ArrowLeft /> Về game
           </Link>
         </div>
       ) : (

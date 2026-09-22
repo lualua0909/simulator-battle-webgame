@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowLeft, ArrowRight, Castle, ChevronRight, Eye, Flame, Glasses, MapIcon, Pause, PersonStanding, Play, SkipForward, Square, Star, Swords, Timer, User, Volume2, VolumeX, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
@@ -17,17 +18,17 @@ export const SIDE_TEXT: Record<Side, string> = { blue: 'text-blue-team', red: 't
 export type ModeChoice = 'battle' | Side;
 
 export function ModePicker(props: { mode: 'bot' | 'local' | 'online'; value: ModeChoice; onChange(v: ModeChoice): void; disabled?: boolean }) {
-  const options: Array<{ value: ModeChoice; label: string; hint: string }> =
+  const options: Array<{ value: ModeChoice; label: ReactNode; hint: string }> =
     props.mode === 'bot'
       ? [
-          { value: 'battle', label: '⚔ Đại chiến', hint: 'hai đạo quân lao vào nhau' },
-          { value: 'blue', label: '🏰 Bạn thủ thành', hint: 'xây tường, tháp; máy công thành' },
-          { value: 'red', label: '🔥 Bạn công thành', hint: 'máy xây thành, bạn phá' },
+          { value: 'battle', label: <><Swords /> Đại chiến</>, hint: 'hai đạo quân lao vào nhau' },
+          { value: 'blue', label: <><Castle /> Bạn thủ thành</>, hint: 'xây tường, tháp; máy công thành' },
+          { value: 'red', label: <><Flame /> Bạn công thành</>, hint: 'máy xây thành, bạn phá' },
         ]
       : [
-          { value: 'battle', label: '⚔ Đại chiến', hint: 'hai đạo quân lao vào nhau' },
-          { value: 'blue', label: '🏰 Thủ thành: Xanh thủ', hint: 'Đỏ công thành' },
-          { value: 'red', label: '🏰 Thủ thành: Đỏ thủ', hint: 'Xanh công thành' },
+          { value: 'battle', label: <><Swords /> Đại chiến</>, hint: 'hai đạo quân lao vào nhau' },
+          { value: 'blue', label: <><Castle /> Thủ thành: Xanh thủ</>, hint: 'Đỏ công thành' },
+          { value: 'red', label: <><Castle /> Thủ thành: Đỏ thủ</>, hint: 'Xanh công thành' },
         ];
   return (
     <div className="grid gap-2 sm:grid-cols-3">
@@ -55,7 +56,7 @@ export function CinematicBars({ title, winner, onSkip }: { title?: string; winne
       <div className="cine-bar absolute inset-x-0 top-0 h-[9vh] origin-top bg-black/85" />
       <div className="cine-bar absolute inset-x-0 bottom-0 flex h-[9vh] origin-bottom items-center justify-end bg-black/85 px-4">
         <button className="pointer-events-auto rounded-lg border-2 border-white/70 px-3 py-1 text-sm font-bold text-white hover:bg-white/15" onClick={onSkip}>
-          Bỏ qua ▸
+          Bỏ qua <ChevronRight />
         </button>
       </div>
       {title && <div className={`cine-title absolute inset-x-0 top-[13vh] text-center font-display text-5xl sm:text-6xl ${color}`}>{title}</div>}
@@ -197,7 +198,7 @@ export function SetupPanel(props: {
               <div className="h-8 rounded-md" style={{ background: `linear-gradient(180deg, ${m.skyTop}, ${m.skyBottom} 55%, ${m.grassColor} 56%, ${m.dirtColor})` }} />
               <div className="mt-1 font-bold">{m.name}</div>
               <div className="text-xs opacity-70">
-                {m.size}m {m.river.enabled ? '· có sông' : ''} {m.defenseDepth > 0 ? '· 🏰' : ''}
+                {m.size}m {m.river.enabled ? '· có sông' : ''} {m.defenseDepth > 0 && <>· <Castle /></>}
               </div>
             </button>
           ))}
@@ -248,10 +249,10 @@ export function SetupPanel(props: {
       )}
       <div className="flex justify-between">
         <Link href="/" className="btn">
-          ← Menu
+          <ArrowLeft /> Menu
         </Link>
         <button className="btn btn-gold text-lg" onClick={props.onStart}>
-          Vào xếp quân →
+          Vào xếp quân <ArrowRight />
         </button>
       </div>
     </div>
@@ -277,10 +278,10 @@ export function OnlineLobby(props: {
         <h2 className="font-display text-2xl">Đấu online</h2>
         <p className="text-sm">Cần đăng nhập để đấu online. Kết quả trận được lưu theo tài khoản.</p>
         <button className="btn btn-gold" disabled={props.authLoading} onClick={props.onSignIn}>
-          👤 Đăng nhập
+          <User /> Đăng nhập
         </button>
         <Link href="/" className="text-sm underline">
-          ← Menu
+          <ArrowLeft /> Menu
         </Link>
       </div>
     );
@@ -309,7 +310,7 @@ export function OnlineLobby(props: {
         </button>
       </div>
       <Link href="/" className="text-sm underline">
-        ← Menu
+        <ArrowLeft /> Menu
       </Link>
     </div>
   );
@@ -377,13 +378,13 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
         <input className="field w-24" type="number" step={100} disabled={!host} value={room.budget} onChange={(e) => set({ budget: Math.max(100, Number(e.target.value) || 100) })} />
       </div>
       <select className="field" disabled={!host} value={room.defense ?? 'battle'} onChange={(e) => set({ defense: e.target.value === 'battle' ? null : (e.target.value as Side) })}>
-        <option value="battle">⚔ Đại chiến</option>
-        <option value="blue">🏰 Thủ thành: Xanh thủ</option>
-        <option value="red">🏰 Thủ thành: Đỏ thủ</option>
+        <option value="battle">Đại chiến</option>
+        <option value="blue">Thủ thành: Xanh thủ</option>
+        <option value="red">Thủ thành: Đỏ thủ</option>
       </select>
       <label className="flex items-center gap-2" title="Lính đã nâng sao được cộng máu và sát thương theo sao của từng người">
         <input type="checkbox" disabled={!host} checked={room.useStars} onChange={(e) => set({ useStars: e.target.checked })} />
-        ⭐ Tính sao nâng cấp của lính
+        <Star /> Tính sao nâng cấp của lính
       </label>
       {!host && <p className="text-xs opacity-60">Chủ phòng (Xanh) chọn bản đồ, ngân sách, chế độ và có tính sao hay không.</p>}
     </div>
@@ -453,10 +454,10 @@ export function BattleHud(props: {
           className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-display tabular-nums leading-none text-white sm:px-2.5 sm:text-lg ${left < 30 ? 'bg-red-team' : 'bg-ink'}`}
           title={props.defense ? `Thời gian còn lại · Phe ${SIDE_NAME[props.defense]} thủ thành` : 'Thời gian còn lại'}
         >
-          ⏱ {mm}:{ss}
+          <Timer /> {mm}:{ss}
           {props.defense && (
             <span className="text-[11px] leading-none" title={`Phe ${SIDE_NAME[props.defense]} thủ`}>
-              🏰
+              <Castle />
             </span>
           )}
         </span>
@@ -467,62 +468,53 @@ export function BattleHud(props: {
           ))}
         </div>
       </div>
-      <div className="panel pointer-events-auto absolute bottom-2 right-2 flex max-w-[64vw] flex-wrap items-center justify-end gap-1 p-1.5 sm:bottom-3 sm:right-3 sm:max-w-none sm:p-2">
-        <button className={`btn px-3 py-1 ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title="Bật/tắt âm thanh">
-          {props.muted ? '🔇' : '🔊'}
+      <div className="panel pointer-events-auto absolute bottom-2 left-1/2 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 p-1 sm:bottom-3">
+        <HelpHint text="Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE · V: đổi góc nhìn · N: lính kế · Bấm vào lính để theo lính đó" />
+        {VIEW_BUTTONS.map((b) => (
+          <button key={b.mode} className={`btn btn-icon ${props.view.mode === b.mode ? 'btn-gold' : ''}`} onClick={() => props.onView(b.mode)} title={b.title} aria-label={b.label}>
+            <b.icon />
+          </button>
+        ))}
+        {props.view.mode !== 'overview' && (
+          <button className="btn btn-icon" onClick={props.onNextUnit} title={`Theo lính kế tiếp (N)${props.view.unit ? ` · đang theo: ${props.view.unit}` : ''}`} aria-label="Lính kế">
+            <SkipForward />
+          </button>
+        )}
+        {props.onVR && (
+          <button className={`btn btn-icon ${props.view.vr ? 'btn-gold' : ''}`} onClick={props.onVR} title={props.view.vr ? 'Thoát VR' : 'Chơi bằng kính VR (Quest)'} aria-label="VR">
+            <Glasses />
+          </button>
+        )}
+        <div className="mx-0.5 h-6 w-px shrink-0 bg-ink/15" />
+        <button className={`btn btn-icon ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title="Bật/tắt âm thanh">
+          {props.muted ? <VolumeX /> : <Volume2 />}
         </button>
         {props.onPause && (
-          <button className={`btn px-3 py-1 ${props.paused ? 'btn-gold' : ''}`} onClick={props.onPause} title="Space">
-            {props.paused ? '▶' : '❚❚'}
+          <button className={`btn btn-icon ${props.paused ? 'btn-gold' : ''}`} onClick={props.onPause} title="Space">
+            {props.paused ? <Play /> : <Pause />}
           </button>
         )}
         {props.onSpeed &&
           [0.25, 1, 2, 4].map((s, i) => (
-            <button key={s} className={`btn px-2 py-1 text-sm ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed?.(s)} title={`Phím ${i + 1}`}>
-              {s}×
+            <button key={s} className={`btn btn-icon text-xs ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed?.(s)} title={`${s}× · Phím ${i + 1}`}>
+              {s === 0.25 ? '¼' : s}×
             </button>
           ))}
-        <button className="btn ml-2 px-2 py-1 text-sm" onClick={props.onStop}>
-          {props.stopLabel}
+        <div className="mx-0.5 h-6 w-px shrink-0 bg-ink/15" />
+        <button className="btn btn-icon btn-red" onClick={props.onStop} title={props.stopLabel} aria-label={props.stopLabel}>
+          <Square />
         </button>
       </div>
-      <ViewBar view={props.view} onView={props.onView} onNextUnit={props.onNextUnit} onVR={props.onVR} />
-      <HelpHint className="absolute bottom-3 left-3" text="Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE · V: đổi góc nhìn · N: lính kế · Bấm vào lính để theo lính đó" />
     </>
   );
 }
 
-const VIEW_BUTTONS: { mode: ViewMode; icon: string; label: string; title: string }[] = [
-  { mode: 'overview', icon: '🗺', label: 'Toàn cảnh', title: 'Toàn cảnh (V)' },
-  { mode: 'third', icon: '👤', label: 'Sau lưng', title: 'Góc nhìn thứ 3: đứng sau lưng lính (V)' },
-  { mode: 'first', icon: '👁', label: 'Mắt lính', title: 'Góc nhìn thứ 1: nhìn bằng mắt lính (V)' },
-  { mode: 'second', icon: '🧍', label: 'Trước mặt', title: 'Góc nhìn thứ 2: đứng trước mặt lính, nhìn nó lao tới (V)' },
+const VIEW_BUTTONS: { mode: ViewMode; icon: LucideIcon; label: string; title: string }[] = [
+  { mode: 'overview', icon: MapIcon, label: 'Toàn cảnh', title: 'Toàn cảnh (V)' },
+  { mode: 'third', icon: User, label: 'Sau lưng', title: 'Góc nhìn thứ 3: đứng sau lưng lính (V)' },
+  { mode: 'first', icon: Eye, label: 'Mắt lính', title: 'Góc nhìn thứ 1: nhìn bằng mắt lính (V)' },
+  { mode: 'second', icon: PersonStanding, label: 'Trước mặt', title: 'Góc nhìn thứ 2: đứng trước mặt lính, nhìn nó lao tới (V)' },
 ];
-
-/** Camera view switcher: overview or following one soldier, plus the VR entry on a headset. */
-function ViewBar(props: { view: ViewState; onView(mode: ViewMode): void; onNextUnit(): void; onVR?(): void }) {
-  const { view } = props;
-  return (
-    <div className="panel pointer-events-auto absolute left-2 top-14 flex max-w-[calc(100vw-1rem)] flex-wrap items-center gap-1 p-1.5 sm:bottom-14 sm:left-3 sm:top-auto sm:p-2">
-      {VIEW_BUTTONS.map((b) => (
-        <button key={b.mode} className={`btn px-2 py-1 text-sm ${view.mode === b.mode ? 'btn-gold' : ''}`} onClick={() => props.onView(b.mode)} title={b.title}>
-          {b.icon}
-          <span className="ml-1 hidden sm:inline">{b.label}</span>
-        </button>
-      ))}
-      {view.mode !== 'overview' && (
-        <button className="btn px-2 py-1 text-sm" onClick={props.onNextUnit} title="Theo lính kế tiếp (N)">
-          ▶ <span className="max-w-[8rem] truncate">{view.unit ?? 'Lính kế'}</span>
-        </button>
-      )}
-      {props.onVR && (
-        <button className={`btn px-2 py-1 text-sm ${view.vr ? 'btn-gold' : ''}`} onClick={props.onVR} title="Chơi bằng kính VR (Quest)">
-          🥽 {view.vr ? 'Thoát VR' : 'VR'}
-        </button>
-      )}
-    </div>
-  );
-}
 
 function TeamBar({ side, alive, total, flip }: { side: Side; alive: number; total: number; flip: boolean }) {
   const pct = total > 0 ? Math.max(0, Math.min(100, (alive / total) * 100)) : 0;
@@ -594,7 +586,7 @@ export function Handoff({ onContinue }: { onContinue(): void }) {
         <div className="font-display text-4xl">Tới lượt người chơi 2</div>
         <p className="max-w-sm">Người chơi 1 hãy quay đi nhé! Người chơi 2 xếp quân phe Đỏ.</p>
         <button className="btn text-lg" onClick={onContinue}>
-          Tôi là người chơi 2 →
+          Tôi là người chơi 2 <ArrowRight />
         </button>
       </div>
     </div>

@@ -4,6 +4,7 @@
 // the draft asset renders (the CMS preview, the workshop viewer, thumbnails and battles all
 // read the same `glb.tint` record). Solid packs take a flat hex; textured packs repaint the
 // `from` hue family toward `to`, keeping shading and leaving skin/trim/hair alone.
+import { ArrowRight, Palette } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -147,7 +148,7 @@ export default function TintEditor({ glbUrl, tint, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border-2 border-ink/20 bg-white/60 p-2 text-xs">
-      <b>🎨 Màu model (xem thử trực tiếp ở khung bên cạnh)</b>
+      <b><Palette /> Màu model (xem thử trực tiếp ở khung bên cạnh)</b>
       {!materials && !failed && <p className="opacity-60">Đang đọc vật liệu trong file…</p>}
       {failed && <p className="font-bold text-red-team">Không đọc được file — kiểm tra lại URL upload.</p>}
       {materials?.map((m) => {
@@ -178,7 +179,7 @@ export default function TintEditor({ glbUrl, tint, onChange }: Props) {
             {mode === 'repaint' && typeof rule === 'object' && (
               <span className="flex items-center gap-1" title="Đổi mọi pixel cùng họ màu với «từ» sang màu «sang»; da, râu, viền không bị ảnh hưởng">
                 <input type="color" value={rule.from} onChange={(e) => setRule(m.name, { ...rule, from: e.target.value })} title="Từ màu này" />
-                <span>→</span>
+                <ArrowRight />
                 <input type="color" value={rule.to} onChange={(e) => setRule(m.name, { ...rule, to: e.target.value })} title="Sang màu này" />
               </span>
             )}

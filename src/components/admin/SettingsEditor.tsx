@@ -1,5 +1,6 @@
 'use client';
 
+import { Check, Settings as SettingsIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ARMOR_CLASSES, DAMAGE_TYPES, type Settings } from '@/shared/schema';
 import { IS_VERCEL } from '@/shared/deploy';
@@ -34,7 +35,7 @@ export default function SettingsEditor() {
     try {
       setErrors({});
       setSettings(await api<Settings>('/api/admin/settings', { method: 'PUT', body: JSON.stringify(settings) }));
-      setStatus({ ok: true, text: 'Đã lưu ✓' });
+      setStatus({ ok: true, text: 'Đã lưu' });
       await reload();
     } catch (e) {
       if (e instanceof ApiError) {
@@ -51,12 +52,16 @@ export default function SettingsEditor() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <h1 className="font-display text-2xl">⚙️ Cài đặt chung</h1>
+        <h1 className="font-display text-2xl"><SettingsIcon /> Cài đặt chung</h1>
         <button className="btn btn-gold ml-auto px-4 py-1" onClick={() => void save()}>
           Lưu
         </button>
       </div>
-      {status && <div className={`rounded-lg border-2 px-3 py-2 text-sm ${status.ok ? 'border-green-700 bg-green-50' : 'border-red-team bg-red-50'}`}>{status.text}</div>}
+      {status && (
+        <div className={`rounded-lg border-2 px-3 py-2 text-sm ${status.ok ? 'border-green-700 bg-green-50' : 'border-red-team bg-red-50'}`}>
+          {status.ok && <Check />} {status.text}
+        </div>
+      )}
       <div className="grid items-start gap-3 xl:grid-cols-2">
         <div className="panel p-4">
           <DocForm fields={FIELDS} doc={settings as unknown as Record<string, unknown>} onChange={(d) => setSettings(d as unknown as Settings)} bundle={bundle} errors={errors} />

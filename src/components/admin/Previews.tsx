@@ -2,6 +2,7 @@
 
 // Live previews for the CMS editor. They consume the unsaved draft, so every tweak is
 // visible before saving.
+import { Dices, Swords } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
@@ -124,7 +125,7 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
         <div className="flex gap-1">
           {!arena && <AnimButtons anim={anim} setAnim={setAnim} />}
           <button type="button" className={`btn px-2 py-0.5 text-xs ${arena ? 'btn-gold' : ''}`} onClick={() => setArena((a) => !a)} title="Lính đánh hình nộm bằng đòn cơ bản và kỹ năng (bản nháp chưa lưu)">
-            ⚔️ Đấu thử
+            <Swords /> Đấu thử
           </button>
         </div>
       }
@@ -488,7 +489,7 @@ export function BotTester({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) {
       title="Thử bot xếp quân"
       tools={
         <button type="button" className="btn px-2 py-0.5 text-xs" onClick={() => setSeed((s) => s + 1)}>
-          🎲 Lần khác
+          <Dices /> Lần khác
         </button>
       }
     >

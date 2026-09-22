@@ -52,7 +52,7 @@ export const factionSchema = z.object({
   id: idSchema,
   name,
   color: hex,
-  icon: z.string().max(8).default('⚔️'),
+  icon: z.string().max(32).default('swords'),
   order: z.number().int().default(0),
 });
 

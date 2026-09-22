@@ -1,5 +1,6 @@
 'use client';
 
+import { ArrowLeft, X } from 'lucide-react';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 import { authErrorMessage, firebaseAuth, googleProvider } from '@/lib/firebase';
@@ -95,7 +96,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
         <div className="mb-4 flex items-center gap-2">
           {view === 'forgot' && (
             <button type="button" className="rounded-lg px-2 py-1 text-lg font-bold hover:bg-white" onClick={() => go('signin')} aria-label="Quay lại">
-              ←
+              <ArrowLeft />
             </button>
           )}
           <h2 id="auth-title" className="font-display text-2xl">
@@ -103,7 +104,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
           </h2>
           {onClose && (
             <button type="button" className="ml-auto rounded-lg px-2 py-1 text-xl font-bold hover:bg-white" onClick={onClose} aria-label="Đóng">
-              ✕
+              <X />
             </button>
           )}
         </div>

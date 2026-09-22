@@ -2,6 +2,7 @@
 
 // CMS quản lý giao dịch nạp xu: 3 tab Đang chờ / Đã xác nhận / Đã huỷ.
 // Duyệt = cộng xu cho user ngay trong transaction (chống bấm 2 lần); huỷ = không cộng xu.
+import { Check, CreditCard, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { formatTopupCoins, formatVnd, TOPUP_STATUS_LABELS, type TopupOrder, type TopupStatus } from '@/shared/topup';
 import { api, ApiError } from './api';
@@ -51,7 +52,7 @@ export default function TopupsAdmin() {
     setMsg(null);
     try {
       await api(`/api/admin/topups/${order.id}`, { method: 'POST', body: JSON.stringify({ action, note }) });
-      setMsg(action === 'confirm' ? `Đã duyệt ${order.content}, cộng ${formatTopupCoins(order.coins)}. ✓` : `Đã huỷ ${order.content}.`);
+      setMsg(action === 'confirm' ? `Đã duyệt ${order.content}, cộng ${formatTopupCoins(order.coins)}.` : `Đã huỷ ${order.content}.`);
       await load(tab);
     } catch (e) {
       setMsg(e instanceof ApiError ? e.message : String(e));
@@ -63,10 +64,10 @@ export default function TopupsAdmin() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="font-display text-2xl">💳 Giao dịch nạp xu</h1>
+        <h1 className="font-display text-2xl"><CreditCard /> Giao dịch nạp xu</h1>
         <span className="text-sm opacity-60">duyệt = tự động cộng xu cho user</span>
         <button className="btn ml-auto px-3 py-1 text-sm" onClick={() => void load(tab)}>
-          ↻ Tải lại
+          <RefreshCw /> Tải lại
         </button>
       </div>
 
@@ -118,7 +119,7 @@ export default function TopupsAdmin() {
                   <td className="px-2 py-1 text-xs">
                     {o.decidedBy ? (
                       <span>
-                        {o.status === 'confirmed' ? '✓' : '✕'} bởi <span className="font-mono">{o.decidedBy.slice(0, 8)}</span>
+                        {o.status === 'confirmed' ? <Check /> : <X />} bởi <span className="font-mono">{o.decidedBy.slice(0, 8)}</span>
                         <br />
                         {fmt(o.decidedAt)}
                       </span>
@@ -131,10 +132,10 @@ export default function TopupsAdmin() {
                     <td className="px-2 py-1">
                       <div className="flex justify-end gap-1">
                         <button className="btn btn-gold px-2 py-0.5 text-xs" disabled={busyId === o.id} onClick={() => void decide(o, 'confirm')}>
-                          {busyId === o.id ? '…' : '✓ Duyệt + cộng xu'}
+                          {busyId === o.id ? '…' : <><Check /> Duyệt + cộng xu</>}
                         </button>
                         <button className="btn btn-red px-2 py-0.5 text-xs" disabled={busyId === o.id} onClick={() => void decide(o, 'cancel')}>
-                          ✕ Huỷ
+                          <X /> Huỷ
                         </button>
                       </div>
                     </td>

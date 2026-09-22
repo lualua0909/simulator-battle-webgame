@@ -278,6 +278,8 @@ export class BattleEngine {
       // Real metres in the headset: controllers held close to the face must not clip.
       this.camera.near = 0.05;
       this.camera.updateProjectionMatrix();
+      // Start beside a soldier at life size; the sandbox table stays one A/X press or grip away.
+      this.setViewMode('third');
       this.xrRecenter = 10;
       this.xrTurn = 0;
       this.tablePlaced = false;
@@ -910,9 +912,8 @@ export class BattleEngine {
       this.xrTurn = 0;
       this.xrYaw = this.view.heading;
     }
-    if (this.xrRecenter > 0) {
+    if (this.xrRecenter > 0 && this.headPose(this.headCalib)) {
       this.xrRecenter--;
-      this.headCalib.copy(this.camera.position);
       this.tablePlaced = false;
     }
     if (u) {
@@ -931,7 +932,7 @@ export class BattleEngine {
     if (this.tablePlaced || !this.terrain) return;
     const t = this.terrain;
     this.tablePlaced = true;
-    if (!this.tableScale) this.tableScale = t.size / 2.5;
+    if (!this.tableScale) this.tableScale = t.size / 4.5;
     const scale = this.tableScale;
     // Stand just outside the own deployment edge, facing the map centre.
     const s = Math.sign(this.zoneCenter(this.director.side).x) || 1;
@@ -941,6 +942,19 @@ export class BattleEngine {
     rig.rotation.set(0, face, 0);
     const head = this.xrA.set(this.headCalib.x, 0, this.headCalib.z).multiplyScalar(scale).applyAxisAngle(THREE.Object3D.DEFAULT_UP, face);
     rig.position.set(x - head.x, this.tableFloor(scale, t.height(s * t.half, 0)), -head.z);
+  }
+
+  /**
+   * The head's pose in the rig this frame, straight from the XR frame. `camera.position` lags a frame and still
+   * holds the desktop camera until the headset reports its first pose, which would throw the rig far off.
+   */
+  private headPose(out: THREE.Vector3): boolean {
+    const ref = this.renderer.xr.getReferenceSpace();
+    const pose = ref && this.renderer.xr.getFrame()?.getViewerPose(ref);
+    if (!pose) return false;
+    const p = pose.transform.position;
+    out.set(p.x, p.y, p.z);
+    return true;
   }
 
   /** Rig height for a table scale: the ground sits ~0.9 m above the real floor, and on the floor at life size. */

@@ -1,5 +1,6 @@
 'use client';
 
+import { Sparkle } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 
 // Tiêu đề game hiệu ứng khối 3D nổi: chữ xếp lớp text-shadow tạo chiều sâu,
@@ -45,7 +46,7 @@ export default function GameTitle() {
           className="title-spark"
           style={{ left: s.left, top: s.top, fontSize: s.size, animationDelay: s.delay, animationDuration: s.dur }}
         >
-          ✦
+          <Sparkle className="fill-current" />
         </span>
       ))}
       <div

@@ -1,3 +1,4 @@
+import { ArrowRight, Bot, Gamepad2, Gift, Globe, Palette, Shield, Star, Swords, Trophy, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import WorldChat from '@/components/chat/WorldChat';
 import GameTitle from '@/components/home/GameTitle';
@@ -13,7 +14,7 @@ const MODES = [
     href: '/play?mode=bot',
     title: 'Đấu với máy',
     desc: 'Chọn đối thủ AI — từ Dễ tới Huyền thoại biết khắc chế đội hình của bạn.',
-    icon: '🤖',
+    icon: Bot,
     ribbon: 'PHỔ BIẾN NHẤT',
     ribbonCls: 'bg-[#ffc233] text-[#2d3232]',
     ring: 'hover:shadow-[#ffc233]/40',
@@ -24,7 +25,7 @@ const MODES = [
     href: '/play?mode=local',
     title: '2 người 1 máy',
     desc: 'Lần lượt xếp quân bí mật rồi xem hai đạo quân lao vào nhau.',
-    icon: '🎮',
+    icon: Gamepad2,
     ribbon: 'VUI CÙNG BẠN BÈ',
     ribbonCls: 'bg-[#2f6fe0] text-white',
     ring: 'hover:shadow-[#2f6fe0]/40',
@@ -35,7 +36,7 @@ const MODES = [
     href: '/play?mode=online',
     title: 'Đấu online',
     desc: 'Tạo phòng, gửi mã cho bạn bè, trận đấu mô phỏng đồng bộ trên hai máy.',
-    icon: '🌐',
+    icon: Globe,
     online: true,
     ribbon: 'THỬ THÁCH THẬT',
     ribbonCls: 'bg-[#d8373a] text-white',
@@ -47,7 +48,7 @@ const MODES = [
     href: '/play?mode=ranked',
     title: 'Xếp hạng',
     desc: 'Tìm đối thủ ngang tài, leo 6 bậc từ Tân Binh tới Bậc Thầy, nhận thưởng cuối mùa.',
-    icon: '🏆',
+    icon: Trophy,
     online: true,
     ribbon: 'LEO HẠNG',
     ribbonCls: 'bg-[#7c3aed] text-white',
@@ -58,12 +59,19 @@ const MODES = [
 ].filter((m) => !(IS_VERCEL && m.online));
 
 const STEPS = [
-  { n: '01', icon: '🛡️', title: 'Xếp quân', desc: 'Kéo thả tướng low-poly lên bàn cờ, xoay đội hình theo ý bạn.' },
-  { n: '02', icon: '⚔️', title: 'Bấm bắt đầu', desc: 'AI điều khiển cả hai phe — không cần micro, chỉ cần chiến thuật.' },
-  { n: '03', icon: '🏆', title: 'Xem hỗn loạn', desc: 'Wobbly ragdoll lao vào nhau, phe còn đứng vững thắng trận.' },
+  { n: '01', icon: Shield, title: 'Xếp quân', desc: 'Kéo thả tướng low-poly lên bàn cờ, xoay đội hình theo ý bạn.' },
+  { n: '02', icon: Swords, title: 'Bấm bắt đầu', desc: 'AI điều khiển cả hai phe — không cần micro, chỉ cần chiến thuật.' },
+  { n: '03', icon: Trophy, title: 'Xem hỗn loạn', desc: 'Wobbly ragdoll lao vào nhau, phe còn đứng vững thắng trận.' },
 ];
 
-const TICKER = ['⚔️ XẾP QUÂN', '🤖 AI 4 CẤP ĐỘ', ...(IS_VERCEL ? [] : ['🌐 ONLINE REAL-TIME']), '🎨 XƯỞNG MÔ HÌNH', '🎁 QUÀ HẰNG NGÀY', ...(IS_VERCEL ? [] : ['🏆 BẢNG XẾP HẠNG'])];
+const TICKER: Array<[LucideIcon, string]> = [
+  [Swords, 'XẾP QUÂN'],
+  [Bot, 'AI 4 CẤP ĐỘ'],
+  ...(IS_VERCEL ? [] : [[Globe, 'ONLINE REAL-TIME'] as [LucideIcon, string]]),
+  [Palette, 'XƯỞNG MÔ HÌNH'],
+  [Gift, 'QUÀ HẰNG NGÀY'],
+  ...(IS_VERCEL ? [] : [[Trophy, 'BẢNG XẾP HẠNG'] as [LucideIcon, string]]),
+];
 
 export default function Home() {
   return (
@@ -73,7 +81,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2">
           <Link href="/" className="flex items-center gap-2">
             <span className="bounce-soft inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#2d3232] bg-gradient-to-b from-[#ffd76a] to-[#f59e0b] text-2xl shadow-[0_3px_0_0_#2d3232]">
-              ⚔️
+              <Swords />
             </span>
             <span className="leading-none">
               <span className="block text-lg tracking-wide">MINI BATTLE</span>
@@ -103,16 +111,22 @@ export default function Home() {
         <HeroBanner>
           <div className="relative mx-auto flex max-w-5xl flex-col items-center px-4 pb-40 pt-10 text-center sm:pb-48">
             <span className="reward-pop inline-flex items-center gap-2 rounded-full border-2 border-[#2d3232] bg-[#ffc233] px-4 py-1 shadow-[0_4px_0_0_#2d3232]">
-              ⭐ MÙA GIẢI MỚI — TƯỚNG WOBBLY ĐÃ SẴN SÀNG ⭐
+              <Star /> MÙA GIẢI MỚI — TƯỚNG WOBBLY ĐÃ SẴN SÀNG <Star />
             </span>
             <GameTitle />
             <p className="mt-2 max-w-xl rounded-2xl border-2 border-white/40 bg-black/25 px-4 py-2 text-lg text-white">
               Mô phỏng đại chiến low-poly: xếp quân, bấm bắt đầu, xem hỗn loạn.
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[#2d3232]">
-              {(IS_VERCEL ? ['⚔️ 2 chế độ chơi', '🤖 AI 4 cấp độ'] : ['⚔️ 3 chế độ chơi', '🤖 AI 4 cấp độ', '🌐 Online real-time']).map((b) => (
+              {(
+                [
+                  [Swords, IS_VERCEL ? '2 chế độ chơi' : '3 chế độ chơi'],
+                  [Bot, 'AI 4 cấp độ'],
+                  ...(IS_VERCEL ? [] : [[Globe, 'Online real-time']]),
+                ] as Array<[LucideIcon, string]>
+              ).map(([Icon, b]) => (
                 <span key={b} className="rounded-full border-2 border-[#2d3232] bg-white px-3 py-1 shadow-[0_3px_0_0_#2d3232]">
-                  {b}
+                  <Icon /> {b}
                 </span>
               ))}
             </div>
@@ -123,9 +137,9 @@ export default function Home() {
       {/* ===== DẢI TICKER ===== */}
       <div className="overflow-hidden border-y-[3px] border-[#2d3232] bg-[#ffc233] py-2" id="tinh-nang" aria-hidden>
         <div className="marquee-track gap-8 pr-8">
-          {[...TICKER, ...TICKER].map((t, i) => (
+          {[...TICKER, ...TICKER].map(([Icon, t], i) => (
             <span key={i} className="whitespace-nowrap text-xl text-[#2d3232]">
-              {t} <span className="ml-6">•</span>
+              <Icon /> {t} <span className="ml-6">•</span>
             </span>
           ))}
         </div>
@@ -152,14 +166,14 @@ export default function Home() {
                 </span>
                 <span className={`flex items-center justify-center pb-6 pt-12 ${m.iconBg}`}>
                   <span className="bounce-soft inline-flex h-24 w-24 items-center justify-center rounded-full border-[3px] border-[#2d3232] bg-white text-6xl shadow-[0_5px_0_0_#2d3232]">
-                    {m.icon}
+                    <m.icon />
                   </span>
                 </span>
                 <span className="flex flex-1 flex-col gap-1 p-5 text-left">
                   <span className="text-2xl">{m.title}</span>
                   <span className="opacity-80">{m.desc}</span>
                   <span className={`mode-cta mt-3 inline-flex items-center gap-1 text-xl ${m.cta}`}>
-                    CHƠI NGAY <span aria-hidden>→</span>
+                    CHƠI NGAY <ArrowRight aria-hidden />
                   </span>
                 </span>
               </Link>
@@ -176,7 +190,7 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
             <h2 className="text-center text-4xl">
-              ⚔️ NHẬP CUỘC <span className="text-[#f59e0b]">TRONG 3 BƯỚC</span>
+              <Swords /> NHẬP CUỘC <span className="text-[#f59e0b]">TRONG 3 BƯỚC</span>
             </h2>
           </Reveal>
           <div className="mt-8 grid gap-6 sm:grid-cols-3">
@@ -186,7 +200,9 @@ export default function Home() {
                 <span className="absolute -top-5 left-1/2 inline-flex h-10 w-16 -translate-x-1/2 items-center justify-center rounded-full border-[3px] border-[#2d3232] bg-[#5b2ee5] text-lg text-white">
                   {s.n}
                 </span>
-                <div className="text-5xl">{s.icon}</div>
+                <div className="text-5xl">
+                  <s.icon />
+                </div>
                 <h3 className="mt-2 text-2xl">{s.title}</h3>
                 <p className="mt-1 opacity-80">{s.desc}</p>
               </div>
@@ -204,13 +220,13 @@ export default function Home() {
           <p className="mt-2 text-lg text-white">Triệu hồi đội quân wobbly của bạn — miễn phí, không cần cài đặt.</p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <Link href="/play?mode=bot" className="btn btn-gold px-8 py-3 text-2xl">
-              ⚔️ CHƠI NGAY
+              <Swords /> CHƠI NGAY
             </Link>
           </div>
         </Reveal>
       </section>
       <footer className="border-t-[3px] border-[#2d3232] bg-[#14102e] py-5 text-center text-white/80">
-        <p>⚔️ MINI BATTLE SIMULATOR — xếp quân • mô phỏng • hỗn loạn vui vẻ</p>
+        <p><Swords /> MINI BATTLE SIMULATOR — xếp quân • mô phỏng • hỗn loạn vui vẻ</p>
       </footer>
 
       <WorldChat />

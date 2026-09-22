@@ -1,5 +1,6 @@
 'use client';
 
+import { Check, FlaskConical } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -77,7 +78,7 @@ export default function DocEditor({ collection, id, from, modelId }: { collectio
       const saved = await api<Doc>(isNew ? `/api/admin/${collection}` : `/api/admin/${collection}/${id}`, { method: isNew ? 'POST' : 'PUT', body: JSON.stringify(doc) });
       setDoc(saved);
       setDirty(false);
-      setStatus({ ok: true, text: 'Đã lưu ✓ — game sẽ dùng dữ liệu mới ở trận tiếp theo.' });
+      setStatus({ ok: true, text: 'Đã lưu — game sẽ dùng dữ liệu mới ở trận tiếp theo.' });
       await reload();
       if (isNew) router.replace(`/admin/c/${collection}/${String(saved.id)}`);
     } catch (e) {
@@ -140,7 +141,9 @@ export default function DocEditor({ collection, id, from, modelId }: { collectio
       </div>
       {status && (
         <div className={`rounded-lg border-2 px-3 py-2 text-sm ${status.ok ? 'border-green-700 bg-green-50' : 'border-red-team bg-red-50'}`}>
-          <b>{status.text}</b>
+          <b>
+            {status.ok && <Check />} {status.text}
+          </b>
           {status.list && (
             <ul className="mt-1 list-disc pl-5">
               {status.list.map((l) => (
@@ -153,7 +156,7 @@ export default function DocEditor({ collection, id, from, modelId }: { collectio
       {collection === 'assets' && isSculpted(doc) && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink bg-gold/30 px-3 py-2 text-sm">
           <span>
-            🧪 Asset đang dùng model img2threejs <b>{doc.sculpt.spec.name}</b> (v{doc.sculpt.version}). Các tham số procedural bên dưới chỉ có tác dụng khi hoàn tác.
+            <FlaskConical /> Asset đang dùng model img2threejs <b>{doc.sculpt.spec.name}</b> (v{doc.sculpt.version}). Các tham số procedural bên dưới chỉ có tác dụng khi hoàn tác.
           </span>
           <Link className="underline" href={`/models?asset=${String(doc.id)}`}>
             Mở trong Xưởng mô hình

@@ -4,7 +4,8 @@
 // a day left unclaimed shows as permanently missed for the rest of that week. This modal never
 // claims the box itself — tapping today's cell hands off to the caller's onClaim, which opens
 // <BoxOpening kind="daily"> for the actual tap-to-open animation and the server call.
-import { useEffect } from 'react';
+import { Check, Gift, Lock, X, type LucideIcon } from 'lucide-react';
+import { createElement, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { liveBoxes, type WeekSlot } from '@/shared/economy';
 import type { ConfigBundle } from '@/shared/schema';
@@ -12,7 +13,7 @@ import { ChestThumb, CoinBar, countdown } from './PlayerHud';
 import { usePlayer, useTick } from './PlayerProvider';
 
 const WEEKDAY_LABEL = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-const CELL_ICON: Record<WeekSlot['status'], string> = { claimed: '✔', missed: '✕', today: '🎁', future: '🔒' };
+const CELL_ICON: Record<WeekSlot['status'], LucideIcon> = { claimed: Check, missed: X, today: Gift, future: Lock };
 const CELL_LABEL: Record<WeekSlot['status'], string> = { claimed: 'Đã nhận', missed: 'Đã bỏ lỡ', today: 'Nhận ngay', future: 'Sắp tới' };
 
 interface Props {
@@ -38,7 +39,7 @@ export default function WeeklyReward({ bundle, onClose, onClaim }: Props) {
   return createPortal(
     <div className="game-ui box-backdrop fixed inset-0 z-40 flex flex-col items-center overflow-y-auto px-4 pb-6 pt-4">
       <button className="btn absolute left-3 top-3 px-3 py-1 text-xl" onClick={onClose} aria-label="Đóng">
-        ✕
+        <X />
       </button>
       <div className="absolute right-3 top-3">
         <CoinBar value={player?.coins ?? 0} />
@@ -55,7 +56,7 @@ export default function WeeklyReward({ bundle, onClose, onClaim }: Props) {
             title={CELL_LABEL[slot.status]}
           >
             <span className="text-outline text-xs">{WEEKDAY_LABEL[i]}</span>
-            <span className="text-2xl leading-none">{CELL_ICON[slot.status]}</span>
+            <span className="text-2xl leading-none">{createElement(CELL_ICON[slot.status])}</span>
           </button>
         ))}
       </div>

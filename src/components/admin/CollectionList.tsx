@@ -1,16 +1,18 @@
 'use client';
 
+import { Check } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { CollectionName } from '@/shared/schema';
 import { COLLECTION_SPECS, ENUM_LABELS, getPath } from '@/shared/fields';
+import { NamedIcon } from '@/components/ui/NamedIcon';
 import { api } from './api';
 
 type Doc = Record<string, unknown> & { id: string };
 
 function Cell({ value }: { value: unknown }) {
-  if (typeof value === 'boolean') return <span>{value ? '✓' : '—'}</span>;
+  if (typeof value === 'boolean') return <span>{value ? <Check /> : '—'}</span>;
   if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) {
     return (
       <span className="inline-flex items-center gap-1 font-mono text-xs">
@@ -44,7 +46,7 @@ export default function CollectionList({ collection }: { collection: CollectionN
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="font-display text-2xl">
-          {spec.icon} {spec.label}
+          <NamedIcon name={spec.icon} /> {spec.label}
         </h1>
         <span className="text-sm opacity-60">{rows ? `${rows.length} mục` : ''}</span>
         <input className="field ml-auto w-56" placeholder="Tìm theo tên / id…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -72,7 +74,7 @@ export default function CollectionList({ collection }: { collection: CollectionN
                 <td className="px-2 py-1 font-mono text-xs">{r.id}</td>
                 {spec.columns.map((c) => (
                   <td key={c.key} className="px-2 py-1">
-                    <Cell value={getPath(r, c.key)} />
+                    {c.key === 'icon' ? <NamedIcon name={String(getPath(r, c.key) ?? '')} /> : <Cell value={getPath(r, c.key)} />}
                   </td>
                 ))}
                 <td className="px-2 py-1 text-right">

@@ -234,19 +234,19 @@ const nameField: Field = { type: 'text', key: 'name', label: 'Tên hiển thị'
 export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
   factions: {
     label: 'Phe phái',
-    icon: '🚩',
+    icon: 'flag',
     columns: [
       { key: 'icon', label: '' },
       { key: 'name', label: 'Tên' },
       { key: 'color', label: 'Màu' },
       { key: 'order', label: 'Thứ tự' },
     ],
-    fields: () => [idField, nameField, { type: 'color', key: 'color', label: 'Màu phe' }, { type: 'text', key: 'icon', label: 'Biểu tượng (emoji)' }, { type: 'number', key: 'order', label: 'Thứ tự', step: 1 }],
-    blank: () => ({ id: '', name: 'Phe mới', color: '#888888', icon: '⚔️', order: 9 }),
+    fields: () => [idField, nameField, { type: 'color', key: 'color', label: 'Màu phe' }, { type: 'text', key: 'icon', label: 'Biểu tượng', help: 'tên icon lucide: mountain, shield, lamp, flame, castle, swords, flag, zap, sparkles, bow-arrow, brick-wall, map, bot, hard-hat' }, { type: 'number', key: 'order', label: 'Thứ tự', step: 1 }],
+    blank: () => ({ id: '', name: 'Phe mới', color: '#888888', icon: 'swords', order: 9 }),
   },
   units: {
     label: 'Quân lính',
-    icon: '🪖',
+    icon: 'hard-hat',
     columns: [
       { key: 'name', label: 'Tên' },
       { key: 'factionId', label: 'Phe' },
@@ -333,7 +333,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
   },
   weapons: {
     label: 'Kỹ năng & vũ khí',
-    icon: '⚡',
+    icon: 'zap',
     columns: [
       { key: 'name', label: 'Tên' },
       { key: 'attack', label: 'Kiểu' },
@@ -453,7 +453,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
   },
   projectiles: {
     label: 'Đạn',
-    icon: '🏹',
+    icon: 'bow-arrow',
     columns: [
       { key: 'name', label: 'Tên' },
       { key: 'model', label: 'Mô hình' },
@@ -477,7 +477,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
   },
   particles: {
     label: 'Particle',
-    icon: '✨',
+    icon: 'sparkles',
     columns: [
       { key: 'name', label: 'Tên' },
       { key: 'shape', label: 'Hình' },
@@ -529,7 +529,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
   },
   assets: {
     label: 'Asset 3D',
-    icon: '🧱',
+    icon: 'brick-wall',
     columns: [
       { key: 'name', label: 'Tên' },
       { key: 'kind', label: 'Loại' },
@@ -550,7 +550,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
   },
   maps: {
     label: 'Bản đồ',
-    icon: '🗺️',
+    icon: 'map',
     columns: [
       { key: 'name', label: 'Tên' },
       { key: 'size', label: 'Kích thước' },
@@ -614,7 +614,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
   },
   bots: {
     label: 'Bot AI',
-    icon: '🤖',
+    icon: 'bot',
     columns: [
       { key: 'name', label: 'Tên' },
       { key: 'difficulty', label: 'Độ khó' },
@@ -707,13 +707,13 @@ export const SETTINGS_FIELDS: Field[] = [
   { type: 'section', label: 'Xếp hạng: chống acc phụ & nhường trận' },
   { type: 'number', key: 'ranked.minAccountDays', label: 'Tuổi tài khoản tối thiểu để đánh xếp hạng (ngày)', min: 0, max: 365, step: 1 },
   { type: 'number', key: 'ranked.minBotWins', label: 'Số lần nhận thưởng thắng bot để mở khóa xếp hạng', min: 0, max: 1000, step: 1 },
-  { type: 'number', key: 'ranked.pairDailyLimit', label: 'Số trận/ngày giữa cùng 2 tài khoản còn được tính', min: 1, max: 100, step: 1, help: 'trận vượt mức vẫn ghi thắng/thua nhưng không đổi ♦' },
-  { type: 'number', key: 'ranked.minBattleSeconds', label: 'Đầu hàng/thoát sớm hơn (giây): bên thắng không được ♦', min: 0, max: 600, step: 5 },
-  { type: 'slider', key: 'ranked.minArmyShare', label: 'Đội thua rẻ hơn tỉ lệ ngân sách này: bên thắng không được ♦', min: 0, max: 1, step: 0.05, help: 'chặn nhường trận bằng đội hình vài lính' },
+  { type: 'number', key: 'ranked.pairDailyLimit', label: 'Số trận/ngày giữa cùng 2 tài khoản còn được tính', min: 1, max: 100, step: 1, help: 'trận vượt mức vẫn ghi thắng/thua nhưng không đổi kim cương' },
+  { type: 'number', key: 'ranked.minBattleSeconds', label: 'Đầu hàng/thoát sớm hơn (giây): bên thắng không được kim cương', min: 0, max: 600, step: 5 },
+  { type: 'slider', key: 'ranked.minArmyShare', label: 'Đội thua rẻ hơn tỉ lệ ngân sách này: bên thắng không được kim cương', min: 0, max: 1, step: 0.05, help: 'chặn nhường trận bằng đội hình vài lính' },
   { type: 'bool', key: 'ranked.blockSameIp', label: 'Không ghép 2 người chơi cùng địa chỉ IP' },
   { type: 'number', key: 'ranked.maxDisputes', label: 'Số trận tranh chấp/mùa trước khi khóa xếp hạng', min: 1, max: 100, step: 1, help: 'tranh chấp = 2 máy báo kết quả khác nhau hoặc lệch trận; mở khóa ở trang Xếp hạng & gian lận' },
-  { type: 'number', key: 'ranked.matchGap', label: 'Ghép trận: chênh lệch tối đa (số ♦)', min: 0, max: 1000, step: 1 },
-  { type: 'slider', key: 'ranked.matchGapGrowth', label: 'Ghép trận: nới thêm bao nhiêu ♦ mỗi 10 giây chờ', min: 0, max: 20, step: 0.5 },
+  { type: 'number', key: 'ranked.matchGap', label: 'Ghép trận: chênh lệch tối đa (số kim cương)', min: 0, max: 1000, step: 1 },
+  { type: 'slider', key: 'ranked.matchGapGrowth', label: 'Ghép trận: nới thêm bao nhiêu kim cương mỗi 10 giây chờ', min: 0, max: 20, step: 0.5 },
   { type: 'section', label: 'Xếp hạng: các bậc' },
   ...RANK_TIER_LABELS.flatMap(([tier, label]) => [
     { type: 'text' as const, key: `ranked.tiers.${tier}.name`, label: `${label}: tên bậc` },
@@ -721,9 +721,9 @@ export const SETTINGS_FIELDS: Field[] = [
       ? []
       : [
           { type: 'number' as const, key: `ranked.tiers.${tier}.classes`, label: `${label}: số hạng`, min: 1, max: 10, step: 1 },
-          { type: 'number' as const, key: `ranked.tiers.${tier}.diamonds`, label: `${label}: số ♦ mỗi hạng`, min: 1, max: 10, step: 1 },
+          { type: 'number' as const, key: `ranked.tiers.${tier}.diamonds`, label: `${label}: số kim cương mỗi hạng`, min: 1, max: 10, step: 1 },
         ]),
-    { type: 'bool' as const, key: `ranked.tiers.${tier}.loseDiamond`, label: `${label}: thua bị trừ ♦/điểm` },
+    { type: 'bool' as const, key: `ranked.tiers.${tier}.loseDiamond`, label: `${label}: thua bị trừ kim cương/điểm` },
     { type: 'select' as const, key: `ranked.tiers.${tier}.seasonBox.chest`, label: `${label}: thưởng cuối mùa — kiểu rương`, options: CHEST_VARIANTS },
     { type: 'range2' as const, key: `ranked.tiers.${tier}.seasonBox.coins`, label: `${label}: thưởng cuối mùa — coin`, min: 0, max: 1_000_000, step: 1 },
     { type: 'number' as const, key: `ranked.tiers.${tier}.seasonBox.cards`, label: `${label}: thưởng cuối mùa — tổng số thẻ`, min: 0, max: 10_000, step: 1 },

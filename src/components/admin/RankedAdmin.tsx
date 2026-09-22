@@ -2,6 +2,7 @@
 
 // CMS: ranked battles the server flagged as possible win-trading (two accounts of one person, thrown
 // games, repeat pairings, disputed results). Review each one; lift a dispute lock when it was unfair.
+import { Check, RefreshCw, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { RANK_FLAG_LABELS, seasonName, type RankFlagDoc } from '@/shared/ranked';
@@ -51,13 +52,13 @@ export default function RankedAdmin() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="font-display text-2xl">🏆 Xếp hạng: trận nghi gian lận</h1>
+        <h1 className="font-display text-2xl"><Trophy /> Xếp hạng: trận nghi gian lận</h1>
         <button className="btn ml-auto px-3 py-1 text-sm" onClick={() => void load(reviewed)}>
-          ↻ Tải lại
+          <RefreshCw /> Tải lại
         </button>
       </div>
       <p className="text-sm opacity-70">
-        Máy chủ không tự chạy lại trận, nên không phân biệt được trận thật với trận nhường. Các trận dưới đây đã bị chặn cộng ♦ cho bên thắng (trừ cờ “cùng IP”, chỉ để xem) — hãy xem cặp tài khoản nào lặp lại nhiều lần.
+        Máy chủ không tự chạy lại trận, nên không phân biệt được trận thật với trận nhường. Các trận dưới đây đã bị chặn cộng kim cương cho bên thắng (trừ cờ “cùng IP”, chỉ để xem) — hãy xem cặp tài khoản nào lặp lại nhiều lần.
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -108,7 +109,7 @@ export default function RankedAdmin() {
                     {Object.entries(f.players).map(([side, p]) => (
                       <div key={side} className="mb-1 flex flex-wrap items-center gap-x-2">
                         <span className={f.winner === side ? 'font-bold text-green-700' : ''}>
-                          {f.winner === side ? '🏆 ' : ''}
+                          {f.winner === side && <><Trophy />{' '}</>}
                           {p!.name}
                         </span>
                         <span className="text-xs opacity-60">({SIDE_LABEL[side] ?? side})</span>
@@ -137,7 +138,7 @@ export default function RankedAdmin() {
                   <td className="px-2 py-1 text-right">
                     {!f.reviewed ? (
                       <button className="btn btn-gold px-2 py-0.5 text-xs" disabled={busy !== null} onClick={() => void run(f.id, { action: 'review', id: f.id }, 'Đã đánh dấu đã xem.')}>
-                        ✓ Đã xem
+                        <Check /> Đã xem
                       </button>
                     ) : (
                       <span className="text-xs opacity-60">bởi {f.reviewedBy?.slice(0, 8) ?? '—'}</span>

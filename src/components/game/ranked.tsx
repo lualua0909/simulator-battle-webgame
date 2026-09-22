@@ -2,6 +2,7 @@
 
 // Ranked mode UI: tier badges, the ranked lobby (standing, queue, season box, leaderboard), the
 // opponent bar while deploying and the standing change after a battle. Numbers come from the server.
+import { ArrowLeft, ChevronDown, ChevronUp, Gem, Gift, Lock, Star, Swords, Trophy, User, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useId, useState } from 'react';
 import BoxOpening from '@/components/player/BoxOpening';
@@ -157,10 +158,10 @@ export function RankedLobby(props: {
         <h2 className="font-display text-2xl">Đấu xếp hạng</h2>
         <p className="text-sm">Cần đăng nhập để đánh xếp hạng. Bậc, kim cương và phần thưởng lưu theo tài khoản.</p>
         <button className="btn btn-gold" disabled={props.authLoading} onClick={props.onSignIn}>
-          👤 Đăng nhập
+          <User /> Đăng nhập
         </button>
         <Link href="/" className="text-sm underline">
-          ← Menu
+          <ArrowLeft /> Menu
         </Link>
       </div>
     );
@@ -213,7 +214,7 @@ export function RankedLobby(props: {
                 <span className="text-sm">
                   {rank.wins} thắng · {rank.losses} thua{rank.draws > 0 ? ` · ${rank.draws} hòa` : ''}
                 </span>
-                <span className="text-xs opacity-70">Thắng +1 ♦, thua −1 ♦ (bậc {cfg.tiers.beginner.name} không mất ♦). Đủ ♦ thắng thêm 1 trận để lên hạng.</span>
+                <span className="text-xs opacity-70">Thắng +1 <Gem />, thua −1 <Gem /> (bậc {cfg.tiers.beginner.name} không mất <Gem />). Đủ <Gem /> thắng thêm 1 trận để lên hạng.</span>
               </div>
             </div>
           )}
@@ -225,18 +226,18 @@ export function RankedLobby(props: {
                 {seasonName(view.pending.season)} đã kết thúc ở bậc <b>{cfg.tiers[view.pending.tier].name}</b>.
               </span>
               <button className="btn btn-gold" onClick={() => setClaiming(true)}>
-                🎁 Nhận thưởng mùa
+                <Gift /> Nhận thưởng mùa
               </button>
             </div>
           )}
 
-          {view.gate && !view.pending && <p className="rounded-lg bg-ink/5 p-2 text-sm">🔒 {view.gate}</p>}
+          {view.gate && !view.pending && <p className="rounded-lg bg-ink/5 p-2 text-sm"><Lock /> {view.gate}</p>}
 
           <p className={`text-xs ${props.error ? 'text-red-team' : 'opacity-60'}`}>{props.connected ? 'Đã kết nối máy chủ.' : (props.error ?? 'Đang kết nối máy chủ…')}</p>
 
           {searching === null ? (
             <button className="btn btn-gold text-lg" disabled={!props.connected || !!view.gate || !view.season} onClick={() => void find()}>
-              ⚔ Tìm trận
+              <Swords /> Tìm trận
             </button>
           ) : (
             <div className="flex items-center gap-2">
@@ -257,11 +258,11 @@ export function RankedLobby(props: {
 
           <div className="flex justify-between">
             <Link href="/" className="btn">
-              ← Menu
+              <ArrowLeft /> Menu
             </Link>
             {view.season && (
               <button className="btn" onClick={() => setBoard(true)}>
-                🏆 Bảng xếp hạng
+                <Trophy /> Bảng xếp hạng
               </button>
             )}
           </div>
@@ -317,7 +318,7 @@ function Leaderboard({ bundle, season, onClose }: { bundle: ConfigBundle; season
         <div className="flex items-center justify-between">
           <h3 className="font-display text-xl">Bảng xếp hạng · {seasonName(season)}</h3>
           <button className="btn px-2 py-0.5" onClick={onClose} aria-label="Đóng">
-            ✕
+            <X />
           </button>
         </div>
         {error && <p className="text-sm text-red-team">{error}</p>}
@@ -348,7 +349,7 @@ export function RankedBar({ bundle, room, opponent, mySide }: { bundle: ConfigBu
   const other = Object.entries(room.players).find(([s]) => s !== mySide)?.[1];
   return (
     <div className="panel pointer-events-auto flex w-56 flex-col gap-1.5 p-2 text-sm sm:w-64">
-      <div className="font-display">🏆 Xếp hạng · {room.ranked ? seasonName(room.ranked) : ''}</div>
+      <div className="font-display"><Trophy /> Xếp hạng · {room.ranked ? seasonName(room.ranked) : ''}</div>
       {secondsLeft !== null && <div className={`text-center font-display text-lg ${secondsLeft <= 10 ? 'text-red-team' : ''}`}>Bắt đầu sau {secondsLeft}s</div>}
       <div className="flex items-center gap-2">
         {opponent?.rank ? <RankBadge tier={opponent.rank.tier} size={36} /> : <RankBadge tier="beginner" size={36} />}
@@ -364,7 +365,7 @@ export function RankedBar({ bundle, room, opponent, mySide }: { bundle: ConfigBu
         </div>
       </div>
       <div className="text-xs opacity-70">
-        {map?.name ?? room.mapId} · ngân sách {room.budget} · ⭐ tính sao
+        {map?.name ?? room.mapId} · ngân sách {room.budget} · <Star /> tính sao
       </div>
     </div>
   );
@@ -373,9 +374,9 @@ export function RankedBar({ bundle, room, opponent, mySide }: { bundle: ConfigBu
 function holdReason(r: RankResult, cfg: ConfigBundle['settings']['ranked']): string | null {
   if (r.verdict.outcome === 'void') return 'Hai máy báo kết quả khác nhau — trận không tính, đã ghi nhận để kiểm tra.';
   if (r.verdict.move || r.verdict.outcome === 'draw') return null;
-  if (r.flags.includes('repeat-pair')) return `Hai tài khoản này đã đấu đủ ${cfg.pairDailyLimit} trận xếp hạng hôm nay — trận này không tính ♦.`;
-  if (r.flags.includes('early-end')) return 'Đối thủ bỏ trận quá sớm — thắng nhưng không cộng ♦.';
-  if (r.flags.includes('weak-army')) return 'Đội hình đối thủ quá mỏng so với ngân sách — thắng nhưng không cộng ♦.';
+  if (r.flags.includes('repeat-pair')) return `Hai tài khoản này đã đấu đủ ${cfg.pairDailyLimit} trận xếp hạng hôm nay — trận này không tính kim cương.`;
+  if (r.flags.includes('early-end')) return 'Đối thủ bỏ trận quá sớm — thắng nhưng không cộng kim cương.';
+  if (r.flags.includes('weak-army')) return 'Đội hình đối thủ quá mỏng so với ngân sách — thắng nhưng không cộng kim cương.';
   return null;
 }
 
@@ -391,7 +392,7 @@ export function RankResultPanel({ bundle, res }: { bundle: ConfigBundle; res: Ac
     <div className="flex w-full flex-col items-center gap-1 rounded-xl bg-ink/5 p-2 text-sm">
       <div className="flex items-center gap-2">
         <RankBadge tier={res.before.tier} size={40} dim={diff > 0} />
-        <span className={`font-display text-xl ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-team' : ''}`}>{diff > 0 ? '▲' : diff < 0 ? '▼' : '='}</span>
+        <span className={`font-display text-xl ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-team' : ''}`}>{diff > 0 ? <ChevronUp /> : diff < 0 ? <ChevronDown /> : '='}</span>
         <RankBadge tier={res.after.tier} size={52} />
       </div>
       <RankLine bundle={bundle} rank={res.after} />
@@ -399,7 +400,7 @@ export function RankResultPanel({ bundle, res }: { bundle: ConfigBundle; res: Ac
       {reason && <p className="text-xs opacity-80">{reason}</p>}
       {res.reward && (
         <p className="font-bold">
-          🎁 +{formatCoins(res.reward.coins)} xu{cards > 0 ? ` · +${cards} thẻ` : ''}
+          <Gift /> +{formatCoins(res.reward.coins)} xu{cards > 0 ? ` · +${cards} thẻ` : ''}
         </p>
       )}
     </div>

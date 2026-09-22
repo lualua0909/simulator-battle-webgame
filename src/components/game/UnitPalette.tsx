@@ -1,10 +1,12 @@
 'use client';
 
+import { Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { isUnlocked, starScale, type PlayerState } from '@/shared/economy';
 import type { ConfigBundle, UnitDef } from '@/shared/schema';
 import { unitPower } from '@/game/bot/generate';
 import { LockIcon, StarIcon } from '@/components/player/icons';
+import { NamedIcon } from '@/components/ui/NamedIcon';
 
 interface Props {
   bundle: ConfigBundle;
@@ -42,7 +44,7 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
         </Tab>
         {factions.map((f) => (
           <Tab key={f.id} active={tab === f.id} onClick={() => setTab(f.id)} color={f.color}>
-            {f.icon} <span className="hidden sm:inline">{f.name}</span>
+            <NamedIcon name={f.icon} /> <span className="hidden sm:inline">{f.name}</span>
           </Tab>
         ))}
       </div>
@@ -130,7 +132,7 @@ function UnitInfo({ unit, bundle, star }: { unit: UnitDef; bundle: ConfigBundle;
       </dl>
       {skills.length > 0 && (
         <p className="mt-1">
-          <b>✨ Kỹ năng:</b> {skills.map((w) => w.name).join(', ')}
+          <b><Sparkles /> Kỹ năng:</b> {skills.map((w) => w.name).join(', ')}
           {unit.castSpeed !== 1 && <span className="opacity-70"> (tốc độ ×{unit.castSpeed})</span>}
         </p>
       )}

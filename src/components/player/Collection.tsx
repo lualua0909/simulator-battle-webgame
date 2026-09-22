@@ -2,12 +2,14 @@
 
 // Card collection: every unit as a card with its stars and cards; unlock, upgrade and buy cards
 // with coins. Buttons only send the request: the wallet shown afterwards is the server's answer.
-import { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, ArrowUp, LockOpen, User, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { formatCoins, isUnlocked, nextStar, starScale, type PlayerAction } from '@/shared/economy';
 import { STAR_MAX, type ConfigBundle, type UnitDef } from '@/shared/schema';
 import { unitPower } from '@/game/bot/generate';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { NamedIcon } from '@/components/ui/NamedIcon';
 import { CoinIcon, Stars } from './icons';
 import { CoinBar } from './PlayerHud';
 import { usePlayer } from './PlayerProvider';
@@ -66,12 +68,12 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
             {user && <CoinBar value={player?.coins ?? 0} />}
           </div>
           <button className="btn order-2 shrink-0 px-2.5 py-1 text-xl" onClick={onClose} aria-label="Đóng">
-            ✕
+            <X />
           </button>
           <div className="order-3 flex max-w-full basis-full flex-nowrap gap-1 overflow-x-auto pb-1 md:order-none md:basis-auto md:flex-1 md:flex-wrap md:overflow-visible md:pb-0">
             {[{ id: 'all', name: 'Tất cả', icon: '', color: '' }, ...factions].map((f) => (
               <button key={f.id} className={`shrink-0 rounded-full border-2 border-[#16181b] px-3 py-0.5 ${tab === f.id ? 'bg-gold' : 'bg-white/85'}`} onClick={() => { setTab(f.id); setSelectedId(null); }}>
-                {f.icon} {f.name}
+                <NamedIcon name={f.icon} /> {f.name}
               </button>
             ))}
           </div>
@@ -114,7 +116,7 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
               <div className="relative flex shrink-0 items-center justify-center pb-2">
                 <span className="h-1.5 w-12 rounded-full bg-ink/20" />
                 <button className="btn absolute right-0 top-0 px-2.5 py-1 text-xl" onClick={() => setSelectedId(null)} aria-label="Đóng">
-                  ✕
+                  <X />
                 </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
@@ -136,7 +138,7 @@ function GuestDetail({ unit, onSignIn }: { unit: UnitDef; onSignIn(): void }) {
       <p>{unit.unlockCost === 0 ? 'Lính miễn phí: ai cũng dùng được.' : `Mở khóa với ${formatCoins(unit.unlockCost)} coin.`}</p>
       <p>Đăng nhập để nhận hộp quà, sưu tầm thẻ, mở khóa và nâng sao cho lính.</p>
       <button className="btn btn-gold" onClick={onSignIn}>
-        👤 Đăng nhập
+        <User /> Đăng nhập
       </button>
     </div>
   );
@@ -179,7 +181,7 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
     }
   };
 
-  const spendButton = (key: string, label: string, price: number, action: PlayerAction, done: string, blocked?: string) => (
+  const spendButton = (key: string, label: ReactNode, price: number, action: PlayerAction, done: string, blocked?: string) => (
     <button className={`btn w-full flex-col gap-0 ${confirm === key ? 'btn-red' : 'btn-gold'}`} disabled={busy || !!blocked || coins < price} onClick={() => void run(key, action, done)}>
       <span>{confirm === key ? `Xác nhận trừ ${formatCoins(price)} coin?` : label}</span>
       <span className="flex items-center gap-1">
@@ -214,20 +216,20 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
         <dt>Máu</dt>
         <dd className="text-right">
           {Math.round(unit.hp * scale)}
-          {next && <span className="text-green-700"> → {Math.round(unit.hp * nextScale)}</span>}
+          {next && <span className="text-green-700"> <ArrowRight /> {Math.round(unit.hp * nextScale)}</span>}
         </dd>
         <dt>Sát thương/giây</dt>
         <dd className="text-right">
           {Math.round(power.dps * scale)}
-          {next && <span className="text-green-700"> → {Math.round(power.dps * nextScale)}</span>}
+          {next && <span className="text-green-700"> <ArrowRight /> {Math.round(power.dps * nextScale)}</span>}
         </dd>
         <dt>Mỗi sao</dt>
         <dd className="text-right">+{Math.round(bonus * 100)}% máu, sát thương</dd>
       </dl>
       {!unlocked ? (
-        spendButton('unlock', `🔓 Mở khóa ${unit.name}`, unit.unlockCost, { action: 'unlock', unitId: unit.id }, `Đã mở khóa ${unit.name}!`)
+        spendButton('unlock', <><LockOpen /> Mở khóa {unit.name}</>, unit.unlockCost, { action: 'unlock', unitId: unit.id }, `Đã mở khóa ${unit.name}!`)
       ) : next ? (
-        spendButton('upgrade', `⬆ Nâng lên ${next.star} sao (${next.cards} thẻ)`, next.coins, { action: 'upgrade', unitId: unit.id }, `${unit.name} đã lên ${next.star} sao!`, cards < next.cards ? `Cần thêm ${next.cards - cards} thẻ` : undefined)
+        spendButton('upgrade', <><ArrowUp /> Nâng lên {next.star} sao ({next.cards} thẻ)</>, next.coins, { action: 'upgrade', unitId: unit.id }, `${unit.name} đã lên ${next.star} sao!`, cards < next.cards ? `Cần thêm ${next.cards - cards} thẻ` : undefined)
       ) : (
         <p className="rounded-xl bg-gold/60 p-2 text-center">Đã đạt {STAR_MAX} sao</p>
       )}

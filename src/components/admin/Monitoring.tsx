@@ -1,5 +1,6 @@
 'use client';
 
+import { Check, Pause, Play, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { SIDE_TEXT } from '@/components/game/panels';
 import type { MetricsSnapshot, StoredStats } from '@/server/metrics';
@@ -73,10 +74,10 @@ export function Monitoring() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-2xl">📈 Giám sát máy chủ</h1>
+        <h1 className="font-display text-2xl"><TrendingUp /> Giám sát máy chủ</h1>
         {live && <span className="text-xs opacity-60">cập nhật {time(live.now)} · tự làm mới mỗi {REFRESH_MS / 1000}s</span>}
         <button className="btn ml-auto px-3 py-1 text-sm" onClick={() => setPaused((p) => !p)}>
-          {paused ? '▶ Tiếp tục' : '⏸ Tạm dừng'}
+          {paused ? <><Play /> Tiếp tục</> : <><Pause /> Tạm dừng</>}
         </button>
       </div>
       {error && <p className="text-red-team">{error}</p>}
@@ -163,7 +164,7 @@ export function Monitoring() {
             </div>
             <div className="panel overflow-x-auto p-2">
               {live.http.routes.length === 0 ? (
-                <p className="p-2 text-sm text-green-700">✓ Chưa có API nào lỗi.</p>
+                <p className="p-2 text-sm text-green-700"><Check /> Chưa có API nào lỗi.</p>
               ) : (
                 <table className="w-full text-sm">
                   <thead>

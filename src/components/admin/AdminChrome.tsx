@@ -1,8 +1,10 @@
 'use client';
 
+import { CreditCard, Download, HardHat, House, LogOut, Plus, RotateCcw, Settings, Swords, TrendingUp, Trophy, Upload, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { NamedIcon } from '@/components/ui/NamedIcon';
 import { COLLECTIONS } from '@/shared/schema';
 import { COLLECTION_SPECS, SETTINGS_FIELDS } from '@/shared/fields';
 import { IS_VERCEL } from '@/shared/deploy';
@@ -14,27 +16,27 @@ export function AdminNav() {
   const path = usePathname();
   const router = useRouter();
   const { signOut } = useAuth();
-  const item = (href: string, label: string, exact = false) => {
+  const item = (href: string, icon: ReactNode, label: string, exact = false) => {
     const active = exact ? path === href : path.startsWith(href);
     return (
       <Link key={href} href={href} className={`block rounded-lg px-2 py-1.5 text-sm font-bold ${active ? 'bg-ink text-white' : 'hover:bg-white'}`}>
-        {label}
+        {icon} {label}
       </Link>
     );
   };
   return (
     <nav className="flex flex-col gap-0.5">
-      {item('/admin', '🏠 Tổng quan', true)}
-      {!IS_VERCEL && item('/admin/monitoring', '📈 Giám sát máy chủ')}
+      {item('/admin', <House />, 'Tổng quan', true)}
+      {!IS_VERCEL && item('/admin/monitoring', <TrendingUp />, 'Giám sát máy chủ')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Nội dung game</div>
-      {item('/models', '🪖 Nhân vật & mô hình')}
-      {COLLECTIONS.filter((c) => c !== 'units').map((c) => item(`/admin/c/${c}`, `${COLLECTION_SPECS[c].icon} ${COLLECTION_SPECS[c].label}`))}
-      {item('/admin/settings', '⚙️ Cài đặt & khắc chế')}
-      {item('/admin/users', '👥 Người dùng')}
-      {item('/admin/topups', '💳 Nạp xu')}
-      {!IS_VERCEL && item('/admin/ranked', '🏆 Xếp hạng & gian lận')}
+      {item('/models', <HardHat />, 'Nhân vật & mô hình')}
+      {COLLECTIONS.filter((c) => c !== 'units').map((c) => item(`/admin/c/${c}`, <NamedIcon name={COLLECTION_SPECS[c].icon} />, COLLECTION_SPECS[c].label))}
+      {item('/admin/settings', <Settings />, 'Cài đặt & khắc chế')}
+      {item('/admin/users', <Users />, 'Người dùng')}
+      {item('/admin/topups', <CreditCard />, 'Nạp xu')}
+      {!IS_VERCEL && item('/admin/ranked', <Trophy />, 'Xếp hạng & gian lận')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
-      {item('/play?mode=bot', '⚔️ Mở game')}
+      {item('/play?mode=bot', <Swords />, 'Mở game')}
       <button
         className="mt-2 rounded-lg px-2 py-1.5 text-left text-sm font-bold hover:bg-white"
         onClick={async () => {
@@ -42,7 +44,7 @@ export function AdminNav() {
           router.push('/admin/login');
         }}
       >
-        ⎋ Đăng xuất
+        <LogOut /> Đăng xuất
       </button>
     </nav>
   );
@@ -65,10 +67,10 @@ export function DashboardActions() {
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         <a className="btn" href="/api/admin/bundle">
-          ⬇ Xuất JSON
+          <Download /> Xuất JSON
         </a>
         <button className="btn" onClick={() => file.current?.click()}>
-          ⬆ Nhập JSON
+          <Upload /> Nhập JSON
         </button>
         <button
           className="btn"
@@ -76,7 +78,7 @@ export function DashboardActions() {
             if (confirm('Khôi phục toàn bộ nội dung về mặc định? Mọi chỉnh sửa sẽ mất.')) void run(() => api('/api/admin/bundle', { method: 'POST', body: JSON.stringify({ action: 'reset' }) }), 'Đã khôi phục dữ liệu mặc định.');
           }}
         >
-          ↺ Khôi phục mặc định
+          <RotateCcw /> Khôi phục mặc định
         </button>
         <input
           ref={file}
@@ -139,7 +141,7 @@ export function DefaultsMerge({ missing }: { missing: MissingDefaults }) {
         return (
           <div key={c}>
             <div className="font-bold">
-              {COLLECTION_SPECS[c].icon} {COLLECTION_SPECS[c].label}
+              <NamedIcon name={COLLECTION_SPECS[c].icon} /> {COLLECTION_SPECS[c].label}
             </div>
             <div className="flex flex-wrap gap-1">
               {docs.map((d) => {
@@ -170,7 +172,7 @@ export function DefaultsMerge({ missing }: { missing: MissingDefaults }) {
       {missing.settings.length > 0 && <p className="text-xs opacity-70">Cài đặt còn trống sẽ được điền: {missing.settings.map((k) => SETTINGS_FIELDS.find((f) => 'key' in f && f.key === k)?.label ?? k).join(', ')}</p>}
       <div>
         <button className="btn btn-gold" disabled={busy} onClick={() => void submit()}>
-          {busy ? 'Đang thêm…' : '＋ Thêm nội dung đã chọn'}
+          {busy ? 'Đang thêm…' : <><Plus /> Thêm nội dung đã chọn</>}
         </button>
       </div>
       {msg && <p>{msg}</p>}

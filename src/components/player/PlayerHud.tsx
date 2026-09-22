@@ -4,6 +4,7 @@
 // then the x-hour box once the daily box is claimed) and the avatar/account menu. `bundle` is
 // optional: pass the caller's own already-loaded bundle (GameClient) to skip a redundant
 // /api/config fetch, or omit it (the home page) to have this component load its own.
+import { LogOut, User, WalletCards, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { formatCoins, liveBoxes, type BoxKind } from '@/shared/economy';
@@ -86,10 +87,12 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
     return (
       <div className="pointer-events-auto flex max-w-full items-center gap-2">
         <button className="reward-slot" onClick={() => setCollection(true)} title="Bộ sưu tập thẻ" aria-label="Bộ sưu tập thẻ">
-          <span className="text-2xl">🃏</span>
+          <span className="text-2xl">
+            <WalletCards />
+          </span>
         </button>
         <button className="btn btn-gold" onClick={() => openAuth('signin')}>
-          👤 Đăng nhập
+          <User /> Đăng nhập
         </button>
         {bundle && collection && <Collection bundle={bundle} thumbs={thumbs} onClose={() => setCollection(false)} />}
       </div>
@@ -106,7 +109,9 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
         <CoinBar value={player?.coins ?? 0} loading={walletLoading && !player} />
       </div>
       <button className="reward-slot" onClick={() => setCollection(true)} title="Bộ sưu tập thẻ" aria-label="Bộ sưu tập thẻ">
-        <span className="text-2xl">🃏</span>
+        <span className="text-2xl">
+            <WalletCards />
+          </span>
       </button>
       {economy &&
         status &&
@@ -129,11 +134,11 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
         <div className="panel absolute right-0 top-full z-30 mt-3 flex min-w-52 flex-col gap-1 p-2">
           {canAccessCms(user) && (
             <Link href="/admin" className="btn justify-start">
-              🛠 CMS quản trị
+              <Wrench /> CMS quản trị
             </Link>
           )}
           <button className="btn justify-start" onClick={() => void signOut().then(() => setMenu(false))}>
-            ⎋ Đăng xuất
+            <LogOut /> Đăng xuất
           </button>
         </div>
       )}
