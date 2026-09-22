@@ -45,5 +45,8 @@
     "playwright": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "jwks-rsa": "^3.2.2"
   }
 }
