@@ -8,7 +8,6 @@ import HeroBanner from '@/components/home/HeroBanner';
 import Reveal from '@/components/home/Reveal';
 import PlayerHud from '@/components/player/PlayerHud';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import LanguageToggle from '@/lib/i18n/LanguageToggle';
 import { IS_VERCEL } from '@/shared/deploy';
 
 export default function Home() {
@@ -104,7 +103,6 @@ export default function Home() {
             </a>
           </nav>
           <div className="flex items-center gap-2">
-            <LanguageToggle />
             <PlayerHud />
           </div>
         </div>
