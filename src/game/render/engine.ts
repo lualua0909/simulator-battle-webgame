@@ -1,6 +1,7 @@
 // Battle engine: owns the Three.js scene, steps the deterministic sim at a fixed rate,
 // interpolates visuals, and turns sim events into particles, ragdolls and stuck arrows.
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import type { ArmyStars } from '@/shared/net';
 import type { ConfigBundle, MapDef, ParticleDef, ProjectileDef, Settings, WeaponDef } from '@/shared/schema';
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
@@ -67,6 +68,9 @@ export interface ViewState {
 
 export type CinematicKind = 'intro' | 'battle' | 'victory';
 
+/** The opt-in WebGPU module (see BattleEngine.loadGpu). */
+export type GpuBackend = typeof import('./webgpu');
+
 interface ActiveCinematic {
   kind: CinematicKind;
   run: Cinematic;
@@ -97,7 +101,7 @@ void main(){ float t = clamp(vDir.y * 1.6 + 0.12, 0.0, 1.0); gl_FragColor = vec4
 }`;
 
 export class BattleEngine {
-  readonly renderer: THREE.WebGLRenderer;
+  readonly renderer: THREE.WebGLRenderer | WebGPURenderer;
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(50, 1, 0.3, 1400);
   readonly rts: RtsCamera;
@@ -140,7 +144,9 @@ export class BattleEngine {
   private ragdollToken = 0;
   private readonly sun = new THREE.DirectionalLight('#fff1d8', 2.6);
   private readonly hemi = new THREE.HemisphereLight('#dcecff', '#5a4a30', 1.25);
-  private readonly sky: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
+  private readonly sky: THREE.Mesh<THREE.SphereGeometry, THREE.Material>;
+  private readonly skyTop = new THREE.Color();
+  private readonly skyBottom = new THREE.Color();
   private ghost:
     | {
         group: THREE.Group;
@@ -210,10 +216,11 @@ export class BattleEngine {
     private readonly host: HTMLElement,
     private readonly bundle: ConfigBundle,
     private readonly events: EngineEvents = {},
+    private readonly gpu: GpuBackend | null = null,
   ) {
     // Phones draw fewer pixels and a smaller shadow map; the low-poly look survives both.
     const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-    this.renderer = new THREE.WebGLRenderer({ antialias: !coarse });
+    this.renderer = gpu ? gpu.createRenderer(!coarse) : new THREE.WebGLRenderer({ antialias: !coarse });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -224,6 +231,16 @@ export class BattleEngine {
     this.renderer.domElement.style.touchAction = 'none';
     this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLost);
     this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored);
+    if (!(this.renderer instanceof THREE.WebGLRenderer)) {
+      // A lost WebGPU device never comes back: the overlay's reload is the way out.
+      const r = this.renderer;
+      const log = r.onDeviceLost.bind(r);
+      r.onDeviceLost = (info) => {
+        log(info);
+        this.contextLost = true;
+        this.events.onContextLost?.(true);
+      };
+    }
     host.appendChild(this.renderer.domElement);
 
     this.particleDefs = new Map(bundle.particles.map((p) => [p.id, p]));
@@ -232,7 +249,9 @@ export class BattleEngine {
 
     this.sky = new THREE.Mesh(
       new THREE.SphereGeometry(900, 24, 12),
-      new THREE.ShaderMaterial({ uniforms: { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() } }, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, fog: false }),
+      gpu
+        ? gpu.skyMaterial(this.skyTop, this.skyBottom)
+        : new THREE.ShaderMaterial({ uniforms: { top: { value: this.skyTop }, bottom: { value: this.skyBottom } }, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, fog: false }),
     );
     this.sky.frustumCulled = false;
     this.sun.shadow.bias = -0.0004;
@@ -273,7 +292,9 @@ export class BattleEngine {
     // The camera rides in the rig; outside VR the rig stays identity, so the desktop camera works in world space.
     this.xr.rig.add(this.camera);
     this.scene.add(this.xr.rig);
-    this.renderer.xr.addEventListener('sessionstart', () => {
+    // Both renderers' XR managers fire these; the union of their typed event maps is not callable as is.
+    const xrEvents: THREE.EventDispatcher<{ sessionstart: object; sessionend: object }> = this.renderer.xr;
+    xrEvents.addEventListener('sessionstart', () => {
       if (this.cine) this.finishCinematic();
       // Real metres in the headset: controllers held close to the face must not clip.
       this.camera.near = 0.05;
@@ -287,7 +308,7 @@ export class BattleEngine {
       this.shakeAmount = 0;
       this.governor.hold();
     });
-    this.renderer.xr.addEventListener('sessionend', () => {
+    xrEvents.addEventListener('sessionend', () => {
       this.xr.reset();
       this.camera.near = 0.3;
       this.resize();
@@ -316,7 +337,7 @@ export class BattleEngine {
     this.heights = new HeightField(terrain);
     this.governor.hold();
     this.mapGroup.add(createTerrainMesh(terrain), createSkirt(terrain));
-    this.water = createWater(terrain);
+    this.water = createWater(terrain, this.gpu?.waterMaterial);
     if (this.water) this.mapGroup.add(this.water.mesh);
     this.mapGroup.add(createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a]))));
     this.zones = {};
@@ -576,9 +597,30 @@ export class BattleEngine {
     }
   }
 
+  /**
+   * The WebGPU module when this browser opted in and has an adapter; null = the default WebGL renderer.
+   * `?renderer=webgpu` / `?renderer=webgl` switches it (remembered per browser) for A/B frame-rate tests.
+   */
+  static async loadGpu(): Promise<GpuBackend | null> {
+    try {
+      const pick = new URLSearchParams(location.search).get('renderer');
+      if (pick === 'webgpu' || pick === 'webgl') localStorage.setItem('sb-renderer', pick);
+      if (localStorage.getItem('sb-renderer') !== 'webgpu') return null;
+      const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+      if (!(await gpu?.requestAdapter())) throw new Error('no WebGPU adapter');
+      const mod = await import('./webgpu');
+      console.info('Renderer: WebGPU');
+      return mod;
+    } catch (e) {
+      console.warn('WebGPU unavailable, rendering with WebGL', e);
+      return null;
+    }
+  }
+
   /** Must be called from a click: browsers only open an XR session on a user gesture. */
   async enterVR(): Promise<void> {
     if (!navigator.xr || this.renderer.xr.isPresenting) return;
+    if (this.gpu) throw new Error('VR chỉ chạy với WebGL, mở lại trang với ?renderer=webgl');
     this.audio.resume();
     const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] });
     await this.renderer.xr.setSession(session);
@@ -701,11 +743,15 @@ export class BattleEngine {
     this.sun.castShadow = q.shadows;
     if (this.sun.shadow.mapSize.x !== q.shadowMapSize) {
       this.sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
-      this.sun.shadow.map?.dispose();
-      this.sun.shadow.map = null;
+      // WebGPU resizes its own shadow target from mapSize; dropping it would break the shadow node.
+      if (!this.gpu) {
+        this.sun.shadow.map?.dispose();
+        this.sun.shadow.map = null;
+      }
     }
-    this.renderer.shadowMap.autoUpdate = q.shadowEvery <= 1;
-    this.renderer.shadowMap.needsUpdate = true;
+    // Per-light flags: both renderers honour them (WebGPU has no renderer-wide shadowMap.autoUpdate).
+    this.sun.shadow.autoUpdate = q.shadowEvery <= 1;
+    this.sun.shadow.needsUpdate = true;
     this.effects.setFlashLights(q.flashLights);
     const s = this.bundle.settings;
     this.unitSettings = { ...s, ragdollLimit: Math.min(s.ragdollLimit, q.ragdollCap), corpseLimit: Math.min(s.corpseLimit, q.corpseCap) };
@@ -734,7 +780,7 @@ export class BattleEngine {
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.renderer.dispose();
     // Free the GPU now: phones cap live contexts, and a page revisit would otherwise hold two until GC.
-    this.renderer.forceContextLoss();
+    if (this.renderer instanceof THREE.WebGLRenderer) this.renderer.forceContextLoss();
     canvas.remove();
   }
 
@@ -830,10 +876,9 @@ export class BattleEngine {
   /** Victory mood: sky and light lerp toward dusk so the fireworks pop. */
   private applyDusk(): void {
     const k = this.dusk.t;
-    const u = this.sky.material.uniforms;
-    u.top.value.copy(this.daySky.top).lerp(DUSK_TOP, k * 0.85);
-    u.bottom.value.copy(this.daySky.bottom).lerp(DUSK_BOTTOM, k * 0.7);
-    if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.copy(u.bottom.value);
+    this.skyTop.copy(this.daySky.top).lerp(DUSK_TOP, k * 0.85);
+    this.skyBottom.copy(this.daySky.bottom).lerp(DUSK_BOTTOM, k * 0.7);
+    if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.copy(this.skyBottom);
     this.sun.color.copy(SUN_DAY).lerp(SUN_DUSK, k);
     this.sun.intensity = 2.6 * (1 - 0.45 * k);
     this.hemi.intensity = 1.25 * (1 - 0.4 * k);
@@ -1235,7 +1280,7 @@ export class BattleEngine {
       this.camera.position.z += (Math.random() * 2 - 1) * s;
       this.shakeAmount = Math.max(0, this.shakeAmount - dt * 1.6);
     }
-    if (!this.renderer.shadowMap.autoUpdate && this.frameNo % QUALITY[this.tier].shadowEvery === 0) this.renderer.shadowMap.needsUpdate = true;
+    if (!this.sun.shadow.autoUpdate && this.frameNo % QUALITY[this.tier].shadowEvery === 0) this.sun.shadow.needsUpdate = true;
     this.renderer.render(this.scene, this.camera);
     this.statsTimer += dt;
     if (sim && this.statsTimer > 0.25) {

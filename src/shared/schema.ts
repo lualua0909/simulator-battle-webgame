@@ -628,7 +628,7 @@ export const rankedSchema = z.object({
 export const settingsSchema = z.object({
   maxUnitsPerSide: z.number().int().min(1).max(500).default(150),
   /** Seconds; at the end a battle is a draw, a siege is won by the defenders. */
-  battleTimeLimit: z.number().min(30).max(3600).default(600),
+  battleTimeLimit: z.number().min(30).max(3600).default(300),
   ragdollLimit: z.number().int().min(0).max(400).default(80),
   corpseLimit: z.number().int().min(0).max(3000).default(800),
   gravity: z.number().min(1).max(40).default(9.8),

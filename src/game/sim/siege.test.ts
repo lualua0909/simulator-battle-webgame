@@ -207,3 +207,25 @@ test('a deep river is crossed only at the ford', () => {
   assert.ok(!deep, 'walked into deep water');
   assert.ok(knight.x > terrain.riverX(knight.z), `still on the near bank at ${knight.x.toFixed(1)},${knight.z.toFixed(1)}`);
 });
+
+test('a close-range defender placed on a wall jumps down to fight', () => {
+  const a = siege({ blue: [at('dummy', 13, 1)], red: [...cell('tuong-thanh', 9, 1, 3), { unitId: 'clubber', ...snapToCell(9, 1) }, core] });
+  const clubber = a.sim.units.find((u) => u.def.id === 'clubber')!;
+  const dummy = a.sim.units.find((u) => u.def.id === 'dummy')!;
+  assert.ok(clubber.onWall);
+  a.run(10);
+  assert.equal(clubber.onWall, null);
+  assert.ok(dummy.hp < dummy.def.hp, 'the defender must reach the attacker below');
+});
+
+test('bot siege defence only posts real shooters on walls (no short-range breath units)', () => {
+  // Cheapest ranged unit, so the old role-only filter would always have picked it.
+  const pyro = { ...SEED.units.find((u) => u.id === 'pyromancer')!, weaponId: 'baby-dragon-breath', cost: 10 };
+  const content = { ...SEED, units: SEED.units.map((u) => (u.id === 'pyromancer' ? pyro : u)) };
+  const terrain = new Terrain(SEED.maps.find((m) => m.id === 'thanh-tren-doi')!, SEED.assets, 'red');
+  for (let seed = 1; seed <= 20; seed++) {
+    const army = generateSiegeDefense({ bot: SEED.bots[1], content, terrain, side: 'red', budget: 12000, seed });
+    const walls = new Set(army.filter((p) => p.unitId === 'tuong-thanh').map((p) => `${Math.floor(p.x / 2)},${Math.floor(p.z / 2)}`));
+    for (const p of army) if (p.unitId === 'pyromancer') assert.ok(!walls.has(`${Math.floor(p.x / 2)},${Math.floor(p.z / 2)}`), `seed ${seed}: pyromancer on a wall`);
+  }
+});

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { hash2, valueNoise } from '../sim/rng';
 import type { Side, Terrain } from '../sim/terrain';
+import type { waterMaterial } from './webgpu';
 
 export function createTerrainMesh(terrain: Terrain): THREE.Mesh {
   const map = terrain.map;
@@ -102,7 +103,8 @@ export interface Water {
   update(time: number): void;
 }
 
-export function createWater(terrain: Terrain): Water | null {
+/** `gpuWater`: the WebGPU renderer's TSL material (it cannot run the GLSL patch below). */
+export function createWater(terrain: Terrain, gpuWater?: typeof waterMaterial): Water | null {
   if (!terrain.riverEnabled) return null;
   const half = terrain.half;
   const along = Math.ceil(terrain.size / 2);
@@ -133,17 +135,23 @@ export function createWater(terrain: Terrain): Water | null {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setIndex(idx);
-  const mat = new THREE.MeshStandardMaterial({ color: terrain.map.waterColor, transparent: true, opacity: 0.8, roughness: 0.2, metalness: 0.1, flatShading: true });
+  const params: THREE.MeshStandardMaterialParameters = { color: terrain.map.waterColor, transparent: true, opacity: 0.8, roughness: 0.2, metalness: 0.1, flatShading: true };
   // Ripples on the GPU: no per-frame vertex loop or buffer upload (flat shading takes its normals
   // from screen-space derivatives, so the facets still catch the light as the surface moves).
-  const time = { value: 0 };
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = time;
-    shader.vertexShader = `uniform float uTime;\n${shader.vertexShader}`.replace(
-      '#include <begin_vertex>',
-      '#include <begin_vertex>\n  transformed.y += sin(position.x * 0.9 + uTime * 1.6) * 0.05 + cos(position.z * 0.5 + uTime * 1.1) * 0.06;',
-    );
-  };
+  let mat: THREE.Material;
+  let time = { value: 0 };
+  if (gpuWater) ({ material: mat, time } = gpuWater(params));
+  else {
+    const std = new THREE.MeshStandardMaterial(params);
+    std.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = time;
+      shader.vertexShader = `uniform float uTime;\n${shader.vertexShader}`.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n  transformed.y += sin(position.x * 0.9 + uTime * 1.6) * 0.05 + cos(position.z * 0.5 + uTime * 1.1) * 0.06;',
+      );
+    };
+    mat = std;
+  }
   const mesh = new THREE.Mesh(g, mat);
   mesh.name = 'river';
   mesh.receiveShadow = true;

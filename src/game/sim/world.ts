@@ -18,6 +18,8 @@ const RETARGET_TICKS = 10;
 const TURN_RATE = 0.3;
 const ACCEL = 0.25;
 const GROUND_REACH = 2.6;
+/** Widest body that collides with trees/rocks: they are placed ≥ 2 m apart (terrain.ts), so every unit fits between two. */
+const OBSTACLE_BODY = 0.95;
 const DEG = 0.017453292519943295;
 /** A skill whose conditions fail looks again after this long. */
 const SKILL_RETRY = 0.3;
@@ -546,6 +548,8 @@ export class BattleSim {
     const groundOnly = u.weapon.attack === 'melee' && !u.flying;
     // Siege engines prefer buildings and walls; everyone else ignores walls until nothing else is left.
     const breaker = u.def.role === 'siege';
+    // Artillery cannot fire inside its minimum range: rather pick a target it can shoot.
+    const tooClose = u.weapon.minRange * u.weapon.minRange;
     let best = -1;
     let bestD = Infinity;
     let bestAny = -1;
@@ -558,6 +562,7 @@ export class BattleSim {
       const dz = v.z - u.z;
       let d = dx * dx + dz * dz;
       if (breaker && v.structure) d *= 0.25;
+      if (d < tooClose) d += 1e6;
       if (v.grid && !breaker) {
         if (d < bestWallD) {
           bestWallD = d;
@@ -651,11 +656,31 @@ export class BattleSim {
           const keep = t.side === u.side && t.hp < t.def.hp ? w.range * 0.7 : 4 + u.radius + t.radius;
           if (dist > keep) want = 1;
         } else if (isRanged(w)) {
-          if (dist > w.range * u.rangeMul * 0.95) want = 1;
+          let reach = w.range * u.rangeMul;
+          if (w.attack === 'chain') {
+            // 3D reach like inRange: from a wall top the height gap eats into it.
+            const dy = t.y + t.def.height * 0.5 - (u.y + u.def.height * 0.7);
+            const r = reach + t.def.radius;
+            reach = Math.min(reach, Math.sqrt(Math.max(0, r * r - dy * dy)));
+          }
+          if (dist > reach * 0.95) want = 1;
           else if (dist < w.minRange) want = -1;
+          else if (u.def.trampleDamage > 0 && !t.flying) {
+            // War platform (elephant + archers on its back): the beast keeps closing
+            // to trample while the riders keep shooting on the move (basic attacks
+            // fire while walking; only skill casts stand still).
+            const contact = u.radius + t.radius + 0.5;
+            if (dist > contact) want = 1;
+          }
+        } else if (w.attack === 'breath') {
+          // Reach is 3D (see inRange): the higher the gap, the closer it has to get.
+          const dy = t.y + t.def.height * 0.5 - u.y;
+          const r = w.range + t.def.radius;
+          if (dist > Math.sqrt(Math.max(0, r * r - dy * dy)) * 0.9) want = 1;
         } else {
           const reach = w.range + u.radius + t.radius;
-          if (dist > reach * 0.9) want = 1;
+          // On a wall above/below the target: keep walking (off the wall edge) instead of standing out of reach.
+          if (dist > reach * 0.9 || (u.onWall && !this.verticalReach(u, t))) want = 1;
         }
         const water = !u.flying && this.terrain.inWater(u.x, u.z) ? this.content.settings.waterSlow : 1;
         const rubble = !u.flying && !u.onWall && this.cellAt(u.x, u.z)?.unit.alive === false ? this.content.settings.siege.rubbleSlow : 1;
@@ -709,7 +734,7 @@ export class BattleSim {
           const proj = ox * nx + oz * nz;
           if (proj <= 0 || proj >= lookahead || proj >= bestProj) continue;
           const lat = nx * oz - nz * ox;
-          const clear = o.radius + u.radius + 0.5;
+          const clear = o.radius + Math.min(u.radius, OBSTACLE_BODY) + 0.5;
           if (lat >= clear || lat <= -clear) continue;
           bestProj = proj;
           side = lat > 1e-4 ? 1 : lat < -1e-4 ? -1 : u.id % 2 === 0 ? 1 : -1;
@@ -952,7 +977,8 @@ export class BattleSim {
         u.onWall = cell;
         return;
       }
-      if (u.side === this.defense) {
+      // Shooters hold the wall; everyone else jumps down to fight.
+      if (u.side === this.defense && isRanged(u.weapon)) {
         u.x = clamp(u.x, from.x0 + 0.05, from.x0 + WALL_CELL - 0.05);
         u.z = clamp(u.z, from.z0 + 0.05, from.z0 + WALL_CELL - 0.05);
       } else this.startFall(u);
@@ -1035,7 +1061,7 @@ export class BattleSim {
         for (const o of list) {
           const dx = u.x - o.x;
           const dz = u.z - o.z;
-          const min = o.radius + u.radius;
+          const min = o.radius + Math.min(u.radius, OBSTACLE_BODY);
           const d2 = dx * dx + dz * dz;
           if (d2 >= min * min || d2 < 1e-8) continue;
           const d = Math.sqrt(d2);
@@ -1729,11 +1755,12 @@ export class BattleSim {
     let tx = t.x;
     let tz = t.z;
     const ty = t.y + t.def.height * 0.5;
-    // One lead iteration against the target's current velocity.
+    // One lead iteration against the target's actual motion this tick (not its wished velocity:
+    // a unit pushing into a tree or wall is not going anywhere).
     let d = Math.sqrt((tx - ox) * (tx - ox) + (tz - oz) * (tz - oz));
     let T = Math.max(0.15, d / speed);
-    tx += (t.vx + t.kx) * T;
-    tz += (t.vz + t.kz) * T;
+    tx += (t.x - t.px) * SIM_HZ * T;
+    tz += (t.z - t.pz) * SIM_HZ * T;
     if (w.spread > 0) {
       const [sx, sz] = this.rng.disk();
       const s = (w.spread * d) / 10;

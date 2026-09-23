@@ -7,6 +7,7 @@
 //   thumbstick ←/→       snap turn 30°
 //   thumbstick ↑/↓       table mode: grow / shrink the table
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 
 export interface XrActions {
   /** Trigger pulled: world-space ray of the controller. */
@@ -30,7 +31,7 @@ export class XrControls {
   private readonly direction = new THREE.Vector3();
 
   constructor(
-    private readonly renderer: THREE.WebGLRenderer,
+    private readonly renderer: THREE.WebGLRenderer | WebGPURenderer,
     private readonly actions: XrActions,
   ) {
     const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);

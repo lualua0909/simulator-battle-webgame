@@ -287,3 +287,53 @@ test('different seeds diverge', () => {
   }
   assert.notEqual(s1.checksum(), s2.checksum());
 });
+
+const OPEN: MapDef = { ...SEED.maps[0], id: 'open', size: 80, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
+const TARGET: UnitDef = { ...SEED.units.find((u) => u.id === 'clubber')!, id: 'target', hp: 5000, speed: 0, weaponId: 'club' };
+const WITH_TARGET = { ...SEED, units: [...SEED.units, TARGET] };
+
+test('a big beast squeezes between two trees at the minimum spacing', () => {
+  const terrain = new Terrain(OPEN);
+  // Trunk surfaces 2 m apart: the closest terrain.ts ever places them.
+  terrain.obstacles.push({ kind: 'tree', assetId: 'tree-pine', x: 0, y: 0, z: -1.8, radius: 0.8, scale: 1, yaw: 0, variant: 0 });
+  terrain.obstacles.push({ kind: 'tree', assetId: 'tree-pine', x: 0, y: 0, z: 1.8, radius: 0.8, scale: 1, yaw: 0, variant: 0 });
+  const sim = new BattleSim(WITH_TARGET, OPEN, terrain, armies({ blue: [{ unitId: 'mammoth', x: -12, z: 0 }], red: [{ unitId: 'target', x: 14, z: 0 }] }), 1);
+  const beast = sim.units[0];
+  for (let i = 0; i < 30 * 15; i++) sim.step();
+  assert.ok(beast.x > 5, `stuck at x=${beast.x.toFixed(2)}`);
+});
+
+test('a low-flying breath unit closes in until its (3D) breath reaches ground targets', () => {
+  const terrain = new Terrain(OPEN);
+  const sim = new BattleSim(WITH_TARGET, OPEN, terrain, armies({ blue: [{ unitId: 'baby-dragon', x: -12, z: 0 }], red: [{ unitId: 'target', x: 12, z: 0 }] }), 1);
+  const target = sim.units[1];
+  for (let i = 0; i < 30 * 15; i++) sim.step();
+  assert.ok(target.hp < target.def.hp, 'dragon never breathed on the target');
+});
+
+test('artillery shoots an enemy it can hit instead of backing away from one inside its minimum range', () => {
+  const terrain = new Terrain(OPEN);
+  const sim = new BattleSim(WITH_TARGET, OPEN, terrain, armies({ blue: [{ unitId: 'catapult', x: -10, z: 0 }], red: [{ unitId: 'target', x: -4, z: 0 }, { unitId: 'target', x: 20, z: 0 }] }), 1);
+  const catapult = sim.units[0];
+  for (let i = 0; i < 5; i++) sim.step();
+  assert.equal(catapult.targetId, 2);
+});
+
+test('a trampling war platform closes to melee while its riders keep shooting', () => {
+  const duel = (blueId: string) => {
+    const terrain = new Terrain(OPEN);
+    const sim = new BattleSim(SEED, OPEN, terrain, armies({ blue: [{ unitId: blueId, x: -15, z: 0 }], red: [{ unitId: 'archer', x: 15, z: 0 }] }), 1);
+    let min = Infinity;
+    for (let i = 0; i < 30 * 25; i++) {
+      sim.step();
+      const a = sim.units[0];
+      const b = sim.units[1];
+      if (!a.alive || !b.alive) break;
+      min = Math.min(min, Math.hypot(a.x - b.x, a.z - b.z));
+    }
+    return min;
+  };
+  // Pure archers hold at bow range (~28 m); the elephant must push into contact instead.
+  assert.ok(duel('archer') > 20, 'archers should hold at bow range');
+  assert.ok(duel('war-elephant') < 10, 'war-elephant held at bow range instead of closing to trample');
+});

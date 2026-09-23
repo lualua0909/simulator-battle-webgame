@@ -237,7 +237,7 @@ const units: UnitDef[] = [
   U({ id: 'hoplite', name: 'Giáo binh', factionId: 'phuong-dong', role: 'melee', cost: 150, hp: 180, speed: 3.3, armorClass: 'light', blockChance: 0.5, weaponId: 'hoplite-spear', modelId: 'm-hoplite' }),
   U({ id: 'monk', name: 'Võ tăng', factionId: 'phuong-dong', role: 'melee', cost: 250, hp: 220, speed: 5.5, weaponId: 'monk-staff', modelId: 'm-monk', description: 'Nhanh, đánh liên hoàn.' }),
   U({ id: 'fire-archer', name: 'Hỏa tiễn thủ', factionId: 'phuong-dong', role: 'ranged', cost: 400, hp: 80, speed: 3.5, skillIds: ['mua-hoa-tien'], weaponId: 'fire-bow', modelId: 'm-fire-archer' }),
-  U({ id: 'war-elephant', name: 'Chiến tượng', factionId: 'phuong-dong', role: 'ranged', cost: 2000, hp: 3000, speed: 3.2, mass: 40, radius: 2, height: 4, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 50, skillIds: ['mua-ten'], weaponId: 'elephant-bow', modelId: 'm-war-elephant' }),
+  U({ id: 'war-elephant', name: 'Chiến tượng', factionId: 'phuong-dong', role: 'melee', cost: 2000, hp: 3000, speed: 3.2, mass: 40, radius: 2, height: 4, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 50, skillIds: ['mua-ten'], weaponId: 'elephant-bow', modelId: 'm-war-elephant' }),
   U({ id: 'eagle', name: 'Đại bàng', factionId: 'huyen-thoai', role: 'melee', cost: 300, hp: 150, speed: 8, mass: 0.8, radius: 0.8, height: 1.2, armorClass: 'beast', flying: true, altitude: 7, weaponId: 'talons', modelId: 'm-eagle', description: 'Bay, bổ nhào xuống cào.' }),
   U({ id: 'wizard', name: 'Pháp sư', factionId: 'huyen-thoai', role: 'ranged', cost: 700, hp: 120, speed: 3.4, skillIds: ['thien-thach'], weaponId: 'fireball-staff', modelId: 'm-wizard' }),
   U({ id: 'giant', name: 'Người khổng lồ', factionId: 'huyen-thoai', role: 'melee', cost: 1600, hp: 2500, speed: 3.4, mass: 25, radius: 1.3, height: 4.6, armorClass: 'beast', knockbackResist: 0.7, trampleDamage: 20, skillIds: ['nem-tang-da', 'dam-dat'], weaponId: 'giant-club', modelId: 'm-giant', description: 'Một gậy bay cả hàng.' }),
@@ -371,7 +371,7 @@ const bots: BotDef[] = [
 
 const settings: Settings = {
   maxUnitsPerSide: 150,
-  battleTimeLimit: 600,
+  battleTimeLimit: 300,
   ragdollLimit: 80,
   corpseLimit: 800,
   gravity: 9.8,

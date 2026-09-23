@@ -17,9 +17,9 @@ const FIGHT_MIN = 22;
 const FIGHT_MAX = 42;
 const ZOOM_BIAS_MIN = 0.62;
 const ZOOM_BIAS_MAX = 1.55;
-/** Low, near-level shot up close; a little higher once the shot opens up. */
-const PITCH_NEAR = 0.22;
-const PITCH_FAR = 0.4;
+/** Góc quay battle: đủ cao để mép dưới màn hình luôn chạm đất trong map/skirt, không chĩa lên trời lộ ngoài map. */
+const PITCH_NEAR = 0.5;
+const PITCH_FAR = 0.68;
 /** Seconds the camera takes to settle on a new aim point — the longer the trip, the gentler it is. */
 const AIM_SMOOTH = 1.5;
 const AIM_SMOOTH_FAR = 3.2;

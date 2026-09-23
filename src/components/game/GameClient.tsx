@@ -168,23 +168,36 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const checksumRef = useRef<(t: number, h: number) => void>(() => {});
 
   useEffect(() => {
-    if (!bundle || !hostRef.current) return;
-    const e = new BattleEngine(hostRef.current, bundle, {
-      onPointer: (p) => pointerRef.current(p),
-      onResult: (r) => resultRef.current(r),
-      onChecksum: (t, h) => checksumRef.current(t, h),
-      onStats: stats.set,
-      onContextLost: setContextLost,
-      onCinematic: (k) => {
-        cineRef.current = k;
-        setCine(k);
-      },
-      onView: setView,
+    const host = hostRef.current;
+    if (!bundle || !host) return;
+    let e: BattleEngine | null = null;
+    let live = true;
+    // Resolves to null (WebGL) right away unless this browser opted into WebGPU.
+    void BattleEngine.loadGpu().then((gpu) => {
+      if (!live) return;
+      e = new BattleEngine(
+        host,
+        bundle,
+        {
+          onPointer: (p) => pointerRef.current(p),
+          onResult: (r) => resultRef.current(r),
+          onChecksum: (t, h) => checksumRef.current(t, h),
+          onStats: stats.set,
+          onContextLost: setContextLost,
+          onCinematic: (k) => {
+            cineRef.current = k;
+            setCine(k);
+          },
+          onView: setView,
+        },
+        gpu,
+      );
+      setEngine(e);
+      (window as unknown as { __engine?: BattleEngine }).__engine = e;
     });
-    setEngine(e);
-    (window as unknown as { __engine?: BattleEngine }).__engine = e;
     return () => {
-      e.dispose();
+      live = false;
+      e?.dispose();
       setEngine(null);
     };
   }, [bundle]);

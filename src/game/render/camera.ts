@@ -12,7 +12,18 @@ import type { Terrain } from '../sim/terrain';
 const MIN_DISTANCE = 10;
 const MIN_PITCH = 0.12;
 const MAX_PITCH = 1.45;
+/**
+ * Góc nâng tối thiểu cho thao tác của user (chuột phải kéo).
+ * Phải lớn hơn nửa FOV dọc (50°/2 ≈ 0.436 rad) để mép dưới màn hình luôn
+ * chạm đất (skirt) thay vì chĩa lên trời và lộ khoảng trắng ngoài map.
+ * Cinematic/director (pitch thấp) vẫn được phép qua jumpTo/setView/autoPitch.
+ */
+const USER_MIN_PITCH = 0.55;
 const CLEARANCE = 1.5;
+/** Giữ tâm camera cách mép map một khoảng để không bao giờ ngắm vào khoảng trống ngoài map. */
+const PAN_INSET = 4;
+/** Mỗi mét zoom-out thì vùng pan cho phép co lại từng này (nhân thêm theo aspect màn hình). */
+const PAN_SHRINK = 0.22;
 const MOVE_KEYS = ['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 
 /** Pitch preferred at a zoom distance; the user's tilt is an offset on top of it. */
@@ -128,7 +139,9 @@ export class RtsCamera {
       d.y = e.clientY;
       if (d.mode === 'orbit') {
         this.goal.yaw -= dx * 0.0065;
-        const pitch = THREE.MathUtils.clamp(this.goalPitch() + dy * 0.005, MIN_PITCH, MAX_PITCH);
+        // User không được hạ góc xuống quá thấp (lộ bầu trời / ngoài map);
+        // cinematic vẫn có thể dùng pitch thấp qua jumpTo/autoPitch.
+        const pitch = THREE.MathUtils.clamp(this.goalPitch() + dy * 0.005, USER_MIN_PITCH, MAX_PITCH);
         this.tilt = pitch - this.pitchBase();
       } else this.dragPan(e.clientX, e.clientY, dx, dy, d.grab);
       this.onInput?.({ kind: d.mode });
@@ -181,12 +194,16 @@ export class RtsCamera {
   focus(x: number, z: number, distance?: number): void {
     this.goal.target.set(x, 0, z);
     if (distance) this.goal.distance = this.clampDistance(distance);
+    this.clampTargets();
   }
 
   /** Hand the pitch back: whatever angle the director held becomes the user's own tilt. */
   releasePitch(): void {
     if (this.autoPitch === null) return;
     this.tilt = this.goalPitch() - basePitch(this.goal.distance);
+    // Không giữ góc là là mặt đất của director làm góc của user (sẽ lộ ngoài map).
+    const minTilt = USER_MIN_PITCH - basePitch(this.goal.distance);
+    if (this.tilt < minTilt) this.tilt = minTilt;
     this.autoPitch = null;
   }
 
@@ -199,6 +216,7 @@ export class RtsCamera {
     this.goal.yaw = yaw;
     this.goal.distance = this.clampDistance(distance);
     this.tilt = pitch - this.pitchBase();
+    this.clampTargets();
   }
 
   /** Snap to a view with no smoothing (a cinematic handing the camera back). */
@@ -209,6 +227,7 @@ export class RtsCamera {
     this.goal.distance = this.distance = this.clampDistance(view.distance);
     this.tilt = view.pitch - this.pitchBase();
     this.pitch = this.goalPitch();
+    this.clampTargets();
     this.applyPose();
   }
 
@@ -223,13 +242,22 @@ export class RtsCamera {
     const anchor = this.groundUnder(clientX, clientY)?.clone();
     const before = this.goal.distance;
     this.goal.distance = this.clampDistance(before * factor);
-    if (!anchor || this.goal.distance === before) return;
+    if (this.goal.distance === before) return;
+    // Neo vào khoảng trống ngoài map thì chỉ zoom tại chỗ, không kéo tâm theo.
+    if (!anchor || !this.insideMap(anchor.x, anchor.z)) {
+      this.clampTargets();
+      return;
+    }
     this.scratch.copy(this.camera, false);
     this.poseCamera(this.scratch, this.goal.target, this.goal.yaw, this.goalPitch(), this.goal.distance);
     const after = this.planeHit(this.scratch, clientX, clientY, anchor.y);
-    if (!after) return;
+    if (!after) {
+      this.clampTargets();
+      return;
+    }
     this.goal.target.x += anchor.x - after.x;
     this.goal.target.z += anchor.z - after.z;
+    this.clampTargets();
   }
 
   update(dt: number): void {
@@ -267,7 +295,9 @@ export class RtsCamera {
   // ------------------------------------------------------------------ internals
 
   private goalPitch(): number {
-    return THREE.MathUtils.clamp(this.pitchBase() + this.tilt, MIN_PITCH, MAX_PITCH);
+    // Khi director cầm (battle) không cho góc tụt xuống quá thấp dù còn dư tilt cũ của user.
+    const lo = this.autoPitch !== null ? 0.45 : MIN_PITCH;
+    return THREE.MathUtils.clamp(this.pitchBase() + this.tilt, lo, MAX_PITCH);
   }
 
   /** Pitch before the user's own tilt: the director's, else the one that follows the zoom. */
@@ -311,9 +341,33 @@ export class RtsCamera {
     return THREE.MathUtils.clamp(d, MIN_DISTANCE, this.maxDistance);
   }
 
+  private insideMap(x: number, z: number): boolean {
+    if (!this.terrain) return false;
+    const half = this.terrain.half;
+    return Math.abs(x) <= half && Math.abs(z) <= half;
+  }
+
+  /**
+   * Vùng tâm camera được phép đứng: co lại khi zoom-out, màn rộng, và khi góc
+   * nhìn thấp (càng là là mặt đất càng dễ lộ ngoài map nên càng siết chặt).
+   * Zoom-in + nhìn từ trên cao thì được đi gần sát mép (chừa PAN_INSET).
+   */
+  private panLimit(): number {
+    if (!this.terrain) return 0;
+    const half = this.terrain.half;
+    const base = Math.max(0, half - PAN_INSET);
+    const aspect = this.camera.aspect || 1.4;
+    const aspectK = THREE.MathUtils.clamp(aspect / 1.4, 0.7, 1.6);
+    // pitch thấp (sin nhỏ) -> chân trời xa -> co vùng pan mạnh hơn.
+    const pitch = this.goalPitch();
+    const lowK = 1 - Math.sin(THREE.MathUtils.clamp(pitch, 0, Math.PI / 2));
+    const shrink = this.goal.distance * (PAN_SHRINK + 0.3 * lowK) * aspectK;
+    return Math.max(0, base - shrink);
+  }
+
   private clampTargets(): void {
     if (!this.terrain) return;
-    const lim = this.terrain.half;
+    const lim = this.panLimit();
     for (const t of [this.goal.target, this.target]) {
       t.x = THREE.MathUtils.clamp(t.x, -lim, lim);
       t.z = THREE.MathUtils.clamp(t.z, -lim, lim);
@@ -332,10 +386,13 @@ export class RtsCamera {
   private dragPan(clientX: number, clientY: number, dx: number, dy: number, grab: THREE.Vector3 | null): void {
     let mx: number;
     let mz: number;
-    const q = grab && this.planeHit(this.camera, clientX, clientY, grab.y);
-    if (grab && q) {
-      mx = grab.x - q.x;
-      mz = grab.z - q.z;
+    // Điểm grab ngoài map (mặt phẳng vô hạn / bầu trời) thì không dùng để neo,
+    // rớt về pan theo tỉ lệ màn hình để khỏi lôi tâm camera ra khỏi map.
+    const usableGrab = grab && this.insideMap(grab.x, grab.z) ? grab : null;
+    const q = usableGrab && this.planeHit(this.camera, clientX, clientY, usableGrab.y);
+    if (usableGrab && q) {
+      mx = usableGrab.x - q.x;
+      mz = usableGrab.z - q.z;
       // Near the horizon a pixel spans many metres; cap the step.
       const len = Math.hypot(mx, mz);
       const cap = this.distance * 0.5;

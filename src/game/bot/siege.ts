@@ -56,7 +56,9 @@ export function generateSiegeDefense(opts: SiegeDefenseOptions): Placement[] {
   const platform = usable.filter((u) => u.structure === 'platform').sort((a, b) => a.cost - b.cost)[0];
   const towers = usable.filter((u) => u.structure === 'building' && !u.spawnUnitId && u.weaponId !== 'none').sort((a, b) => a.cost - b.cost);
   const barracks = usable.find((u) => u.structure === 'building' && u.spawnUnitId);
-  const shooters = usable.filter((u) => u.structure === 'none' && u.role === 'ranged' && !u.flying && u.radius <= 0.6).sort((a, b) => a.cost - b.cost);
+  // Wall garrison: only units that can hit the ground below from up there (not short-range breath etc.).
+  const shoots = (u: UnitDef) => ['projectile', 'strike', 'chain'].includes(content.weapons.find((w) => w.id === u.weaponId)?.attack ?? '');
+  const shooters = usable.filter((u) => u.structure === 'none' && u.role === 'ranged' && shoots(u) && !u.flying && u.radius <= 0.6).sort((a, b) => a.cost - b.cost);
 
   // ---- wall cells of the chosen template (relative cell offsets; +dx = toward the front)
   const layout = opts.layout ?? SIEGE_LAYOUTS[rng.int(SIEGE_LAYOUTS.length)];
