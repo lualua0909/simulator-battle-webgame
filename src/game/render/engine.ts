@@ -12,7 +12,7 @@ import type { Armies } from '../sim/army';
 import { Terrain, WALL_CELL, type Side } from '../sim/terrain';
 import { BattleSim, SIM_DT, type BattleResult, type SimEvent, type SimUnit } from '../sim/world';
 import { attackStyleFor, Poser } from './animate';
-import { basePitch, RtsCamera, type CameraView } from './camera';
+import { basePitch, RtsCamera, type CameraView, type ViewInsets } from './camera';
 import { Cinematic, type Shot } from './cinematic';
 import { CameraDirector } from './director';
 import { EffectRenderer, type EffectHost } from './effects';
@@ -92,6 +92,11 @@ const FIREWORK_COLORS: Record<Side, string[]> = {
 
 /** Deployment zone overlay tint per side. */
 const ZONE_COLOR: Record<Side, string> = { blue: '#2f6fe0', red: '#d8373a', green: '#2f9e44', yellow: '#e0b400' };
+/** Deployment view: camera pitch, and metres kept around the zone. */
+const DEPLOY_PITCH = 0.9;
+const DEPLOY_MARGIN = 2;
+/** The deployment view never pulls back so far that a metre at the aim point shrinks below this many CSS pixels. */
+const DEPLOY_MIN_PX = 6;
 
 const SKY_VERT = `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const SKY_FRAG = `uniform vec3 top; uniform vec3 bottom; varying vec3 vDir;
@@ -390,6 +395,20 @@ export class BattleEngine {
     for (const [side, group] of Object.entries(this.zones) as Array<[Side, THREE.Group]>) group.visible = sides.includes(side);
   }
 
+  /** The deploy UI covers these canvas edges (null = none): the camera centres, frames and bounds itself to the rest. */
+  setViewInsets(insets: ViewInsets | null): void {
+    this.rts.setInsets(insets);
+  }
+
+  /** Frames `side`'s deployment zone in the uncovered part of the screen (see deployView): glides there, or snaps with `instant`. */
+  frameDeploy(side: Side, instant = false): void {
+    const view = this.deployView(side);
+    if (!view) return;
+    this.director.side = side;
+    if (instant) this.rts.jumpTo(view);
+    else this.rts.glideTo(view);
+  }
+
   /** Camera behind a side's deployment zone, looking at the enemy. */
   viewSide(side: Side): void {
     const t = this.terrain;
@@ -458,18 +477,18 @@ export class BattleEngine {
     return this.cine?.kind ?? null;
   }
 
-  /** Establishing flight over the whole map that settles close behind `side`'s deployment zone. */
+  /** Establishing flight over the whole map that settles on `side`'s deployment view (see frameDeploy). */
   playDeployIntro(side: Side, onEnd: () => void = () => {}): void {
     const t = this.terrain;
-    if (!t) return onEnd();
+    const view = this.deployView(side);
+    if (!t || !view) return onEnd();
     const s = Math.sign(this.zoneCenter(side).x) || 1; // own half: x·s > 0
     const h = t.half;
-    const zone = t.zoneOf(side);
-    const view = this.closeView(side, (zone.x0 + zone.x1) / 2, 0, 24);
     this.play('intro', view, onEnd, 6.5, [
       { at: 0, pos: new THREE.Vector3(-s * h, t.size * 0.5, -h * 0.95), look: this.ground(-s * h * 0.4, 0) },
       { at: 2.4, pos: new THREE.Vector3(-s * h * 0.15, t.size * 0.24, h * 0.9), look: this.ground(0, 0) },
-      { at: 4.6, pos: new THREE.Vector3(s * h * 0.45, t.size * 0.16, h * 0.55), look: view.target.clone() },
+      // Rises into the (high, pulled-back) deployment view instead of dipping low before it.
+      { at: 4.6, pos: new THREE.Vector3(s * h * 0.95, t.size * 0.38, h * 0.6), look: view.target.clone() },
     ]);
   }
 
@@ -828,6 +847,22 @@ export class BattleEngine {
     return { target: this.ground(x, z), yaw: this.yawOf(side), pitch: basePitch(distance), distance };
   }
 
+  /**
+   * View behind `side` holding its whole deployment zone inside the uncovered area (spare room shows the ground ahead),
+   * unless that would shrink the soldiers below DEPLOY_MIN_PX a metre: then the zone overflows the sides evenly.
+   */
+  private deployView(side: Side): CameraView | null {
+    const t = this.terrain;
+    if (!t) return null;
+    const zone = t.zoneOf(side);
+    const m = DEPLOY_MARGIN;
+    const points: THREE.Vector3[] = [];
+    for (const x of [zone.x0 - m, zone.x1 + m]) for (const z of [zone.z0 - m, zone.z1 + m]) points.push(this.ground(x, z));
+    // Distance at which a metre at the aim point spans DEPLOY_MIN_PX pixels.
+    const maxDistance = (this.host.clientHeight || 600) / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * DEPLOY_MIN_PX);
+    return this.rts.fit(points, this.yawOf(side), DEPLOY_PITCH, maxDistance);
+  }
+
   private zoneCenter(side: Side): { x: number; z: number } {
     const z = this.terrain!.zoneOf(side);
     return { x: (z.x0 + z.x1) / 2, z: (z.z0 + z.z1) / 2 };
@@ -1056,8 +1091,7 @@ export class BattleEngine {
     const w = this.host.clientWidth || 800;
     const h = this.host.clientHeight || 600;
     this.renderer.setSize(w, h);
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.rts.resize(w, h);
   }
 
   private groundAt(clientX: number, clientY: number): THREE.Vector3 | null {

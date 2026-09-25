@@ -80,7 +80,7 @@ function HeroDecorations({
       </div>
       <div
         ref={sunRef}
-        className="absolute -left-10 top-8 z-[3] h-36 w-36 will-change-transform sm:left-10"
+        className="absolute left-2 top-8 z-[3] h-24 w-24 will-change-transform sm:left-10 sm:h-36 sm:w-36"
         aria-hidden
       >
         <div className="hero-moon border-4 border-[#2d3232] bg-gradient-to-b from-[#ffe57a] to-[#ff9d2e] shadow-[0_6px_0_0_#2d3232,0_0_60px_rgba(255,200,60,.8)]" />
@@ -93,9 +93,9 @@ function HeroHills({ hillsRef }: { hillsRef: RefObject<SVGSVGElement | null> }) 
   return (
     <svg
       ref={hillsRef}
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[22vh] w-full will-change-transform"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[14vh] w-full will-change-transform sm:h-[22vh]"
       viewBox="0 0 1200 400"
-      preserveAspectRatio="none"
+      preserveAspectRatio="xMidYMax slice"
       aria-hidden
     >
       <path d="M0 250 L150 170 L300 230 L470 120 L640 220 L820 140 L1000 230 L1200 160 L1200 400 L0 400Z" fill="#8fbf6a" stroke="#2d3232" strokeWidth="8" />
@@ -138,7 +138,7 @@ function useSunsetParallax(
       if (hillsRef.current) hillsRef.current.style.transform = `translate3d(0, ${(s * 0.2).toFixed(1)}px, 0)`;
       if (contentRef.current) {
         contentRef.current.style.transform = `translate3d(0, ${(s * -0.12).toFixed(1)}px, 0)`;
-        contentRef.current.style.opacity = `${Math.max(0, 1 - p * 2.2).toFixed(3)}`;
+        contentRef.current.style.opacity = `${Math.max(0, 1 - p * 1.4).toFixed(3)}`;
       }
     };
     const schedule = () => {
@@ -204,6 +204,7 @@ export default function HeroBanner({ children, parallax = true }: { children: Re
     <>
       <div ref={anchorRef} className="pointer-events-none absolute inset-0" aria-hidden />
       {!missing && (
+        <>
         <Image
           src={HERO_BANNER_SRC}
           alt=""
@@ -214,6 +215,8 @@ export default function HeroBanner({ children, parallax = true }: { children: Re
           className="object-cover"
           onError={() => setMissing(true)}
         />
+        <div className="absolute inset-0 z-[4] bg-gradient-to-b from-[#241a6e]/40 via-transparent to-[#241a6e]/30" aria-hidden />
+        </>
       )}
       {missing && <HeroDecorations sunRef={sunRef} cloudsRef={cloudsRef} />}
       <div ref={contentRef} className="relative z-10 will-change-transform">

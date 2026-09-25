@@ -10,12 +10,15 @@ export interface NetPlayer {
   connected: boolean;
   units: number;
   cost: number;
+  /** This seat's army budget before siege scaling: the player's level budget (ranked: the map's). */
+  budget: number;
 }
 
 export interface RoomState {
   code: string;
   phase: 'lobby' | 'battle';
   mapId: string;
+  /** Map budget: the budget of both seats of a ranked room (casual seats use their own level budget). */
   budget: number;
   /** Host setting: upgraded units fight with their star bonus. */
   useStars: boolean;
@@ -30,7 +33,6 @@ export interface RoomState {
 
 export interface RoomSettings {
   mapId: string;
-  budget: number;
   useStars: boolean;
   defense: Side | null;
 }

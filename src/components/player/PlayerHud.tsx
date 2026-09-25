@@ -26,9 +26,9 @@ import WeeklyReward from './WeeklyReward';
 export function CoinBar({ value, loading }: { value: number; loading?: boolean }) {
   const { t } = useLanguage();
   return (
-    <Link href="/nap-xu" className="coin-bar" title={t('hud.topupTitle')}>
-      <span className="text-outline ml-auto text-xl leading-none tabular-nums">{loading ? '…' : formatCoins(value)}</span>
-      <CoinIcon size={42} className="absolute -right-4 top-1/2 -translate-y-1/2 drop-shadow" />
+    <Link href="/nap-xu" className="coin-bar min-w-0" title={t('hud.topupTitle')}>
+      <span className="text-outline ml-auto truncate text-xl leading-none tabular-nums">{loading ? '…' : formatCoins(value)}</span>
+      <CoinIcon size={42} className="absolute -right-4 top-1/2 -translate-y-1/2 shrink-0 drop-shadow" />
     </Link>
   );
 }
@@ -89,14 +89,14 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
 
   if (!user) {
     return (
-      <div className="pointer-events-auto flex max-w-full items-center gap-2">
+      <div className="pointer-events-auto flex max-w-full min-w-0 items-center gap-2">
         <LanguageToggle compact />
         <button className="reward-slot" onClick={() => setCollection(true)} title={t('hud.collection')} aria-label={t('hud.collection')}>
           <span className="text-2xl">
             <WalletCards />
           </span>
         </button>
-        <button className="btn btn-gold" onClick={() => openAuth('signin')}>
+        <button className="btn btn-gold min-h-[40px] whitespace-nowrap" onClick={() => openAuth('signin')}>
           <User /> {t('hud.signin')}
         </button>
         {bundle && collection && <Collection bundle={bundle} thumbs={thumbs} onClose={() => setCollection(false)} />}
@@ -109,9 +109,9 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
   const economy = bundle?.settings.economy;
 
   return (
-    <div ref={box} className="pointer-events-auto relative flex max-w-full items-center gap-2 sm:gap-3">
+    <div ref={box} className="pointer-events-auto relative flex max-w-full min-w-0 items-center gap-1.5 sm:gap-3">
       <LanguageToggle compact />
-      <div className="mr-1 shrink-0 sm:mr-4">
+      <div className="mr-0 min-w-0 shrink sm:mr-4">
         <CoinBar value={player?.coins ?? 0} loading={walletLoading && !player} />
       </div>
       <button className="reward-slot" onClick={() => setCollection(true)} title={t('hud.collection')} aria-label={t('hud.collection')}>
@@ -133,9 +133,9 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
         ))}
       <button className="flex min-w-0 items-center gap-2" onClick={() => setMenu((m) => !m)} title={t('hud.account')}>
         <PlayerAvatar user={user} size={46} className="shrink-0 rounded-full border-[3px] border-white bg-[#bfe3ff] shadow-[0_0_0_2px_#2d3232,0_3px_0_2px_#2d3232]" />
-        <span className="hidden max-w-40 truncate text-lg text-outline sm:block sm:max-w-56">{name}</span>
+        <span title={name} className="hidden max-w-40 truncate text-lg text-outline sm:block sm:max-w-56">{name}</span>
       </button>
-      {error && !player && <span className="absolute right-0 top-full mt-1 rounded bg-white/90 px-2 text-red-team">{error}</span>}
+      {error && !player && <span className="absolute right-0 top-full z-10 mt-1 max-w-[calc(100vw-2rem)] break-words rounded bg-white/90 px-2 text-red-team">{error}</span>}
       {menu && (
         <div className="panel absolute right-0 top-full z-30 mt-3 flex min-w-52 flex-col gap-1 p-2">
           {canAccessCms(user) && (

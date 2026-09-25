@@ -57,12 +57,12 @@ export default function WorldChat() {
   }
 
   return (
-    <div className="fixed bottom-3 right-3 z-30 flex flex-col items-end gap-3">
+    <div className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-[max(0.75rem,env(safe-area-inset-right))] z-30 flex flex-col items-end gap-3">
       {open && (
-        <div className="panel flex bg-paper h-[min(32rem,70vh)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden">
+        <div className="panel flex bg-paper h-[min(32rem,70dvh)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b-2 border-ink/20 px-3 py-2">
-            <span className="text-outline text-xl"><Earth /> {t('chat.title')}</span>
-            <button className="btn px-2 py-0" onClick={() => setOpen(false)} aria-label={t('common.close')}>
+            <span className="text-outline min-w-0 truncate text-xl"><Earth /> {t('chat.title')}</span>
+            <button className="btn min-h-[40px] min-w-[40px] shrink-0 px-2 py-0" onClick={() => setOpen(false)} aria-label={t('common.close')}>
               <X />
             </button>
           </div>
@@ -74,8 +74,8 @@ export default function WorldChat() {
                 <div key={m.id} className={`flex items-end gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
                   <PlayerAvatar user={m} size={32} className="shrink-0 rounded-full border-2 border-ink bg-[#bfe3ff]" />
                   <div className={`max-w-[75%] rounded-xl border-2 border-ink/70 px-2 py-1 ${mine ? 'bg-[#cfe8ff]' : 'bg-white'}`}>
-                    <div className="flex items-baseline gap-2 text-xs opacity-70">
-                      <span className="truncate">{m.name}</span>
+                    <div className="flex min-w-0 items-baseline gap-2 text-sm opacity-70">
+                      <span className="truncate" title={m.name}>{m.name}</span>
                       <span className="shrink-0">{time(m.at, locale)}</span>
                     </div>
                     <p className="whitespace-pre-wrap break-words">{m.text}</p>
@@ -86,14 +86,14 @@ export default function WorldChat() {
           </div>
           {error && <p className="px-3 text-red-team">{error}</p>}
           {user ? (
-            <form onSubmit={send} className="flex items-center gap-2 border-t-2 border-ink/20 p-2">
-              <div className="relative flex-1">
-                <input className="field pr-14" value={text} maxLength={CHAT_MAX_CHARS} onChange={(e) => setText(e.target.value)} placeholder={t('chat.placeholder')} />
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs opacity-50">
+            <form onSubmit={send} className="flex items-center gap-2 border-t-2 border-ink/20 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+              <div className="relative min-w-0 flex-1">
+                <input className="field pr-14" value={text} maxLength={CHAT_MAX_CHARS} onChange={(e) => setText(e.target.value)} placeholder={t('chat.placeholder')} enterKeyHint="send" autoComplete="off" />
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm opacity-50">
                   {text.length}/{CHAT_MAX_CHARS}
                 </span>
               </div>
-              <button className="btn btn-gold px-3 py-1" disabled={sending || !text.trim()}>
+              <button className="btn btn-gold min-h-[40px] shrink-0 px-3 py-1" disabled={sending || !text.trim()}>
                 {t('chat.send')}
               </button>
             </form>

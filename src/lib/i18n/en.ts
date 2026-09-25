@@ -95,6 +95,7 @@ const en = {
     configError: 'Could not load game config:',
     random: 'Random',
     budget: 'Budget',
+    level: 'Level',
     opponent: 'Opponent',
     back: 'Back',
     start: 'Start battle',

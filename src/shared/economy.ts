@@ -41,6 +41,8 @@ export type RankState = z.infer<typeof rankStateSchema>;
 /** `players/{uid}` without timestamps. Invalid stored data is refused, never reset: a reset would wipe the coins. */
 export const playerStateSchema = z.object({
   coins: count.default(0),
+  /** Experience: sets the player's level and army budget (see `playerLevel`). */
+  xp: count.default(0),
   /** Unspent cards per unit id. */
   cards: z.record(z.string(), count).default({}),
   /** Star level per unit id. */
@@ -76,6 +78,47 @@ export function emptyPlayer(): PlayerState {
 
 export function isUnlocked(unit: Pick<UnitDef, 'id' | 'unlockCost'>, player: Pick<PlayerState, 'unlocked'> | null): boolean {
   return unit.unlockCost === 0 || Boolean(player?.unlocked.includes(unit.id));
+}
+
+// ---------------------------------------------------------------- levels
+
+type LevelRules = Pick<Economy, 'levelXp' | 'levelXpGrowth' | 'maxLevel'>;
+
+export interface PlayerLevel {
+  level: number;
+  /** XP earned inside this level, and XP this level needs (0 at the max level). */
+  into: number;
+  need: number;
+}
+
+/** Level 1 → 2 needs `levelXp`, every next level `levelXpGrowth` more, up to `maxLevel`. */
+export function playerLevel(xp: number, e: LevelRules): PlayerLevel {
+  let level = 1;
+  let left = Math.max(0, xp);
+  for (;;) {
+    const need = e.levelXp + e.levelXpGrowth * (level - 1);
+    // !(need > 0): rules missing (settings from an older schema) would otherwise loop forever.
+    if (level >= e.maxLevel || !(need > 0)) return { level, into: 0, need: 0 };
+    if (left < need) return { level, into: left, need };
+    left -= need;
+    level++;
+  }
+}
+
+/** Base army budget of a level (siege roles and bot multipliers apply on top). */
+export function levelBudget(level: number, e: Pick<Economy, 'levelBudget' | 'levelBudgetStep'>): number {
+  return e.levelBudget + e.levelBudgetStep * (Math.max(1, level) - 1);
+}
+
+/** Base army budget of a wallet; no wallet (signed out) = level 1. */
+export function playerBudget(p: Pick<PlayerState, 'xp'> | null, e: Economy): number {
+  return levelBudget(playerLevel(p?.xp ?? 0, e).level, e);
+}
+
+/** XP an online battle gives one side; none when it lasted under `xpMinSeconds` (surrender farming). */
+export function pvpXp(outcome: 'win' | 'lose' | 'draw', durationMs: number, e: Pick<Economy, 'xpPvpWin' | 'xpPvpLoss' | 'xpPvpDraw' | 'xpMinSeconds'>): number {
+  if (durationMs < e.xpMinSeconds * 1000) return 0;
+  return outcome === 'win' ? e.xpPvpWin : outcome === 'lose' ? e.xpPvpLoss : e.xpPvpDraw;
 }
 
 /** Cost of the next star, or null at the top. */
@@ -315,7 +358,7 @@ export function winBotBattle(p: PlayerState, bots: readonly Pick<BotDef, 'id' | 
   const reward = rollBox(units, box, random);
   const cards = { ...p.cards };
   for (const c of reward.cards) cards[c.unitId] = (cards[c.unitId] ?? 0) + c.count;
-  const state: PlayerState = { ...p, coins: p.coins + reward.coins, cards, lastBotWinAt: now, botTicket: null, botWinDay: today, botWinsToday: winsToday + 1, botWinTotal: p.botWinTotal + 1 };
+  const state: PlayerState = { ...p, coins: p.coins + reward.coins, xp: p.xp + Math.round(economy.xpBotWin * mult), cards, lastBotWinAt: now, botTicket: null, botWinDay: today, botWinsToday: winsToday + 1, botWinTotal: p.botWinTotal + 1 };
   const entry: LedgerEntry = { type: 'bot-win', coins: reward.coins, balance: state.coins, cards: Object.fromEntries(reward.cards.map((c) => [c.unitId, c.count])), note: `Thắng bot ${bot.id} (độ khó ${bot.difficulty}) ×${ticket.botCount}` };
   return { state, entry, reward };
 }

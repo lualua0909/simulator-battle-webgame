@@ -528,6 +528,20 @@ export const economySchema = z.object({
   botWinMinSeconds: z.number().min(0).max(3600).default(15),
   /** Bot-win rewards per Vietnam day (0 = unlimited). */
   botWinDailyCap: z.number().int().min(0).max(1000).default(30),
+  /** XP from level 1 to 2; each next level needs `levelXpGrowth` more. */
+  levelXp: z.number().int().min(1).max(1_000_000).default(100),
+  levelXpGrowth: z.number().int().min(0).max(1_000_000).default(50),
+  maxLevel: z.number().int().min(1).max(1000).default(50),
+  /** Army budget at level 1, plus `levelBudgetStep` per level above it (bot, local and casual online battles). */
+  levelBudget: z.number().int().min(100).max(1_000_000).default(3000),
+  levelBudgetStep: z.number().int().min(0).max(100_000).default(250),
+  /** XP per bot-win reward (× the same bot-count bonus as the coins). */
+  xpBotWin: z.number().int().min(0).max(100_000).default(30),
+  /** XP per online battle (casual and ranked) by outcome; battles shorter than `xpMinSeconds` or voided give none. */
+  xpPvpWin: z.number().int().min(0).max(100_000).default(50),
+  xpPvpLoss: z.number().int().min(0).max(100_000).default(15),
+  xpPvpDraw: z.number().int().min(0).max(100_000).default(25),
+  xpMinSeconds: z.number().min(0).max(3600).default(30),
 });
 
 export const siegeSettingsSchema = z.object({

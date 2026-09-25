@@ -4,10 +4,15 @@ import { hash2, valueNoise } from '../sim/rng';
 import type { Side, Terrain } from '../sim/terrain';
 import type { waterMaterial } from './webgpu';
 
+/** Grid cells along each side of the terrain mesh (the skirt's bank samples the edge the same way). */
+function terrainSegments(terrain: Terrain): number {
+  return Math.min(200, Math.round(terrain.size / 0.85));
+}
+
 export function createTerrainMesh(terrain: Terrain): THREE.Mesh {
   const map = terrain.map;
   const half = terrain.half;
-  const seg = Math.min(200, Math.round(terrain.size / 0.85));
+  const seg = terrainSegments(terrain);
   const step = terrain.size / seg;
   const n = seg + 1;
   const hts = new Float32Array(n * n);
@@ -78,8 +83,8 @@ export function createTerrainMesh(terrain: Terrain): THREE.Mesh {
   return mesh;
 }
 
-/** Flat ground ring around the playable square so the map never ends in a void. */
-export function createSkirt(terrain: Terrain): THREE.Mesh {
+/** Flat ground ring around the playable square, and the bank from the map's edge down to it, so the map never ends in a void. */
+export function createSkirt(terrain: Terrain): THREE.Group {
   const half = terrain.half;
   let low = Infinity;
   for (let i = 0; i <= 40; i++) {
@@ -95,7 +100,32 @@ export function createSkirt(terrain: Terrain): THREE.Mesh {
   mesh.position.y = low - 0.2;
   mesh.receiveShadow = true;
   mesh.name = 'skirt';
-  return mesh;
+  // Without the bank a camera outside the map looks through the gap under the terrain's edge, into the sky.
+  // Sampled like the terrain mesh, so the two meet without a seam.
+  const seg = terrainSegments(terrain);
+  const step = terrain.size / seg;
+  const base = low - 0.2;
+  const pos: number[] = [];
+  const edges: Array<(t: number) => [number, number]> = [(t) => [t, -half], (t) => [t, half], (t) => [-half, t], (t) => [half, t]];
+  for (const at of edges) {
+    for (let i = 0; i < seg; i++) {
+      const [ax, az] = at(-half + i * step);
+      const [bx, bz] = at(-half + (i + 1) * step);
+      const ay = terrain.height(ax, az);
+      const by = terrain.height(bx, bz);
+      pos.push(ax, ay, az, ax, base, az, bx, by, bz, bx, by, bz, ax, base, az, bx, base, bz);
+    }
+  }
+  const bankGeo = new THREE.BufferGeometry();
+  bankGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  bankGeo.computeVertexNormals();
+  const bankColor = new THREE.Color(terrain.map.dirtColor).multiplyScalar(0.7);
+  const bank = new THREE.Mesh(bankGeo, new THREE.MeshStandardMaterial({ color: bankColor, roughness: 1, flatShading: true, side: THREE.DoubleSide }));
+  bank.name = 'skirt-bank';
+  bank.receiveShadow = true;
+  const skirt = new THREE.Group();
+  skirt.add(mesh, bank);
+  return skirt;
 }
 
 export interface Water {

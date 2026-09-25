@@ -6,8 +6,11 @@
 //   one-finger drag               grab-pan; two fingers pinch to zoom, twist to orbit, drag to pan
 //   WASD / arrows pan, Q/E rotate.
 // Tilt follows zoom (close = low and cinematic, far = top-down) plus the user's own tilt offset.
+// UI panels over the canvas are insets: the projection centres on the area they leave uncovered, so the aim point,
+// orbit, framing and map bounds all work on what the player can actually see.
 import * as THREE from 'three';
 import type { Terrain } from '../sim/terrain';
+import { angleDiff } from './unitView';
 
 const MIN_DISTANCE = 10;
 const MIN_PITCH = 0.12;
@@ -20,10 +23,20 @@ const MAX_PITCH = 1.45;
  */
 const USER_MIN_PITCH = 0.55;
 const CLEARANCE = 1.5;
-/** Giữ tâm camera cách mép map một khoảng để không bao giờ ngắm vào khoảng trống ngoài map. */
-const PAN_INSET = 4;
-/** Mỗi mét zoom-out thì vùng pan cho phép co lại từng này (nhân thêm theo aspect màn hình). */
-const PAN_SHRINK = 0.22;
+/**
+ * Phía trước tâm ngắm phải còn thấy map ít nhất từng này × khoảng cách camera. Không đòi cả mép trên màn hình:
+ * góc thấp thì mép trên là đường chân trời, ra ngoài map là tự nhiên.
+ */
+const FAR_REACH = 0.4;
+/**
+ * Phần nửa bề rộng vùng trống mà mép trái/phải được phép lấn ra ngoài map khi nhìn chéo 45°. Nhìn chéo qua một góc
+ * map (xếp quân 3-4 phe) thì cả hai mép đều lấn ra, không thể giữ trọn trong map; nhìn dọc theo mép map thì giữ được
+ * nên không cho lấn.
+ */
+const SIDE_SLACK = 0.5;
+/** fit(): lề chừa trong vùng trống, theo tỉ lệ kích thước vùng đó. */
+const FIT_PAD = 0.04;
+const NO_INSETS: ViewInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const MOVE_KEYS = ['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 
 /** Pitch preferred at a zoom distance; the user's tilt is an offset on top of it. */
@@ -40,6 +53,14 @@ export interface CameraView {
   yaw: number;
   pitch: number;
   distance: number;
+}
+
+/** CSS pixels of the canvas covered by UI along each edge. */
+export interface ViewInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
 }
 
 /** Two-finger state: spread, twist and midpoint on screen. */
@@ -83,6 +104,13 @@ export class RtsCamera {
   private pinch: Gesture | null = null;
   private terrain: Terrain | null = null;
   private maxDistance = 220;
+  private insets = NO_INSETS;
+  /** Canvas size in CSS pixels. */
+  private width = 1;
+  private height = 1;
+  /** Half the uncovered area's width and height on the image plane one metre in front of the camera. */
+  private halfU = 1;
+  private halfV = 1;
   private readonly scratch = new THREE.PerspectiveCamera();
   private readonly raycaster = new THREE.Raycaster();
   private readonly ndc = new THREE.Vector2();
@@ -183,6 +211,20 @@ export class RtsCamera {
     return this.panWithLeft;
   }
 
+  /** The canvas was resized (CSS pixels). */
+  resize(width: number, height: number): void {
+    this.width = Math.max(1, width);
+    this.height = Math.max(1, height);
+    this.updateProjection();
+  }
+
+  /** UI now covers these canvas edges (null = none): from here on the view centres on the rest. */
+  setInsets(insets: ViewInsets | null): void {
+    this.insets = insets ?? NO_INSETS;
+    this.updateProjection();
+    this.clampTargets();
+  }
+
   setTerrain(terrain: Terrain): void {
     this.terrain = terrain;
     // Zoomed all the way out the map just fills the frame — no further.
@@ -228,13 +270,78 @@ export class RtsCamera {
     this.tilt = view.pitch - this.pitchBase();
     this.pitch = this.goalPitch();
     this.clampTargets();
+    this.target.copy(this.goal.target);
     this.applyPose();
+  }
+
+  /** Glide to a view with the usual smoothing; the yaw turns the short way round. */
+  glideTo(view: CameraView): void {
+    this.spin = 0;
+    this.goal.target.copy(view.target);
+    this.goal.yaw = this.yaw + angleDiff(view.yaw, this.yaw);
+    this.goal.distance = this.clampDistance(view.distance);
+    this.tilt = view.pitch - this.pitchBase();
+    this.clampTargets();
   }
 
   /** Where the live camera would sit for a view (same terrain clearance). */
   positionFor(view: CameraView, out: THREE.Vector3): THREE.Vector3 {
     this.poseCamera(this.scratch, view.target, view.yaw, view.pitch, view.distance);
     return out.copy(this.scratch.position);
+  }
+
+  /**
+   * The view from `yaw`/`pitch` that holds `points` inside the uncovered area, as close as they fit — but never
+   * farther than `maxDistance`: a set that still does not fit is centred and overflows evenly. Spare height goes
+   * above the points (the ground ahead), not below them (behind, where the map ends). The map bounds are applied
+   * while fitting, so the view survives them unchanged.
+   */
+  fit(points: readonly THREE.Vector3[], yaw: number, pitch: number, maxDistance = this.maxDistance): CameraView {
+    const cam = this.scratch.copy(this.camera, false);
+    const i = this.insets;
+    // Room for the points' on-screen box, in normalised device coordinates (the aim point is its centre).
+    const roomW = ((2 * (this.width - i.left - i.right)) / this.width) * (1 - FIT_PAD * 2);
+    const roomH = ((2 * (this.height - i.top - i.bottom)) / this.height) * (1 - FIT_PAD * 2);
+    const target = new THREE.Vector3();
+    for (const p of points) target.add(p);
+    target.divideScalar(Math.max(1, points.length));
+    const p = new THREE.Vector3();
+    // Re-aims at `distance` until the box is centred across and sits on the bottom of the room (or is centred,
+    // when taller than it); returns how many times too big the box is — at most 1 means it fits.
+    const place = (distance: number): number => {
+      for (let n = 0; ; n++) {
+        this.poseCamera(cam, target, yaw, pitch, distance);
+        let x0 = Infinity;
+        let x1 = -Infinity;
+        let y0 = Infinity;
+        let y1 = -Infinity;
+        for (const q of points) {
+          p.copy(q).project(cam);
+          x0 = Math.min(x0, p.x);
+          x1 = Math.max(x1, p.x);
+          y0 = Math.min(y0, p.y);
+          y1 = Math.max(y1, p.y);
+        }
+        const lift = Math.max(0, roomH - (y1 - y0)) / 2;
+        const aim = n < 8 && this.planeHitNdc(cam, (x0 + x1) / 2, (y0 + y1) / 2 + lift, target.y);
+        if (!aim) return Math.max((x1 - x0) / roomW, (y1 - y0) / roomH);
+        target.copy(aim);
+        this.clampTarget(target, yaw, pitch, distance);
+        if (this.terrain) target.y = this.terrain.height(target.x, target.z);
+      }
+    };
+    // The nearest distance that still fits (moving the aim point rescales the box, so search rather than solve).
+    let far = this.clampDistance(maxDistance);
+    if (place(far) <= 1) {
+      let near = MIN_DISTANCE;
+      for (let n = 0; n < 14; n++) {
+        const mid = (near + far) / 2;
+        if (place(mid) <= 1) far = mid;
+        else near = mid;
+      }
+      place(far);
+    }
+    return { target, yaw, pitch, distance: far };
   }
 
   /** Zoom by `factor` keeping the ground under the cursor fixed on screen. */
@@ -347,31 +454,53 @@ export class RtsCamera {
     return Math.abs(x) <= half && Math.abs(z) <= half;
   }
 
-  /**
-   * Vùng tâm camera được phép đứng: co lại khi zoom-out, màn rộng, và khi góc
-   * nhìn thấp (càng là là mặt đất càng dễ lộ ngoài map nên càng siết chặt).
-   * Zoom-in + nhìn từ trên cao thì được đi gần sát mép (chừa PAN_INSET).
-   */
-  private panLimit(): number {
-    if (!this.terrain) return 0;
-    const half = this.terrain.half;
-    const base = Math.max(0, half - PAN_INSET);
-    const aspect = this.camera.aspect || 1.4;
-    const aspectK = THREE.MathUtils.clamp(aspect / 1.4, 0.7, 1.6);
-    // pitch thấp (sin nhỏ) -> chân trời xa -> co vùng pan mạnh hơn.
-    const pitch = this.goalPitch();
-    const lowK = 1 - Math.sin(THREE.MathUtils.clamp(pitch, 0, Math.PI / 2));
-    const shrink = this.goal.distance * (PAN_SHRINK + 0.3 * lowK) * aspectK;
-    return Math.max(0, base - shrink);
+  /** Projection whose principal point is the centre of the uncovered area: the aim point shows there. */
+  private updateProjection(): void {
+    const cam = this.camera;
+    const i = this.insets;
+    cam.aspect = this.width / this.height;
+    cam.updateProjectionMatrix();
+    const e = cam.projectionMatrix.elements;
+    e[8] = (i.right - i.left) / this.width;
+    e[9] = (i.top - i.bottom) / this.height;
+    cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+    const perPx = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) / (this.height / 2);
+    this.halfU = (Math.max(1, this.width - i.left - i.right) * perPx) / 2;
+    this.halfV = (Math.max(1, this.height - i.top - i.bottom) * perPx) / 2;
   }
 
+  /** Keeps the view the camera is heading for on the map (see clampTarget). */
   private clampTargets(): void {
+    this.clampTarget(this.goal.target, this.goal.yaw, this.goalPitch(), this.goal.distance);
+  }
+
+  /**
+   * Keeps what the uncovered area shows on the map: the ground under the middle of its bottom, left and right
+   * edges, and FAR_REACH × distance ahead of the aim point, stay on the map (a diagonal view's sides may reach past
+   * its edge, see SIDE_SLACK). Along an axis where that span is wider than the map, the view is
+   * centred on the map instead — zoomed far out the map sits in the middle of the uncovered area rather than
+   * sliding off it.
+   */
+  private clampTarget(t: THREE.Vector3, yaw: number, pitch: number, distance: number): void {
     if (!this.terrain) return;
-    const lim = this.panLimit();
-    for (const t of [this.goal.target, this.target]) {
-      t.x = THREE.MathUtils.clamp(t.x, -lim, lim);
-      t.z = THREE.MathUtils.clamp(t.z, -lim, lim);
-    }
+    const u = this.halfU;
+    const v = this.halfV;
+    const sp = Math.sin(pitch);
+    const cp = Math.cos(pitch);
+    // Ground distances from the aim point: to the side edges, back to the bottom edge, and ahead.
+    const side = distance * u;
+    const near = (distance * v) / (sp + v * cp);
+    const down = sp - v * cp;
+    const far = distance * Math.min(FAR_REACH, down > 1e-3 ? v / down : FAR_REACH);
+    // Ground direction from the camera toward the aim point.
+    const fx = -Math.cos(yaw);
+    const fz = -Math.sin(yaw);
+    const lim = this.terrain.half;
+    const slack = SIDE_SLACK * Math.abs(Math.sin(2 * yaw));
+    const sx = side * Math.max(0, Math.abs(fz) - slack);
+    const sz = side * Math.max(0, Math.abs(fx) - slack);
+    t.x = clampSpan(t.x, Math.min(far * fx, -near * fx, -sx), Math.max(far * fx, -near * fx, sx), lim);
+    t.z = clampSpan(t.z, Math.min(far * fz, -near * fz, -sz), Math.max(far * fz, -near * fz, sz), lim);
   }
 
   /** Keyboard pan in camera-relative ground axes (smoothed). */
@@ -414,6 +543,7 @@ export class RtsCamera {
     this.goal.target.x += mx;
     this.goal.target.z += mz;
     this.clampTargets();
+    this.clampTarget(this.target, this.yaw, this.pitch, this.distance);
     this.applyPose();
   }
 
@@ -424,8 +554,12 @@ export class RtsCamera {
   /** Cursor ray from `cam` against the horizontal plane at height `y`. */
   private planeHit(cam: THREE.PerspectiveCamera, clientX: number, clientY: number, y: number): THREE.Vector3 | null {
     const rect = this.dom.getBoundingClientRect();
-    this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
-    this.raycaster.setFromCamera(this.ndc, cam);
+    return this.planeHitNdc(cam, ((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1, y);
+  }
+
+  /** Ray from `cam` through a point in normalised device coordinates against the horizontal plane at height `y`. */
+  private planeHitNdc(cam: THREE.PerspectiveCamera, ndcX: number, ndcY: number, y: number): THREE.Vector3 | null {
+    this.raycaster.setFromCamera(this.ndc.set(ndcX, ndcY), cam);
     const { origin, direction } = this.raycaster.ray;
     if (direction.y > -1e-3) return null;
     return this.hit.copy(origin).addScaledVector(direction, (y - origin.y) / direction.y);
@@ -442,4 +576,11 @@ export class RtsCamera {
     cam.lookAt(target);
     cam.updateMatrixWorld();
   }
+}
+
+/** `t` clamped so the span [t + lo, t + hi] stays within ±lim; a span wider than that is centred on 0 instead. */
+function clampSpan(t: number, lo: number, hi: number, lim: number): number {
+  const min = -lim - lo;
+  const max = lim - hi;
+  return min <= max ? THREE.MathUtils.clamp(t, min, max) : (min + max) / 2;
 }

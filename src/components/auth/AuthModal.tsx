@@ -91,20 +91,20 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
   return (
     <div className="fixed inset-0 z-50 flex bg-ink/60 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="auth-title" onClick={onClose}>
       <div
-        className="flex h-full w-full flex-col overflow-y-auto bg-paper p-5 pt-[max(1.25rem,env(safe-area-inset-top))] sm:h-auto sm:max-h-[92vh] sm:max-w-md sm:rounded-2xl sm:border-2 sm:border-ink sm:p-6 sm:shadow-[0_6px_0_0_rgba(31,26,20,0.85)]"
+        className="flex h-dvh w-full flex-col overflow-y-auto overscroll-contain bg-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))] sm:h-auto sm:max-h-[92vh] sm:max-w-md sm:rounded-2xl sm:border-2 sm:border-ink sm:p-6 sm:shadow-[0_6px_0_0_rgba(31,26,20,0.85)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center gap-2">
           {view === 'forgot' && (
-            <button type="button" className="rounded-lg px-2 py-1 text-lg font-bold hover:bg-white" onClick={() => go('signin')} aria-label={t('common.back')}>
+            <button type="button" className="min-h-[40px] min-w-[40px] rounded-lg px-2 py-1 text-lg font-bold hover:bg-white" onClick={() => go('signin')} aria-label={t('common.back')}>
               <ArrowLeft />
             </button>
           )}
-          <h2 id="auth-title" className="font-display text-2xl">
+          <h2 id="auth-title" className="font-display min-w-0 flex-1 break-words text-2xl">
             {TITLES[view]}
           </h2>
           {onClose && (
-            <button type="button" className="ml-auto rounded-lg px-2 py-1 text-xl font-bold hover:bg-white" onClick={onClose} aria-label={t('common.close')}>
+            <button type="button" className="ml-auto min-h-[40px] min-w-[40px] shrink-0 rounded-lg px-2 py-1 text-xl font-bold hover:bg-white" onClick={onClose} aria-label={t('common.close')}>
               <X />
             </button>
           )}
@@ -113,7 +113,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
         {view !== 'forgot' && (
           <div className="mb-4 grid grid-cols-2 rounded-xl border-2 border-ink bg-white p-1 text-sm font-bold">
             {(['signin', 'signup'] as const).map((v) => (
-              <button key={v} type="button" className={`rounded-lg py-1.5 ${view === v ? 'bg-ink text-white' : ''}`} onClick={() => go(v)}>
+              <button key={v} type="button" className={`min-h-[44px] rounded-lg py-1.5 ${view === v ? 'bg-ink text-white' : ''}`} onClick={() => go(v)}>
                 {TITLES[v]}
               </button>
             ))}

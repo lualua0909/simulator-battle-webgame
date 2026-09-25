@@ -24,7 +24,10 @@ const ranked: RankSettleInput[] = [];
 const WALLETS: Record<string, PlayerState> = {
   alice: { ...emptyPlayer(), stars: { clubber: 3, archer: 2 } },
   carol: { ...emptyPlayer(), unlocked: ['knight'] },
+  dave: { ...emptyPlayer(), xp: 100 },
 };
+/** XP the fake awardXp was asked to add. */
+const xpAwards: Array<{ uid: string; outcome: string }> = [];
 const saved: Array<{ battle: BattleRecord; winner: string; tick: number }> = [];
 /** Short enough that deploy-timeout tests don't sit around for the real 30s, generous enough that a normal ready/ready round trip in other tests never races it. */
 const TEST_DEPLOY_MS = 400;
@@ -40,6 +43,7 @@ before(async () => {
     authenticate: async (cookie) => (cookie ? USERS[cookie] ?? null : null),
     saveMatch: async (battle, winner, tick) => void saved.push({ battle, winner, tick }),
     loadPlayer: async (uid) => WALLETS[uid] ?? emptyPlayer(),
+    awardXp: async (uid, outcome) => (xpAwards.push({ uid, outcome }), WALLETS[uid] ?? emptyPlayer()),
     rankEntry: async (u) => ({ season: 's1', rank: null, steps: 0, gate: u.uid === 'eve' ? 'Thắng bot và nhận thưởng 10 lần để mở khóa xếp hạng' : null }),
     settleRanked: async (input) => {
       ranked.push(input);
@@ -161,7 +165,26 @@ test('win + lose from both players is saved with the server-side battle data', a
   assert.deepEqual(match.battle.players, { blue: { uid: 'alice', name: 'alice' }, red: { uid: 'bob', name: 'bob' } });
   assert.deepEqual(match.battle.armies, start.armies);
   assert.deepEqual(match.battle.stars, start.stars);
+  assert.deepEqual(xpAwards.slice(-2).sort((a, b) => a.uid.localeCompare(b.uid)), [
+    { uid: 'alice', outcome: 'win' },
+    { uid: 'bob', outcome: 'lose' },
+  ]);
   close(alice, bob);
+});
+
+test('each casual seat gets the budget of its own level', async () => {
+  const alice = open('cookie-alice');
+  const dave = open('cookie-dave');
+  await Promise.all([connected(alice), connected(dave)]);
+  const room = await create(alice);
+  assert.ok(room.ok);
+  const both = new Promise<RoomState>((resolve) => alice.on('room:state', (s) => s.players.red && resolve(s)));
+  await join(dave, room.code);
+  const state = await both;
+  const e = SEED.settings.economy;
+  assert.equal(state.players.blue!.budget, e.levelBudget);
+  assert.equal(state.players.red!.budget, e.levelBudget + e.levelBudgetStep);
+  close(alice, dave);
 });
 
 test('surrendering mid-battle declares the other side the winner right away, without a matching report', async () => {
@@ -191,7 +214,7 @@ test('star levels come from the wallets of the army units while the host keeps s
   assert.ok(room.ok);
   await join(guest, room.code);
   const off = new Promise<void>((resolve) => host.on('room:state', (s) => s.useStars === false && resolve()));
-  host.emit('room:settings', { mapId: SEED.maps[0].id, budget: SEED.maps[0].budget, useStars: false, defense: null });
+  host.emit('room:settings', { mapId: SEED.maps[0].id, useStars: false, defense: null });
   await off;
   const started = once(guest, 'battle:start');
   await ready(host, 'blue');
@@ -260,7 +283,7 @@ test('siege rooms validate the defenders against siege rules and start with the 
   await join(guest, room.code);
   const map = SEED.maps[0];
   const siege = new Promise<void>((resolve) => host.on('room:state', (s) => s.defense === 'red' && resolve()));
-  host.emit('room:settings', { mapId: map.id, budget: map.budget, useStars: false, defense: 'red' });
+  host.emit('room:settings', { mapId: map.id, useStars: false, defense: 'red' });
   await siege;
   const terrain = new Terrain(map, SEED.assets, 'red');
   const zone = terrain.zoneOf('red');
@@ -324,7 +347,7 @@ test('siege mode stays 2-side: a 3rd join is rejected, and defense cannot be ena
   await join(guest, room.code);
   const map = SEED.maps[0];
   const siege = new Promise<void>((resolve) => host.on('room:state', (s) => s.defense === 'red' && resolve()));
-  host.emit('room:settings', { mapId: map.id, budget: map.budget, useStars: false, defense: 'red' });
+  host.emit('room:settings', { mapId: map.id, useStars: false, defense: 'red' });
   await siege;
   assert.deepEqual(await join(carol, room.code), { ok: false, error: 'Phòng đấu thủ thành chỉ có 2 người' });
   close(host, guest, carol);
@@ -338,11 +361,11 @@ test('siege mode stays 2-side: a 3rd join is rejected, and defense cannot be ena
   assert.ok(room2.ok);
   await join(guest2, room2.code);
   await join(carol2, room2.code);
-  host2.emit('room:settings', { mapId: map.id, budget: map.budget, useStars: false, defense: 'red' }); // silently rejected: 3 seats are connected
+  host2.emit('room:settings', { mapId: map.id, useStars: false, defense: 'red' }); // silently rejected: 3 seats are connected
   // A second, observable settings change confirms the first one never took effect (no reordering risk: same socket, in order).
-  const budgetChanged = new Promise<{ defense: string | null; budget: number }>((resolve) => host2.on('room:state', (s) => s.budget === 1234 && resolve(s)));
-  host2.emit('room:settings', { mapId: map.id, budget: 1234, useStars: false, defense: null });
-  const after = await budgetChanged;
+  const starsOff = new Promise<{ defense: string | null }>((resolve) => host2.on('room:state', (s) => s.useStars === false && resolve(s)));
+  host2.emit('room:settings', { mapId: map.id, useStars: false, defense: null });
+  const after = await starsOff;
   assert.equal(after.defense, null);
   close(host2, guest2, carol2);
 });

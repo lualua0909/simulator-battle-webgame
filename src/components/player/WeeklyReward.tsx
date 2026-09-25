@@ -44,16 +44,16 @@ export default function WeeklyReward({ bundle, onClose, onClaim }: Props) {
   const chest = bundle.settings.economy.dailyBox.chest;
 
   return createPortal(
-    <div className="game-ui box-backdrop fixed inset-0 z-40 flex flex-col items-center overflow-y-auto px-4 pb-6 pt-4">
-      <button className="btn absolute left-3 top-3 px-3 py-1 text-xl" onClick={onClose} aria-label={t('common.close')}>
+    <div className="game-ui box-backdrop fixed inset-0 z-40 flex flex-col items-center overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
+      <button className="btn absolute left-3 top-3 min-h-[44px] min-w-[44px] px-3 py-1 text-xl" onClick={onClose} aria-label={t('common.close')}>
         <X />
       </button>
       <div className="absolute right-3 top-3">
         <CoinBar value={player?.coins ?? 0} />
       </div>
-      <h2 className="text-outline mt-14 text-center text-3xl sm:mt-2">{t('weekly.title')}</h2>
+      <h2 className="text-outline mt-14 break-words px-2 text-center text-3xl sm:mt-2">{t('weekly.title')}</h2>
       <ChestThumb variant={chest} wobble size={120} />
-      <div className="mt-4 grid w-full max-w-lg grid-cols-7 gap-2">
+      <div className="mt-4 grid w-full max-w-lg grid-cols-7 gap-1 sm:gap-2">
         {status.daily.week.map((slot, i) => (
           <button
             key={slot.date}

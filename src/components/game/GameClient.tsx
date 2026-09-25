@@ -1,9 +1,9 @@
 'use client';
 
-import { ArrowLeft, ArrowRight, Castle, Check, Dices, Flame, Plus, Swords, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Castle, Check, Dices, Flame, LocateFixed, Plus, Swords, Trash2, Undo2, X } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react';
-import { botBoxTier, isUnlocked } from '@/shared/economy';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react';
+import { botBoxTier, isUnlocked, playerBudget } from '@/shared/economy';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import { useAuth } from '@/components/auth/AuthProvider';
 import BoxOpening from '@/components/player/BoxOpening';
@@ -62,7 +62,6 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const online = mode === 'online' || mode === 'ranked';
   const [phase, setPhase] = useState<Phase>(online ? 'lobby' : 'setup');
   const [mapId, setMapId] = useState('');
-  const [budget, setBudget] = useState(3000);
   const [botId, setBotId] = useState('');
   /** Bot mode: how many bot opponents (siege ignores this, always 1). */
   const [botCount, setBotCount] = useState(1);
@@ -96,6 +95,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [view, setView] = useState<ViewState>({ mode: 'overview', unit: null, vr: false });
   const [vrOk, setVrOk] = useState(false);
   const cineRef = useRef<CinematicKind | null>(null);
+  /** Deploy UI over the map (top toolbar, its right-hand column, unit tray): the camera works in the space they leave. */
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const sideColRef = useRef<HTMLDivElement>(null);
+  const trayRef = useRef<HTMLDivElement>(null);
   /** Set on a fresh entry into deployment (not a return from battle) → establishing flight. */
   const introPending = useRef(false);
   /** Ranked: the matched opponent, and what the last battle did to the standing (null while waiting). */
@@ -157,7 +160,6 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   useEffect(() => {
     if (!bundle) return;
     setMapId((m) => m || bundle.maps[0]?.id || '');
-    setBudget(bundle.maps[0]?.budget ?? 3000);
     setBotId((b) => b || bundle.bots.find((x) => x.id === 'thuong')?.id || orderedBots(bundle)[1]?.id || bundle.bots[0]?.id || '');
     setSelected((s) => s ?? [...bundle.units].sort((a, b) => a.cost - b.cost)[0]?.id ?? null);
     void unitThumbnails(bundle).then(setThumbs);
@@ -206,12 +208,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     void BattleEngine.vrSupported().then(setVrOk);
   }, []);
 
-  // online room drives map + budget
+  // online room drives the map
   useEffect(() => {
     if (!online || !net.room) return;
     setMapId(net.room.mapId);
-    setBudget(net.room.budget);
-  }, [online, net.room?.mapId, net.room?.budget]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [online, net.room?.mapId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lost the seat (signed out, or the room is gone after a reconnect) → back to the lobby.
   useEffect(() => {
@@ -256,7 +257,14 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const mySide: Side = online ? net.seat?.side ?? 'blue' : side;
   const myArmy = armies[mySide];
   const spent = bundle ? armyCost(bundle, myArmy) : 0;
+  /** Base budget: online the server's figure for this seat (level budget; ranked: the map's), offline this player's level budget (both local sides too). */
+  const seatBudget = online ? net.room?.players[mySide]?.budget : undefined;
+  const budget = bundle ? seatBudget ?? playerBudget(player, bundle.settings.economy) : 0;
   const myBudget = bundle ? sideBudget(bundle.settings, budget, mySide, defense) : budget;
+  // The server raises the seat budget after the XP of an online battle: reload the wallet to match.
+  useEffect(() => {
+    if (seatBudget !== undefined) void refresh();
+  }, [seatBudget, refresh]);
   const wallBlocks = myArmy.filter((p) => units.get(p.unitId)?.structure === 'wall').length;
 
   // Keep the selection on a unit the player owns and may field here (the wallet loads after the content).
@@ -513,15 +521,44 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     }
   }, [engine, phase, mySide, mode, blind, tool, selected, locked, canPlace, mapVersion, botSides]);
 
+  // The deploy UI covers the top and bottom of the map: the camera centres, frames and bounds itself to the
+  // rest. A layout effect, so the insets are in place before the effect below frames the deployment zone.
+  useLayoutEffect(() => {
+    if (!engine || phase !== 'deploy') return;
+    const canvas = engine.renderer.domElement;
+    const measure = () => {
+      const c = canvas.getBoundingClientRect();
+      const bar = toolbarRef.current?.getBoundingClientRect();
+      const col = sideColRef.current?.getBoundingClientRect();
+      const tray = trayRef.current?.getBoundingClientRect();
+      if (!bar || !col || !tray || !c.height) return;
+      const top = Math.max(0, bar.bottom - c.top);
+      const bottom = Math.max(0, c.bottom - tray.top);
+      // The right-hand column (start button, room or opponent panel) can hang below the toolbar: clear it across
+      // the full width, unless leaving its strip out keeps clearly more height (a tall online room panel).
+      const below = Math.max(top, col.bottom - c.top);
+      const wide = c.height - bottom - below >= (c.height - bottom - top) * 0.7;
+      engine.setViewInsets(wide ? { top: below, right: 0, bottom, left: 0 } : { top, right: Math.max(0, c.right - col.left), bottom, left: 0 });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    for (const el of [canvas, toolbarRef.current, sideColRef.current, trayRef.current]) if (el) ro.observe(el);
+    return () => {
+      ro.disconnect();
+      engine.setViewInsets(null);
+    };
+  }, [engine, phase, bundle]);
+
   // Re-frame the camera only when the viewing side or map changes (not on every tool change).
   // A fresh entry into deployment plays the establishing flight instead — restarted if the
-  // side or map changes under it (an online room syncing its map).
+  // side or map changes under it (an online room syncing its map). A return (edit army, new
+  // match) snaps straight to the deployment view.
   useEffect(() => {
     if (!engine || phase !== 'deploy') return;
     if (introPending.current || cineRef.current === 'intro') {
       introPending.current = false;
       engine.playDeployIntro(mySide);
-    } else engine.viewSide(mySide);
+    } else engine.frameDeploy(mySide, true);
   }, [engine, phase, mySide, mapVersion]);
 
   // Left-drag pans the map whenever the left button is not placing units.
@@ -722,11 +759,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   // ------------------------------------------------------------------ render
   return (
-    <div className="game-ui relative h-screen w-screen overflow-hidden bg-[#cfe3f2] select-none">
+    <div className="game-ui relative h-dvh w-screen overflow-hidden bg-[#cfe3f2] select-none">
       <div ref={hostRef} className="absolute inset-0" />
       {!bundle && <div className="absolute inset-0 flex items-center justify-center font-display text-2xl">Đang tải…</div>}
 
-      <div className="pointer-events-none absolute inset-0 flex flex-col p-3">
+      <div className="pointer-events-none absolute inset-0 flex flex-col p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
         {(phase === 'setup' || phase === 'lobby') && (
           <div className="absolute right-3 top-3 z-10">
             <PlayerHud bundle={bundle} />
@@ -735,7 +772,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
         {bundle && phase === 'setup' && !online && (
           <div className="pointer-events-auto m-auto flex max-h-full min-h-0 w-full justify-center overflow-y-auto overscroll-contain touch-pan-y">
-            <SetupPanel bundle={bundle} mode={mode} mapId={mapId} setMapId={setMapId} budget={budget} setBudget={setBudget} botId={botId} setBotId={setBotId} botCount={botCount} setBotCount={setBotCount} blind={blind} setBlind={setBlind} choice={choice} setChoice={setChoice} onStart={enterDeploy} />
+            <SetupPanel bundle={bundle} mode={mode} mapId={mapId} setMapId={setMapId} player={player} botId={botId} setBotId={setBotId} botCount={botCount} setBotCount={setBotCount} blind={blind} setBlind={setBlind} choice={choice} setChoice={setChoice} onStart={enterDeploy} />
           </div>
         )}
 
@@ -788,10 +825,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           </div>
         )}
 
-        {bundle && phase === 'deploy' && !cine && (
+        {/* Laid out (invisible) during the intro flight too: the flight ends on a view framed around this UI. */}
+        {bundle && phase === 'deploy' && (
           <>
-            <div className="flex flex-wrap items-start gap-1.5 sm:gap-2">
-              <div className="panel pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-y-auto overscroll-contain p-1.5 sm:gap-2 sm:overflow-visible sm:p-2 max-h-[30vh] sm:max-h-none">
+            <div className={`flex flex-wrap items-start gap-1.5 sm:gap-2 ${cine ? 'invisible' : ''}`}>
+              <div ref={toolbarRef} className="panel pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-y-auto overscroll-contain p-1.5 sm:gap-2 sm:overflow-visible sm:p-2 max-h-[24vh] sm:max-h-none">
                 <Link href="/" className="btn px-2 py-1 text-sm" aria-label="Về menu">
                   <ArrowLeft />
                 </Link>
@@ -840,32 +878,32 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   <Trash2 /><span className="hidden sm:inline"> Xóa hết</span>
                 </button>
               </div>
-              <div className="ml-auto flex min-w-0 max-w-full shrink-0 flex-col items-end gap-2">
+              <div ref={sideColRef} className="ml-auto flex min-w-0 max-w-[46vw] shrink-0 flex-col items-end gap-2 sm:max-w-none">
                 <div className="hidden max-w-full sm:block">
                   <PlayerHud bundle={bundle} />
                 </div>
-                <button className={`btn pointer-events-auto max-w-full px-2 py-1 text-base sm:px-4 sm:py-2 sm:text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
+                <button className={`btn pointer-events-auto max-w-full px-3 py-2 min-h-[44px] text-base sm:px-4 sm:py-2 sm:text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
                   {mode === 'bot' ? (
                     <>
-                      <Swords /><span className="hidden sm:inline"> Bắt đầu!</span>
+                      <Swords /><span className="sm:hidden">Bắt đầu</span><span className="hidden sm:inline"> Bắt đầu!</span>
                     </>
                   ) : mode === 'local' ? (
                     side === 'blue' ? (
                       <>
-                        <ArrowRight /><span className="hidden sm:inline"> Xong, tới Người chơi 2</span>
+                        <ArrowRight /><span className="sm:hidden">Xong → P2</span><span className="hidden sm:inline"> Xong, tới Người chơi 2</span>
                       </>
                     ) : (
                       <>
-                        <Swords /><span className="hidden sm:inline"> Bắt đầu!</span>
+                        <Swords /><span className="sm:hidden">Bắt đầu</span><span className="hidden sm:inline"> Bắt đầu!</span>
                       </>
                     )
                   ) : locked ? (
                     <>
-                      <X /><span className="hidden sm:inline"> Hủy sẵn sàng</span>
+                      <X /><span className="sm:hidden">Hủy</span><span className="hidden sm:inline"> Hủy sẵn sàng</span>
                     </>
                   ) : (
                     <>
-                      <Check /><span className="hidden sm:inline"> Sẵn sàng</span>
+                      <Check /><span className="sm:hidden">Sẵn sàng</span><span className="hidden sm:inline"> Sẵn sàng</span>
                     </>
                   )}
                 </button>
@@ -882,8 +920,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 )}
               </div>
             </div>
-            <div className="mt-auto flex items-end gap-1.5 sm:gap-2">
-              <HelpHint className="hidden sm:block" text="Chuột trái: đặt · Shift+kéo: rải · Tường: kéo để xây dãy, bấm lên tường để chồng tầng · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE" />
+            <div ref={trayRef} className={`mt-auto flex items-end gap-1.5 sm:gap-2 ${cine ? 'invisible' : ''}`}>
+              <HelpHint text="Chuột trái: đặt · Shift+kéo: rải · Tường: kéo để xây dãy, bấm lên tường để chồng tầng · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE" />
               <div className="min-w-0 flex-1">
                 <UnitPalette
                   bundle={bundle}
@@ -900,6 +938,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   available={(u) => canField(u, mySide, defense)}
                   player={player}
                   stars={mode === 'bot' || (online && net.room?.useStars) ? player?.stars : undefined}
+                  action={
+                    <button className="btn px-2 py-0.5 text-xs sm:text-sm" onClick={() => engine?.frameDeploy(mySide)} title="Đưa camera về khung xếp quân" aria-label="Về giữa">
+                      <LocateFixed /> Về giữa
+                    </button>
+                  }
                 />
               </div>
             </div>
@@ -927,7 +970,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             onVR={vrOk ? () => (view.vr ? engine?.exitVR() : void engine?.enterVR().catch((err) => flash(`Không vào được VR: ${err instanceof Error ? err.message : err}`))) : undefined}
           />
         )}
-        {desync && phase === 'battle' && <div className="panel pointer-events-auto absolute left-1/2 top-20 -translate-x-1/2 px-3 py-1 text-sm text-red-team">Hai máy đang lệch trận (desync) — kết quả có thể khác nhau.</div>}
+        {desync && phase === 'battle' && <div className="panel pointer-events-auto absolute left-1/2 top-20 max-w-[calc(100vw-2rem)] -translate-x-1/2 break-words px-3 py-1 text-center text-sm text-red-team">Hai máy đang lệch trận (desync) — kết quả có thể khác nhau.</div>}
       </div>
 
       {phase === 'result' && result && (
@@ -977,7 +1020,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           onSkip={() => engine?.skipCinematic()}
         />
       )}
-      {toast && <div className="panel pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 px-4 py-2 font-bold">{toast}</div>}
+      {toast && <div className="panel pointer-events-none absolute left-1/2 top-16 max-w-[calc(100vw-2rem)] -translate-x-1/2 break-words px-4 py-2 text-center font-bold">{toast}</div>}
       {contextLost && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="panel max-w-sm p-4 text-center">

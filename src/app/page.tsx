@@ -82,13 +82,13 @@ export default function Home() {
       {/* ===== NAV BAR ===== */}
       <header className="sticky top-0 z-20 border-b-[3px] border-[#2d3232] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="bounce-soft inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#2d3232] bg-gradient-to-b from-[#ffd76a] to-[#f59e0b] text-2xl shadow-[0_3px_0_0_#2d3232]">
+          <Link href="/" className="flex min-w-0 shrink items-center gap-2">
+            <span className="bounce-soft inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#2d3232] bg-gradient-to-b from-[#ffd76a] to-[#f59e0b] text-2xl shadow-[0_3px_0_0_#2d3232]">
               <Swords />
             </span>
-            <span className="leading-none">
-              <span className="block text-lg tracking-wide">MINI BATTLE</span>
-              <span className="block text-sm text-[#b25b00]">SIMULATOR</span>
+            <span className="min-w-0 leading-none">
+              <span className="block truncate text-base tracking-wide sm:text-lg">MINI BATTLE</span>
+              <span className="block truncate text-sm text-[#b25b00]">SIMULATOR</span>
             </span>
           </Link>
           <nav className="hidden items-center gap-4 md:flex" aria-label={t('nav.navLabel')}>
@@ -102,7 +102,7 @@ export default function Home() {
               {t('nav.features')}
             </a>
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 shrink-0 items-center gap-2">
             <PlayerHud />
           </div>
         </div>
@@ -111,7 +111,7 @@ export default function Home() {
       {/* ===== HERO ===== */}
       <section className="relative overflow-hidden bg-gradient-to-b from-[#241a6e] via-[#5b2ee5] to-[#8b5cf6]">
         <HeroBanner>
-          <div className="relative mx-auto flex max-w-5xl flex-col items-center px-4 pb-40 pt-10 text-center sm:pb-48">
+          <div className="relative mx-auto flex max-w-5xl flex-col items-center px-4 pb-28 pt-8 text-center sm:pb-48 sm:pt-10">
             <span className="reward-pop inline-flex items-center gap-2 rounded-full border-2 border-[#2d3232] bg-[#ffc233] px-4 py-1 shadow-[0_4px_0_0_#2d3232]">
               <Star /> {t('home.badge')} <Star />
             </span>
@@ -119,6 +119,14 @@ export default function Home() {
             <p className="mt-2 max-w-xl rounded-2xl border-2 border-white/40 bg-black/25 px-4 py-2 text-lg text-white">
               {t('home.subtitle')}
             </p>
+            <div className="mt-6 flex max-w-full flex-wrap items-center justify-center gap-3">
+              <a href="#choi-ngay" className="btn btn-gold max-w-full break-words px-6 py-3 text-xl sm:px-8 sm:text-2xl">
+                <Swords /> {t('home.ctaPlay')}
+              </a>
+              <a href="#cach-choi" className="btn max-w-full bg-white px-6 py-3 text-lg break-words sm:text-xl">
+                <Gamepad2 /> {t('nav.howTo')}
+              </a>
+            </div>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[#2d3232]">
               {(
                 [
@@ -140,7 +148,7 @@ export default function Home() {
       <div className="overflow-hidden border-y-[3px] border-[#2d3232] bg-[#ffc233] py-2" id="tinh-nang" aria-hidden>
         <div className="marquee-track gap-8 pr-8">
           {[...TICKER, ...TICKER].map(([Icon, txt], i) => (
-            <span key={i} className="whitespace-nowrap text-xl text-[#2d3232]">
+            <span key={i} className="whitespace-nowrap text-base text-[#2d3232] sm:text-xl">
               <Icon /> {txt} <span className="ml-6">•</span>
             </span>
           ))}
@@ -151,8 +159,8 @@ export default function Home() {
       <section id="choi-ngay" className="relative bg-gradient-to-b from-[#ff8a1e] via-[#ff9d2e] to-[#ffb300] pb-14 pt-10">
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
-            <h2 className="text-outline text-center text-4xl sm:text-5xl">{t('home.modesTitle')}</h2>
-            <p className="mx-auto mt-2 max-w-xl text-center text-lg text-white drop-shadow-[0_2px_0_#2d3232]">
+            <h2 className="text-outline text-center text-3xl sm:text-5xl">{t('home.modesTitle')}</h2>
+            <p className="mx-auto mt-2 max-w-xl rounded-xl bg-black/25 px-3 py-1 text-center text-lg text-white drop-shadow-[0_2px_0_#2d3232]">
               {IS_VERCEL ? t('home.modesSubtitle2') : t('home.modesSubtitle4')}
             </p>
           </Reveal>
@@ -163,7 +171,7 @@ export default function Home() {
                 href={m.href}
                 className={`mode-card group relative flex h-full flex-col overflow-hidden rounded-3xl border-[3px] border-[#2d3232] bg-white shadow-[0_8px_0_0_#2d3232] hover:shadow-[0_14px_0_0_#2d3232] ${m.ring}`}
               >
-                <span className={`absolute left-3 top-3 z-10 rounded-full border-2 border-[#2d3232] px-3 py-0.5 text-sm ${m.ribbonCls}`}>
+                <span className={`absolute left-3 top-3 z-10 max-w-[calc(100%-1.5rem)] truncate rounded-full border-2 border-[#2d3232] px-3 py-0.5 text-sm ${m.ribbonCls}`}>
                   {m.ribbon}
                 </span>
                 <span className={`flex items-center justify-center pb-6 pt-12 ${m.iconBg}`}>
@@ -191,7 +199,7 @@ export default function Home() {
       <section id="cach-choi" className="bg-white py-12">
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
-            <h2 className="text-center text-4xl">
+            <h2 className="text-center text-3xl sm:text-4xl">
               <Swords /> {t('home.stepsTitleA')} <span className="text-[#f59e0b]">{t('home.stepsTitleB')}</span>
             </h2>
           </Reveal>
@@ -218,10 +226,10 @@ export default function Home() {
       <section className="relative overflow-hidden bg-gradient-to-b from-[#5b2ee5] to-[#241a6e] py-12 text-center">
         <div className="hero-dots absolute inset-0 opacity-40" aria-hidden />
         <Reveal variant="zoom" className="relative mx-auto max-w-2xl px-4">
-          <h2 className="text-outline text-4xl sm:text-5xl">{t('home.ctaTitle')}</h2>
-          <p className="mt-2 text-lg text-white">{t('home.ctaDesc')}</p>
+          <h2 className="text-outline text-3xl sm:text-5xl">{t('home.ctaTitle')}</h2>
+          <p className="mt-2 rounded-xl bg-black/25 px-3 py-1 text-lg text-white">{t('home.ctaDesc')}</p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <Link href="/play?mode=bot" className="btn btn-gold px-8 py-3 text-2xl">
+            <Link href="/play?mode=bot" className="btn btn-gold max-w-full break-words px-6 py-3 text-xl sm:px-8 sm:text-2xl">
               <Swords /> {t('home.ctaPlay')}
             </Link>
           </div>

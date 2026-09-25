@@ -15,6 +15,7 @@ import {
   openBox,
   PLAYERS_COLLECTION,
   playerStateSchema,
+  pvpXp,
   startBotBattle,
   unlockUnit,
   upgradeUnit,
@@ -27,6 +28,7 @@ import {
   type PlayerState,
   type Quiet,
 } from '@/shared/economy';
+import type { BattleOutcome } from '@/shared/net';
 import { claimSeasonReward, currentSeason } from '@/shared/ranked';
 import type { ContentBundle } from '@/shared/schema';
 import { getContent, getSettings } from './content';
@@ -109,6 +111,11 @@ export function runPlayerAction(uid: string, action: PlayerAction): Promise<Play
     case 'buy-cards':
       return change(uid, (p, c) => buyCards(p, unitOf(c, action.unitId), action.count));
   }
+}
+
+/** XP for one side of a finished online battle (no coins or cards move, so no ledger line). */
+export async function awardBattleXp(uid: string, outcome: BattleOutcome, durationMs: number): Promise<PlayerState> {
+  return (await change(uid, (p, c) => ({ state: { ...p, xp: p.xp + pvpXp(outcome, durationMs, c.settings.economy) } }))).player;
 }
 
 /** Admin top-up or correction, recorded with the admin's uid and note. */

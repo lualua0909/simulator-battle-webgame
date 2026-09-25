@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Rng } from '@/game/sim/rng';
-import { adjustCoins, botBoxTier, boxStatus, buyCards, EconomyError, emptyPlayer, isUnlocked, liveBoxes, openBox, rollBox, starScale, startBotBattle, unlockUnit, upgradeUnit, vnDay, winBotBattle, type PlayerState } from './economy';
+import { adjustCoins, botBoxTier, boxStatus, buyCards, EconomyError, emptyPlayer, isUnlocked, levelBudget, liveBoxes, openBox, playerBudget, playerLevel, pvpXp, rollBox, starScale, startBotBattle, unlockUnit, upgradeUnit, vnDay, winBotBattle, type PlayerState } from './economy';
 import { SEED } from './seed';
 
 const HOUR = 3_600_000;
@@ -158,6 +158,7 @@ test('beating a bot pays the pending battle\'s difficulty tier, scaled up for ex
   assert.ok(won.reward!.coins >= easy.coins[0] && won.reward!.coins <= easy.coins[1]);
   assert.equal(won.state.botTicket, null);
   assert.equal(won.state.botWinTotal, 1);
+  assert.equal(won.state.xp, economy.xpBotWin);
   const again = startBotBattle(won.state, bots[0], 1, claimAt).state;
   assert.throws(() => winBotBattle(again, bots, SEED.units, economy, claimAt + 1000, random()), /Đợi/);
   const afterCooldown = winBotBattle(again, bots, SEED.units, economy, claimAt + economy.botWinCooldown * 1000, random());
@@ -204,4 +205,25 @@ test('stars scale stats by the bonus, clamped to 0–5', () => {
   assert.equal(starScale(3, 0.1), 1 + 0.1 * 3);
   assert.equal(starScale(9, 0.1), starScale(5, 0.1));
   assert.equal(starScale(-2, 0.1), 1);
+});
+
+test('levels need growing XP, stop at the max level and set the army budget', () => {
+  const e = { ...economy, levelXp: 100, levelXpGrowth: 50, maxLevel: 3, levelBudget: 3000, levelBudgetStep: 250 };
+  assert.deepEqual(playerLevel(0, e), { level: 1, into: 0, need: 100 });
+  assert.deepEqual(playerLevel(99, e), { level: 1, into: 99, need: 100 });
+  assert.deepEqual(playerLevel(100, e), { level: 2, into: 0, need: 150 });
+  assert.deepEqual(playerLevel(260, e), { level: 3, into: 0, need: 0 });
+  assert.deepEqual(playerLevel(1_000_000, e), { level: 3, into: 0, need: 0 });
+  assert.equal(levelBudget(1, e), 3000);
+  assert.equal(levelBudget(3, e), 3500);
+  assert.equal(playerBudget(null, e), 3000);
+  assert.equal(playerBudget({ xp: 120 }, e), 3250);
+});
+
+test('online battles give XP by outcome, none when too short', () => {
+  const long = economy.xpMinSeconds * 1000;
+  assert.equal(pvpXp('win', long, economy), economy.xpPvpWin);
+  assert.equal(pvpXp('lose', long, economy), economy.xpPvpLoss);
+  assert.equal(pvpXp('draw', long, economy), economy.xpPvpDraw);
+  assert.equal(pvpXp('win', long - 1, economy), 0);
 });

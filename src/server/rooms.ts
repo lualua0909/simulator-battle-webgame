@@ -16,15 +16,15 @@ import { z } from 'zod';
 import { armyCost, armySchema, sideBudget, validateArmy, type Armies, type Placement } from '@/game/sim/army';
 import { SIM_HZ } from '@/game/sim/world';
 import { ALL_SIDES, Terrain, type Side } from '@/game/sim/terrain';
-import { isUnlocked, vnDay, type PlayerState, type RankState } from '@/shared/economy';
-import { UNAUTHORIZED, type ArmyStars, type ClientToServer, type RoomState, type ServerToClient } from '@/shared/net';
+import { isUnlocked, playerBudget, vnDay, type PlayerState, type RankState } from '@/shared/economy';
+import { UNAUTHORIZED, type ArmyStars, type BattleOutcome, type ClientToServer, type RoomState, type ServerToClient } from '@/shared/net';
 import { pairKey, pickPairs, type QueueEntry } from '@/shared/ranked';
 import { idSchema, type ConfigBundle } from '@/shared/schema';
 import type { AppUser } from '@/shared/users';
 import { getBundle } from './content';
 import { CHECKSUM_EVERY, judgeMatch, saveMatch, type BattleRecord, type MatchPlayer } from './matches';
 import { recordBattleResult, recordBattleStart, recordBattleVoid, recordSaveFailed, registerRooms } from './metrics';
-import { getPlayer } from './players';
+import { awardBattleXp, getPlayer } from './players';
 import { rankEntry, settleRanked, type RankSettleInput, type RankSettlement } from './ranked';
 import { SESSION_COOKIE, userFromSessionCookie } from './users';
 
@@ -46,12 +46,15 @@ interface Player {
   army: Placement[];
   /** Star levels of the army's units, read from the wallet when the player got ready. */
   stars: Record<string, number>;
+  /** Level budget from the wallet (on joining, refreshed on ready and after XP); unused in ranked rooms. */
+  budget: number;
 }
 
 interface Room {
   code: string;
   phase: 'lobby' | 'battle';
   mapId: string;
+  /** Map budget; ranked seats fight with it (casual seats use their own level budget). */
   budget: number;
   /** Host setting: upgraded units fight with their star bonus. */
   useStars: boolean;
@@ -84,6 +87,8 @@ export interface RoomDeps {
   saveMatch(battle: BattleRecord, winner: Side | 'draw', tick: number): Promise<void>;
   /** The player's wallet: unlocked units and star levels. */
   loadPlayer(uid: string): Promise<PlayerState>;
+  /** Adds the XP of a finished online battle to the wallet and returns it. */
+  awardXp(uid: string, outcome: BattleOutcome, durationMs: number): Promise<PlayerState>;
   /** Ranked: season, standing, matchmaking steps and why the player may not queue (if so). */
   rankEntry(user: AppUser): Promise<{ season: string | null; rank: RankState | null; steps: number; gate: string | null }>;
   /** Ranked: applies a finished battle to both standings (null when its season is over). */
@@ -145,12 +150,17 @@ export function allowSocketRequest(req: IncomingMessage, callback: (err: string 
   callback(ok ? null : 'Origin không hợp lệ', ok);
 }
 
+/** Army budget of a seat before siege scaling: ranked rooms share the map budget, casual seats bring their level's. */
+function seatBudget(room: Pick<Room, 'ranked' | 'budget'>, p: Pick<Player, 'budget'>): number {
+  return room.ranked ? room.budget : p.budget;
+}
+
 async function publicState(room: Room): Promise<RoomState> {
   const bundle = await getBundle();
   const players: RoomState['players'] = {};
   for (const side of ALL_SIDES) {
     const p = room.players[side];
-    if (p) players[side] = { name: p.name, ready: p.ready, connected: p.socketId !== null, units: p.army.length, cost: armyCost(bundle, p.army) };
+    if (p) players[side] = { name: p.name, ready: p.ready, connected: p.socketId !== null, units: p.army.length, cost: armyCost(bundle, p.army), budget: seatBudget(room, p) };
   }
   return { code: room.code, phase: room.phase, mapId: room.mapId, budget: room.budget, useStars: room.useStars, defense: room.defense, players, deadline: room.deployDeadline, ranked: room.ranked?.season ?? null };
 }
@@ -165,7 +175,7 @@ function seatCap(room: Pick<Room, 'defense'>): number {
   return room.defense !== null ? 2 : 4;
 }
 
-export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: userFromSessionCookie, saveMatch, loadPlayer: getPlayer, rankEntry, settleRanked }): void {
+export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: userFromSessionCookie, saveMatch, loadPlayer: getPlayer, awardXp: awardBattleXp, rankEntry, settleRanked }): void {
   const deployMs = deps.deployMs ?? DEPLOY_MS;
   /** Live socket per uid: a new connection replaces the old one. */
   const online = new Map<string, Sock>();
@@ -251,6 +261,26 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     }
   };
 
+  /** XP for every side of a saved battle; the seat's new level budget shows in the lobby right away. */
+  const giveXp = async (room: Room, battle: BattleRecord, winner: Side | 'draw') => {
+    const bundle = await getBundle();
+    const durationMs = Date.now() - battle.startedAt;
+    await Promise.all(
+      battle.activeSides.map(async (s) => {
+        const uid = battle.players[s]!.uid;
+        const outcome: BattleOutcome = winner === 'draw' ? 'draw' : winner === s ? 'win' : 'lose';
+        try {
+          const wallet = await deps.awardXp(uid, outcome, durationMs);
+          const p = room.players[s];
+          if (p?.uid === uid) p.budget = playerBudget(wallet, bundle.settings.economy);
+        } catch (e) {
+          console.error(`Không cộng được XP cho ${uid} (phòng ${room.code}):`, e instanceof Error ? e.message : e);
+        }
+      }),
+    );
+    void broadcast(room);
+  };
+
   const settle = async (room: Room) => {
     const battle = room.battle!;
     room.battle = null;
@@ -264,6 +294,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       await deps.saveMatch(battle, verdict.winner, verdict.tick);
       recordBattleResult(verdict.winner);
       io.to(room.code).emit('battle:result', { ok: true, winner: verdict.winner });
+      void giveXp(room, battle, verdict.winner);
     } catch (e) {
       recordSaveFailed();
       console.error(`Không lưu được kết quả trận phòng ${room.code}:`, e instanceof Error ? e.message : e);
@@ -309,6 +340,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     try {
       await deps.saveMatch(battle, winner, endTick);
       recordBattleResult(winner);
+      void giveXp(room, battle, winner);
     } catch (e) {
       recordSaveFailed();
       console.error(`Không lưu được kết quả trận phòng ${room.code}:`, e instanceof Error ? e.message : e);
@@ -333,7 +365,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       let army = p.army;
       if (!p.ready) {
         // Timed out before readying: fight with whatever was drafted, dropping it only if it's invalid.
-        const budget = sideBudget(bundle.settings, room.budget, s, room.defense);
+        const budget = sideBudget(bundle.settings, seatBudget(room, p), s, room.defense);
         const check = validateArmy(bundle, terrain, s, army, budget);
         if (!check.ok) army = [];
       }
@@ -421,7 +453,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     rooms.set(room.code, room);
     const seats = [[a, 'blue', b], [b, 'red', a]] as const;
     for (const [q, side] of seats) {
-      room.players[side] = { uid: q.entry.uid, socketId: q.socket.id, name: q.name, ready: false, army: [], stars: {} };
+      room.players[side] = { uid: q.entry.uid, socketId: q.socket.id, name: q.name, ready: false, army: [], stars: {}, budget: map.budget };
       room.ranked!.ips[side] = q.entry.ip;
       q.seat(room, side);
     }
@@ -536,12 +568,12 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     socket.on('rank:cancel', () => unqueue(user.uid, socket));
 
     socket.on('room:create', async (ack) => {
-      const bundle = await getBundle();
+      const [bundle, wallet] = await Promise.all([getBundle(), deps.loadPlayer(user.uid).catch(() => null)]);
       leave();
       const map = bundle.maps[0];
       if (!map) return ack({ ok: false, error: 'Chưa có bản đồ nào trong CMS' });
       const code = newCode();
-      room = { code, phase: 'lobby', mapId: map.id, budget: map.budget, useStars: true, defense: null, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [], stars: {} } }, battle: null, cleanup: null, deployDeadline: null, deployTimer: null, ranked: null };
+      room = { code, phase: 'lobby', mapId: map.id, budget: map.budget, useStars: true, defense: null, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [], stars: {}, budget: playerBudget(wallet, bundle.settings.economy) } }, battle: null, cleanup: null, deployDeadline: null, deployTimer: null, ranked: null };
       side = 'blue';
       rooms.set(code, room);
       void socket.join(code);
@@ -552,14 +584,14 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     socket.on('room:join', async (req, ack) => {
       const code = typeof req?.code === 'string' ? req.code.trim().toUpperCase() : '';
       if (!code) return ack({ ok: false, error: 'Không tìm thấy phòng' });
+      const [bundle, wallet] = await Promise.all([getBundle(), deps.loadPlayer(user.uid).catch(() => null)]);
       let target = rooms.get(code);
       if (!target) {
         // Room was closed or never existed: recreate it under the same code instead of erroring.
-        const bundle = await getBundle();
         const map = bundle.maps[0];
         if (!map) return ack({ ok: false, error: 'Chưa có bản đồ nào trong CMS' });
         leave();
-        target = { code, phase: 'lobby', mapId: map.id, budget: map.budget, useStars: true, defense: null, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [], stars: {} } }, battle: null, cleanup: null, deployDeadline: null, deployTimer: null, ranked: null };
+        target = { code, phase: 'lobby', mapId: map.id, budget: map.budget, useStars: true, defense: null, players: { blue: { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: [], stars: {}, budget: playerBudget(wallet, bundle.settings.economy) } }, battle: null, cleanup: null, deployDeadline: null, deployTimer: null, ranked: null };
         rooms.set(code, target);
         room = target;
         side = 'blue';
@@ -578,7 +610,7 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       if (!mine) return ack({ ok: false, error: target.defense !== null ? 'Phòng đấu thủ thành chỉ có 2 người' : 'Phòng đã đủ 4 người' });
       if (room !== target || side !== mine) leave();
       const existing = target.players[mine];
-      target.players[mine] = { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: existing?.army ?? [], stars: existing?.stars ?? {} };
+      target.players[mine] = { uid: user.uid, socketId: socket.id, name: playerName(user), ready: false, army: existing?.army ?? [], stars: existing?.stars ?? {}, budget: playerBudget(wallet, bundle.settings.economy) };
       if (target.cleanup) {
         clearTimeout(target.cleanup);
         target.cleanup = null;
@@ -594,13 +626,13 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
     socket.on('room:settings', async (req) => {
       const bundle = await getBundle();
       if (!room || side !== 'blue' || room.phase !== 'lobby' || room.ranked) return;
-      const parsed = z.object({ mapId: idSchema, budget: z.number().int().min(100).max(1_000_000), useStars: z.boolean(), defense: z.enum(['blue', 'red']).nullable().default(null) }).safeParse(req);
+      const parsed = z.object({ mapId: idSchema, useStars: z.boolean(), defense: z.enum(['blue', 'red']).nullable().default(null) }).safeParse(req);
       if (!parsed.success) return;
       if (!bundle.maps.some((m) => m.id === parsed.data.mapId)) return;
       // Siege is a 2-side mode: it can't be turned on once a 3rd/4th seat is occupied.
       if (parsed.data.defense !== null && connectedSides(room).length > 2) return;
       room.mapId = parsed.data.mapId;
-      room.budget = parsed.data.budget;
+      room.budget = bundle.maps.find((m) => m.id === parsed.data.mapId)!.budget;
       room.useStars = parsed.data.useStars;
       room.defense = parsed.data.defense;
       for (const p of Object.values(room.players)) if (p) p.ready = false;
@@ -623,14 +655,15 @@ export function attachRooms(io: RoomServer, deps: RoomDeps = { authenticate: use
       const map = bundle.maps.find((m) => m.id === room!.mapId);
       if (!map) return ack({ ok: false, error: 'Bản đồ không còn tồn tại' });
       if (army.data.length === 0) return ack({ ok: false, error: 'Chưa đặt lính nào' });
-      const check = validateArmy(bundle, new Terrain(map, bundle.assets, room.defense, connectedSides(room)), side, army.data, sideBudget(bundle.settings, room.budget, side, room.defense));
+      const me = room.players[side]!;
+      me.budget = playerBudget(wallet, bundle.settings.economy);
+      const check = validateArmy(bundle, new Terrain(map, bundle.assets, room.defense, connectedSides(room)), side, army.data, sideBudget(bundle.settings, seatBudget(room, me), side, room.defense));
       if (!check.ok) return ack({ ok: false, error: check.error });
       const armyUnits = new Set(army.data.map((p) => p.unitId));
       const locked = bundle.units.find((u) => armyUnits.has(u.id) && !isUnlocked(u, wallet));
       if (locked) return ack({ ok: false, error: `Chưa mở khóa lính ${locked.name}` });
       // Readying for a new battle without confirming the last one abandons it.
       if (room.battle && !room.battle.reports[side]) voidBattle(room, `${room.players[side]!.name} bỏ dở trận, kết quả bị hủy`, 'Người chơi bỏ dở trận');
-      const me = room.players[side]!;
       me.army = army.data;
       me.stars = Object.fromEntries([...armyUnits].flatMap((id) => (wallet.stars[id] ? [[id, wallet.stars[id]]] : [])));
       me.ready = true;

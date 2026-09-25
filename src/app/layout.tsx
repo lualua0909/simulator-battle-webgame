@@ -69,6 +69,7 @@ export const viewport: Viewport = {
   themeColor: '#1a1446',
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
 };
 
 // Schema VideoGame giúp Google hiểu đây là game (rich result tiềm năng).

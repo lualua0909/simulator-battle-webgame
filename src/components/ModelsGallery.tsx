@@ -160,17 +160,17 @@ export default function ModelsGallery(props: Props) {
   ) : (
     <ModelViewer template={template} weapon={weapon} anim={anim} yaw={props.yaw} explode={explode} onPick={setPicked} />
   );
-  if (props.bare) return <div className="h-screen w-screen">{viewer}</div>;
+  if (props.bare) return <div className="h-dvh w-screen">{viewer}</div>;
 
   const item = (active: boolean, onClick: () => void, children: React.ReactNode) => (
-    <button className={`w-full rounded px-2 py-1 text-left hover:bg-white ${active ? 'bg-white font-bold' : ''}`} onClick={onClick}>
+    <button className={`min-h-[40px] w-full rounded px-2 py-1 text-left hover:bg-white ${active ? 'bg-white font-bold' : ''}`} onClick={onClick}>
       {children}
     </button>
   );
 
   return (
-    <div className="flex h-screen">
-      <aside className="w-64 shrink-0 overflow-y-auto border-r-2 border-ink bg-parch p-3">
+    <div className="flex h-dvh flex-col overflow-hidden lg:flex-row">
+      <aside className="max-h-[28dvh] w-full shrink-0 overflow-y-auto overscroll-contain border-b-2 border-ink bg-parch p-3 lg:h-auto lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r-2">
         <div className="flex items-baseline justify-between gap-2">
           <Link href="/" className="font-display text-lg">
             <ArrowLeft /> Mini Battle Simulator
@@ -184,7 +184,7 @@ export default function ModelsGallery(props: Props) {
         <div className="mt-3 flex items-center justify-between">
           <h2 className="font-display text-sm">Lính</h2>
           {admin && (
-            <button className="btn px-2 py-0 text-xs" onClick={() => select({ unit: 'new' })}>
+            <button className="btn min-h-[36px] px-2 py-0 text-xs" onClick={() => select({ unit: 'new' })}>
               + Lính mới
             </button>
           )}
@@ -234,9 +234,9 @@ export default function ModelsGallery(props: Props) {
           ))}
         </ul>
       </aside>
-      <main className="relative min-w-0 flex-1">
+      <main className="relative min-h-[46dvh] min-w-0 flex-1 lg:min-h-0">
         {viewer}
-        <div className="panel absolute left-3 top-3 flex flex-wrap items-center gap-2 p-2 text-sm">
+        <div className="panel absolute left-3 top-3 flex max-h-[45%] max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 overflow-y-auto overscroll-contain p-2 text-sm">
           {sel.chest && (
             <button className={`btn px-2 py-1 text-xs ${chestOpen ? 'btn-gold' : ''}`} onClick={() => setChestOpen((o) => !o)}>
               {chestOpen ? <><RotateCcw /> Đóng lại</> : <><Sparkles /> Mở thử</>}
@@ -270,13 +270,13 @@ export default function ModelsGallery(props: Props) {
               <span className="opacity-70">model + animation từ file upload</span>
             </>
           )}
-          {picked && <span className="rounded bg-white px-2 py-0.5 font-mono text-xs">{picked}</span>}
+          {picked && <span className="max-w-full truncate rounded bg-white px-2 py-0.5 font-mono text-xs" title={picked}>{picked}</span>}
         </div>
-        {candidate && <div className="absolute bottom-3 left-3 rounded-lg border-2 border-ink bg-gold px-3 py-1 text-sm font-bold"><FlaskConical /> Đang xem thử v{candidate.sculpt.version} của Claude — chưa áp dụng</div>}
-        {dirty && <div className="absolute right-3 top-3 rounded-lg border-2 border-ink bg-white px-2 py-1 text-xs font-bold">Xem trước bản nháp chưa lưu</div>}
+        {candidate && <div className="absolute bottom-3 left-3 right-3 rounded-lg border-2 border-ink bg-gold px-3 py-1 text-sm font-bold break-words lg:right-auto lg:max-w-[calc(100%-1.5rem)]"><FlaskConical /> Đang xem thử v{candidate.sculpt.version} của Claude — chưa áp dụng</div>}
+        {dirty && <div className="absolute bottom-3 right-3 rounded-lg border-2 border-ink bg-white px-2 py-1 text-xs font-bold lg:bottom-auto lg:top-3">Xem trước bản nháp chưa lưu</div>}
       </main>
       {admin && (
-        <aside className="w-[27rem] shrink-0 overflow-y-auto border-l-2 border-ink bg-parch p-3">
+        <aside className="max-h-[32dvh] w-full shrink-0 overflow-y-auto overscroll-contain border-t-2 border-ink bg-parch p-3 lg:h-auto lg:max-h-none lg:w-[27rem] lg:max-w-[40vw] lg:border-l-2 lg:border-t-0">
           {unit && !asset && !skill ? (
             <UnitEditor
               key={creating ? 'new' : savedUnit?.id}

@@ -37,6 +37,15 @@ export default function BoxOpening({ bundle, action, title, chest, thumbs, onClo
     return () => window.removeEventListener('keydown', onKey);
   }, [mode, onClose]);
 
+  // Lock the page behind the full-screen modal so only the box scrolls on mobile.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   const open = async () => {
     if (mode !== 'idle') return;
     setError(null);
@@ -56,14 +65,14 @@ export default function BoxOpening({ bundle, action, title, chest, thumbs, onClo
   const factions = new Map(bundle.factions.map((f) => [f.id, f]));
 
   return createPortal(
-    <div className="game-ui box-backdrop fixed inset-0 z-50 flex flex-col items-center overflow-y-auto px-4 pb-6 pt-4">
-      <div className="absolute right-7 top-3">
+    <div className="game-ui box-backdrop fixed inset-0 z-50 flex flex-col items-center overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
+      <div className="absolute right-3 top-3 sm:right-7">
         <CoinBar value={player?.coins ?? 0} />
       </div>
-      <h2 className="text-outline mt-14 text-center text-4xl sm:mt-2">{title}</h2>
+      <h2 className="text-outline mt-14 break-words px-2 text-center text-3xl sm:mt-2 sm:text-4xl">{title}</h2>
       <div className={`relative w-full max-w-xl shrink-0 ${revealed ? 'h-[32vh]' : 'h-[56vh]'} transition-[height] duration-500`}>
         <ChestStage variant={chest} mode={mode} onOpened={() => setRevealed(true)} />
-        {mode === 'idle' && <button className="absolute inset-0 cursor-pointer" aria-label={locale === 'vi' ? 'Mở hộp' : 'Open box'} onClick={() => void open()} />}
+        {mode === 'idle' && <button className="absolute inset-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold" aria-label={locale === 'vi' ? 'Mở hộp' : 'Open box'} onClick={() => void open()} />}
       </div>
       {mode === 'idle' && (
         <div className="flex flex-col items-center gap-3">

@@ -90,6 +90,8 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, anim = 
       const h = el.clientHeight || 300;
       renderer.setSize(w, h);
       camera.aspect = w / h;
+      // Portrait hẹp (mobile): mở rộng fov để model không bị cắt 2 bên.
+      camera.fov = camera.aspect < 0.8 ? 50 : camera.aspect < 1 ? 42 : 35;
       camera.updateProjectionMatrix();
     };
     const ro = new ResizeObserver(resize);
@@ -172,5 +174,5 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, anim = 
     };
   }, [url]);
 
-  return <div ref={host} className={className ?? 'h-full w-full'} />;
+  return <div ref={host} className={className ?? 'h-full min-h-[200px] w-full touch-none'} />;
 }

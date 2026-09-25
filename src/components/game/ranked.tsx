@@ -201,7 +201,7 @@ export function RankedLobby(props: {
             {RANK_TIERS.map((t, i) => (
               <div key={t} className={`flex flex-col items-center rounded-lg pb-1 text-center text-white ${i === tierIndex ? 'bg-white/20 ring-2 ring-gold' : ''}`}>
                 <RankBadge tier={t} size={i === tierIndex ? 52 : 40} dim={i > tierIndex} />
-                <span className="text-[10px] font-bold leading-tight sm:text-xs">{cfg.tiers[t].name}</span>
+                <span className="text-[11px] font-bold leading-tight sm:text-xs">{cfg.tiers[t].name}</span>
               </div>
             ))}
           </div>
@@ -348,7 +348,7 @@ export function RankedBar({ bundle, room, opponent, mySide }: { bundle: ConfigBu
   const map = bundle.maps.find((m) => m.id === room.mapId);
   const other = Object.entries(room.players).find(([s]) => s !== mySide)?.[1];
   return (
-    <div className="panel pointer-events-auto flex w-56 flex-col gap-1.5 p-2 text-sm sm:w-64">
+    <div className="panel pointer-events-auto flex w-44 max-w-[calc(100vw-1.5rem)] flex-col gap-1.5 p-2 text-sm sm:w-64">
       <div className="font-display"><Trophy /> Xếp hạng · {room.ranked ? seasonName(room.ranked) : ''}</div>
       {secondsLeft !== null && <div className={`text-center font-display text-lg ${secondsLeft <= 10 ? 'text-red-team' : ''}`}>Bắt đầu sau {secondsLeft}s</div>}
       <div className="flex items-center gap-2">

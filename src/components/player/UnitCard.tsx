@@ -36,7 +36,7 @@ export default function UnitCard({ unit, thumb, faction, star, progress, locked,
       {progress && (
         <div className={`cr-progress ${ready ? 'cr-progress-ready' : ''}`}>
           <div className="cr-progress-fill" style={{ width: `${progress.need === null ? 100 : Math.min(100, (progress.have / Math.max(1, progress.need)) * 100)}%` }} />
-          <span className="text-outline relative">{progress.need === null ? (locale === 'vi' ? 'TỐI ĐA' : 'MAX') : `${progress.have}/${progress.need}`}</span>
+          <span className="text-outline relative max-w-full whitespace-nowrap">{progress.need === null ? (locale === 'vi' ? 'TỐI ĐA' : 'MAX') : `${progress.have}/${progress.need}`}</span>
         </div>
       )}
       <div className="cr-frame">
@@ -44,18 +44,18 @@ export default function UnitCard({ unit, thumb, faction, star, progress, locked,
           {thumb ? <img src={thumb} alt="" draggable={false} className={locked ? 'grayscale' : ''} /> : <div className="h-full w-full animate-pulse bg-white/30" />}
           {star !== undefined && !locked && <Stars value={star} size={Math.round(width / 7.5)} className="absolute inset-x-0 bottom-1 justify-center" />}
           {locked && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-[#10204080]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-[#10204080] px-1">
               <LockIcon size={Math.round(width / 4)} />
-              <span className="text-outline flex items-center gap-1">
+              <span className="text-outline flex max-w-full items-center gap-1 truncate text-sm">
                 <CoinIcon size={18} />
                 {formatCoins(unit.unlockCost)}
               </span>
             </div>
           )}
-          {count !== undefined && <span className="text-outline absolute right-1 top-0 text-2xl">+{count}</span>}
+          {count !== undefined && <span className="text-outline absolute right-1 top-0 text-xl">+{count}</span>}
         </div>
         <div className="cr-plank">
-          <span className="text-outline">{unitName((unit as { id?: string }).id ?? unit.name, unit.name)}</span>
+          <span className="text-outline break-words" title={unitName((unit as { id?: string }).id ?? unit.name, unit.name)}>{unitName((unit as { id?: string }).id ?? unit.name, unit.name)}</span>
         </div>
       </div>
       <div className="cr-tail" />

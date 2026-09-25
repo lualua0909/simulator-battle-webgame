@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import type { RoomSettings, RoomState } from '@/shared/net';
+import { levelBudget, playerLevel, type PlayerState } from '@/shared/economy';
 import { ALL_SIDES, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import type { BattleStats, ViewState } from '@/game/render/engine';
@@ -70,7 +71,7 @@ export function CinematicBars({ title, winner, onSkip }: { title?: string; winne
           {t('panels.skip')} <ChevronRight />
         </button>
       </div>
-      {title && <div className={`cine-title absolute inset-x-0 top-[13vh] text-center font-display text-5xl sm:text-6xl ${color}`}>{title}</div>}
+      {title && <div className={`cine-title absolute inset-x-0 top-[13vh] px-4 text-center font-display text-3xl break-words sm:text-6xl ${color}`}>{title}</div>}
     </div>
   );
 }
@@ -173,8 +174,8 @@ export function SetupPanel(props: {
   mode: 'bot' | 'local';
   mapId: string;
   setMapId(id: string): void;
-  budget: number;
-  setBudget(v: number): void;
+  /** Signed-out players fight at level 1. */
+  player: PlayerState | null;
   botId: string;
   setBotId(id: string): void;
   botCount: number;
@@ -188,8 +189,9 @@ export function SetupPanel(props: {
   const { bundle, mode } = props;
   const { t, locale, mapName, botName } = useLanguage();
   const modeTitle = mode === 'bot' ? t('modes.botTitle') : t('modes.localTitle');
+  const lv = playerLevel(props.player?.xp ?? 0, bundle.settings.economy);
   return (
-    <div className="panel pointer-events-auto m-auto flex w-[min(760px,94vw)] flex-col gap-2 p-3 sm:max-h-[88vh] sm:gap-3 sm:overflow-y-auto sm:overscroll-contain sm:touch-pan-y sm:p-4">
+    <div className="panel pointer-events-auto m-auto flex max-h-full w-[min(760px,94vw)] flex-col gap-2 overflow-y-auto overscroll-contain p-3 touch-pan-y sm:max-h-[88vh] sm:gap-3 sm:p-4">
       <h2 className="font-display text-2xl">{modeTitle}</h2>
       <section>
         <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{locale === 'vi' ? 'Chế độ' : 'Mode'}</h3>
@@ -204,7 +206,6 @@ export function SetupPanel(props: {
               key={m.id}
               onClick={() => {
                 props.setMapId(m.id);
-                props.setBudget(m.budget);
               }}
               className={`rounded-xl border-2 p-2 text-left ${props.mapId === m.id ? 'border-ink bg-gold' : 'border-ink/30 bg-white'}`}
             >
@@ -219,8 +220,11 @@ export function SetupPanel(props: {
       </section>
       <section className="flex items-center gap-2 sm:gap-3">
         <h3 className="shrink-0 text-sm font-extrabold uppercase opacity-70">{t('game.budget')}</h3>
-        <input type="range" min={300} max={30000} step={100} value={props.budget} onChange={(e) => props.setBudget(Number(e.target.value))} className="min-w-0 flex-1" />
-        <input type="number" min={100} step={100} value={props.budget} onChange={(e) => props.setBudget(Math.max(100, Number(e.target.value) || 0))} className="field flex-none shrink-0" style={{ width: '5.5rem' }} />
+        <span className="font-display text-lg tabular-nums">{levelBudget(lv.level, bundle.settings.economy)}</span>
+        <span className="min-w-0 flex-1 text-xs opacity-70">
+          {t('game.level')} {lv.level}
+          {lv.need > 0 && ` · ${lv.into}/${lv.need} XP`}
+        </span>
         {mode === 'bot' && props.choice === 'battle' && (
           <select value={props.botCount} onChange={(e) => props.setBotCount(Number(e.target.value))} className="field flex-none shrink-0" style={{ width: 'auto' }} title="Số lượng bot" aria-label="Số lượng bot">
             {[1, 2, 3].map((n) => (
@@ -234,7 +238,7 @@ export function SetupPanel(props: {
       {mode === 'bot' ? (
         <section>
           <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{t('game.opponent')}</h3>
-          <div className="grid grid-cols-4 gap-1 sm:gap-2">
+          <div className="grid grid-cols-2 gap-1 min-[420px]:grid-cols-4 sm:gap-2">
             {orderedBots(bundle).map((b) => {
               const active = props.botId === b.id;
               return (
@@ -246,7 +250,7 @@ export function SetupPanel(props: {
                   >
                     <RankIcon rank={BOT_ORDER.indexOf(b.id)} />
                   </span>
-                  <span className={`whitespace-nowrap text-[11px] leading-tight sm:text-base ${active ? '' : 'opacity-70 group-hover:opacity-100'}`}>{botName(b.id, b.name)}</span>
+                  <span title={botName(b.id, b.name)} className={`max-w-full truncate px-1 text-xs leading-tight sm:text-base ${active ? '' : 'opacity-70 group-hover:opacity-100'}`}>{botName(b.id, b.name)}</span>
                   <span className={`h-1 w-8 rounded-full transition-colors sm:w-10 ${active ? 'bg-gold' : 'bg-transparent group-hover:bg-ink/20'}`} />
                 </button>
               );
@@ -342,7 +346,7 @@ export function useCountdown(deadline: number | null): number | null {
 
 export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: Side; onSettings(next: RoomSettings): void }) {
   const { room, mySide, bundle } = props;
-  const current: RoomSettings = { mapId: room.mapId, budget: room.budget, useStars: room.useStars, defense: room.defense };
+  const current: RoomSettings = { mapId: room.mapId, useStars: room.useStars, defense: room.defense };
   const set = (patch: Partial<RoomSettings>) => props.onSettings({ ...current, ...patch });
   const host = mySide === 'blue';
   const link = typeof window !== 'undefined' ? `${window.location.origin}/play?mode=online&room=${room.code}` : '';
@@ -351,7 +355,7 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
   /** Siege is 2-side only; an open room can seat up to 4. */
   const slots = room.defense !== null ? (['blue', 'red'] as const) : ALL_SIDES;
   return (
-    <div className="panel pointer-events-auto flex max-h-[26vh] w-52 flex-col gap-2 overflow-y-auto overscroll-contain p-2 text-sm sm:max-h-none sm:w-auto sm:overflow-visible">
+    <div className="panel pointer-events-auto flex max-h-[22vh] w-44 max-w-[calc(100vw-1.5rem)] flex-col gap-2 overflow-y-auto overscroll-contain p-2 text-sm sm:max-h-[50vh] sm:w-52 md:max-h-none md:overflow-visible">
       <div className="flex items-center gap-2">
         <span className="font-display">Phòng {room.code}</span>
         <button
@@ -375,20 +379,20 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
             <span className={`h-3 w-3 rounded-full ${SIDE_BG[s]}`} />
             <span className="font-bold">{p ? p.name : '— đang chờ —'}</span>
             {s === mySide && <span className="text-xs opacity-60">(bạn)</span>}
+            {p && <span className="text-xs tabular-nums opacity-60" title="Ngân sách theo cấp">{p.budget}</span>}
             {p && !p.connected && <span className="text-xs text-red-team">mất kết nối</span>}
             {p?.ready && <span className="ml-auto rounded bg-green-600 px-1.5 text-xs font-bold text-white">SẴN SÀNG</span>}
           </div>
         );
       })}
       <div className="flex items-center gap-2">
-        <select className="field" disabled={!host} value={room.mapId} onChange={(e) => set({ mapId: e.target.value, budget: bundle.maps.find((m) => m.id === e.target.value)?.budget ?? room.budget })}>
+        <select className="field" disabled={!host} value={room.mapId} onChange={(e) => set({ mapId: e.target.value })}>
           {bundle.maps.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name}
             </option>
           ))}
         </select>
-        <input className="field w-24" type="number" step={100} disabled={!host} value={room.budget} onChange={(e) => set({ budget: Math.max(100, Number(e.target.value) || 100) })} />
       </div>
       <select className="field" disabled={!host} value={room.defense ?? 'battle'} onChange={(e) => set({ defense: e.target.value === 'battle' ? null : (e.target.value as Side) })}>
         <option value="battle">Đại chiến</option>
@@ -409,14 +413,14 @@ export function HelpHint({ text, className = '' }: { text: string; className?: s
   return (
     <div className={`pointer-events-auto relative shrink-0 ${className}`}>
       <button
-        className="panel flex h-7 w-7 items-center justify-center rounded-full text-sm opacity-70 hover:opacity-100"
+        className="panel flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base opacity-70 hover:opacity-100"
         onClick={() => setOpen((o) => !o)}
         title="Hướng dẫn điều khiển"
         aria-label="Hướng dẫn điều khiển"
       >
         ?
       </button>
-      {open && <div className="panel absolute bottom-9 left-0 z-10 w-60 p-2 text-xs leading-tight">{text}</div>}
+      {open && <div className="panel absolute bottom-9 left-0 z-10 w-60 max-w-[calc(100vw-2rem)] break-words p-2 text-xs leading-tight">{text}</div>}
     </div>
   );
 }
@@ -454,7 +458,7 @@ export function BattleHud(props: {
   return (
     <>
       <div
-        className="panel pointer-events-auto absolute left-1/2 top-2 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-1.5 overflow-hidden whitespace-nowrap px-2.5 py-1.5 sm:top-3 sm:gap-2 sm:px-3.5 sm:py-1.5"
+        className="panel pointer-events-auto absolute left-1/2 top-2 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto overscroll-contain whitespace-nowrap px-2.5 py-1.5 [scrollbar-width:none] sm:top-3 sm:gap-2 sm:px-3.5 sm:py-1.5 [&::-webkit-scrollbar]:hidden"
         style={{ borderRadius: 9999 }}
       >
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
@@ -481,7 +485,7 @@ export function BattleHud(props: {
           ))}
         </div>
       </div>
-      <div className="panel pointer-events-auto absolute bottom-2 left-1/2 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 p-1 sm:bottom-3">
+      <div className="panel pointer-events-auto absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 flex max-h-[28vh] max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 overflow-y-auto overscroll-contain p-1 sm:bottom-3 sm:max-h-none sm:overflow-visible">
         <HelpHint text="Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE · V: đổi góc nhìn · N: lính kế · Bấm vào lính để theo lính đó" />
         {VIEW_BUTTONS.map((b) => (
           <button key={b.mode} className={`btn btn-icon ${props.view.mode === b.mode ? 'btn-gold' : ''}`} onClick={() => props.onView(b.mode)} title={b.title} aria-label={b.label}>
@@ -535,7 +539,7 @@ function TeamBar({ side, alive, total, flip }: { side: Side; alive: number; tota
     <div className={`flex shrink-0 items-center gap-1 sm:gap-1.5 ${flip ? 'flex-row-reverse' : ''}`} title={`${SIDE_NAME[side]}: còn ${alive}/${total}`}>
       <span className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-ink/60 ${SIDE_BG[side]}`} />
       <span className={`font-display tabular-nums sm:text-lg ${SIDE_TEXT[side]}`}>{alive}</span>
-      <div className="h-2.5 w-9 overflow-hidden rounded-full border border-ink/80 bg-black/10 sm:h-3 sm:w-20 lg:w-24">
+      <div className="h-2.5 w-12 overflow-hidden rounded-full border border-ink/80 bg-black/10 sm:h-3 sm:w-20 lg:w-24">
         <div className={`h-full rounded-full transition-[width] duration-300 ${SIDE_BG[side]}`} style={{ width: `${pct}%`, marginLeft: flip ? 'auto' : undefined }} />
       </div>
     </div>
@@ -548,9 +552,9 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
   const color = result.winner !== 'draw' ? SIDE_TEXT[result.winner] : 'text-ink';
   const survivors = ALL_SIDES.filter((s) => result.survivors[s] !== undefined);
   return (
-    <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-ink/25">
-      <div className="panel flex w-[min(420px,92vw)] flex-col items-center gap-3 p-6 text-center">
-        <div className={`font-display text-4xl ${color}`}>{title}</div>
+    <div className="pointer-events-auto absolute inset-0 flex items-center justify-center overflow-y-auto bg-ink/45 p-3 overscroll-contain">
+      <div className="panel flex max-h-[92dvh] w-[min(420px,92vw)] flex-col items-center gap-3 overflow-y-auto overscroll-contain p-6 text-center">
+        <div className={`font-display text-3xl break-words sm:text-4xl ${color}`}>{title}</div>
         <p className="text-sm opacity-80">
           {result.reason === 'surrender'
             ? props.mySide && result.winner === props.mySide

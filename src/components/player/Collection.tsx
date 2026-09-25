@@ -186,7 +186,7 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
 
   const spendButton = (key: string, label: ReactNode, price: number, action: PlayerAction, done: string, blocked?: string) => (
     <button className={`btn w-full flex-col gap-0 ${confirm === key ? 'btn-red' : 'btn-gold'}`} disabled={busy || !!blocked || coins < price} onClick={() => void run(key, action, done)}>
-      <span>{confirm === key ? `Xác nhận trừ ${formatCoins(price)} coin?` : label}</span>
+      <span className="max-w-full break-words text-center">{confirm === key ? `Xác nhận trừ ${formatCoins(price)} coin?` : label}</span>
       <span className="flex items-center gap-1">
         {blocked ??
           (coins < price ? (
@@ -203,9 +203,9 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-3">
-        <UnitCard unit={unit} thumb={thumb} faction={bundle.factions.find((f) => f.id === unit.factionId)} star={star} locked={!unlocked} width={128} />
+        <UnitCard unit={unit} thumb={thumb} faction={bundle.factions.find((f) => f.id === unit.factionId)} star={star} locked={!unlocked} width={112} className="shrink-0" />
         <div className="flex min-w-0 flex-col gap-1">
-          <h3 className="text-2xl leading-tight">{unitName(unit.id, unit.name)}</h3>
+          <h3 className="break-words text-2xl leading-tight">{unitName(unit.id, unit.name)}</h3>
           <span className="opacity-75">{ROLE_LABEL[unit.role]}</span>
           <Stars value={star} size={22} />
           <span>
