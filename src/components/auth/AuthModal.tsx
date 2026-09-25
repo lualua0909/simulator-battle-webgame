@@ -89,7 +89,7 @@ export default function AuthModal({ initialView = 'signin', onClose, onSignedIn 
     });
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-ink/60 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="auth-title" onClick={onClose}>
+    <div className="game-ui fixed inset-0 z-50 flex bg-ink/60 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="auth-title" onClick={onClose}>
       <div
         className="flex h-dvh w-full flex-col overflow-y-auto overscroll-contain bg-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))] sm:h-auto sm:max-h-[92vh] sm:max-w-md sm:rounded-2xl sm:border-2 sm:border-ink sm:p-6 sm:shadow-[0_6px_0_0_rgba(31,26,20,0.85)]"
         onClick={(e) => e.stopPropagation()}

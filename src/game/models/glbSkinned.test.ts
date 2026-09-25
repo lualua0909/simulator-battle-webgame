@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createAssetModel } from '@/game/models';
 import { bakeModel } from '@/game/models/bake';
-import { pickClipName, repaintPixels, skinnedBounds } from '@/game/models/glbSkinned';
+import { groundLift, mountSeatFor, pickClipName, repaintPixels, skinnedBounds, walkSpeedFor, yawCorrectionFor, NORMALIZED_HEIGHT } from '@/game/models/glbSkinned';
 import { assetSchema, unitSchema, weaponSchema } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
 
@@ -271,8 +271,7 @@ test('committed hoa-tien-thu.glb parses with shoot/walk/run/death clips', async 
   assert.ok(height > 1 && height < 30, `hoa-tien-thu.glb: rendered height ${height}`);
 });
 
-test('seed fire-archer weapon, asset and unit validate, arsenal hidden', async () => {
-  const weapon = SEED.weapons.find((w) => w.id === 'fire-bow');
+test('seed fire-archer weapon, asset and unit validate, arsenal hidden', async () => {  const weapon = SEED.weapons.find((w) => w.id === 'fire-bow');
   const asset = SEED.assets.find((a) => a.id === 'm-fire-archer');
   const unit = SEED.units.find((u) => u.id === 'fire-archer');
   assert.ok(weapon && asset && unit, 'seed has fire-bow, m-fire-archer and fire-archer');
@@ -300,4 +299,168 @@ test('seed fire-archer weapon, asset and unit validate, arsenal hidden', async (
     if (name === 'RocketLauncher') continue;
     assert.ok(hidden.has(name), `rigid mesh ${name} not hidden`);
   }
+});
+
+// voi-mamut.glb (Voi ma mút) and voi-trang.glb (Chiến tượng / tượng binh) share
+// the same battle clip names: Idle = Đứng yên, Walk = Đi bộ, Attack_Bite = Cắn,
+// Attack_Stomp = Dậm chân, Hit = Trúng đòn, Death = Chết, Scale_Pulse = Nhập phong.
+// voi-trang.glb ships Idle / Walk / Attack_Stomp / Attack_TrunkSweep / Hit / Death. No Run/Jump:
+// run falls back to Walk so a charging elephant never glides in the idle pose.
+const VOI_MAMUT_CLIPS = ['Idle', 'Walk', 'Attack_Bite', 'Attack_Stomp', 'Hit', 'Death', 'Scale_Pulse'];
+const VOI_TRANG_CLIPS = ['Idle', 'Walk', 'Attack_Stomp', 'Attack_TrunkSweep', 'Hit', 'Death'];
+
+test('voi-mamut clips map to battle states (Run falls back to Walk)', () => {
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'idle'), 'Idle');
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'walk'), 'Walk');
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'run'), 'Walk');
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'death'), 'Death');
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'jump'), null);
+});
+
+test('elephant skill clips: stomp / trunk sweep / trunk toss; run never picks the trunk clip', () => {
+  assert.equal(pickClipName(VOI_TRANG_CLIPS, 'run'), 'Walk');
+  assert.equal(pickClipName(VOI_TRANG_CLIPS, 'stomp'), 'Attack_Stomp');
+  assert.equal(pickClipName(VOI_TRANG_CLIPS, 'sweep'), 'Attack_TrunkSweep');
+  assert.equal(pickClipName(VOI_TRANG_CLIPS, 'toss'), 'Attack_TrunkSweep');
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'stomp'), 'Attack_Stomp');
+  // No trunk clip in voi-mamut.glb: the instance falls back to its attack clip.
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'sweep'), null);
+  for (const unit of ['mammoth', 'war-elephant']) {
+    const ids = SEED.units.find((u) => u.id === unit)!.skillIds;
+    for (const id of ['voi-dam-chan', 'voi-quet-voi', 'voi-hat-voi']) assert.ok(ids.includes(id), `${unit} has ${id}`);
+  }
+});
+
+test('committed voi-mamut.glb parses with the seven clips', async () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'voi-mamut.glb');
+  assert.ok(existsSync(file), 'public/models/voi-mamut.glb is committed');
+  // Textured files need DOM image decoding; the browser path is covered by screenshots.
+  let names = VOI_MAMUT_CLIPS;
+  try {
+    const buf = readFileSync(file);
+    const gltf = await new GLTFLoader().parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, '');
+    names = gltf.animations.map((a) => a.name);
+  } catch {
+    // fall back to the known clip list above
+  }
+  assert.deepEqual([...names].sort(), [...VOI_MAMUT_CLIPS].sort());
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(names, 'run'), 'Walk');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+});
+
+test('seed m-mammoth references /models/voi-mamut.glb and validates', () => {
+  const asset = SEED.assets.find((a) => a.id === 'm-mammoth')!;
+  assert.ok(asset, 'seed has m-mammoth');
+  assert.equal(asset.kind, 'elephant');
+  assert.equal(asset.glb?.url, '/models/voi-mamut.glb');
+  assert.equal(asset.scale, 2.1);
+  assert.deepEqual(assetSchema.parse(asset), asset);
+});
+
+test('seed m-war-elephant references /models/voi-trang.glb and validates', () => {
+  const asset = SEED.assets.find((a) => a.id === 'm-war-elephant')!;
+  assert.ok(asset, 'seed has m-war-elephant');
+  assert.equal(asset.kind, 'elephant');
+  assert.equal(asset.glb?.url, '/models/voi-trang.glb');
+  assert.equal(asset.scale, 2);
+  assert.deepEqual(assetSchema.parse(asset), asset);
+});
+
+test('committed voi-trang.glb parses with the six clips', async () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'voi-trang.glb');
+  assert.ok(existsSync(file), 'public/models/voi-trang.glb is committed');
+  let names = VOI_TRANG_CLIPS;
+  try {
+    const buf = readFileSync(file);
+    const gltf = await new GLTFLoader().parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, '');
+    names = gltf.animations.map((a) => a.name);
+  } catch {
+    // fall back to the known clip list above
+  }
+  assert.deepEqual([...names].sort(), [...VOI_TRANG_CLIPS].sort());
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Stomp');
+  assert.equal(pickClipName(names, 'run'), 'Walk');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+});
+
+test('elephant yaw corrections map the snout onto engine forward +Z', () => {
+  // voi-mamut.glb: head at -X, needs +90°. voi-trang.glb: head at +X, needs -90°.
+  // The battle drives `rotation.y = yaw` for a +Z model: Ry(yaw + corr) · head = (sin yaw, 0, cos yaw).
+  const up = new THREE.Vector3(0, 1, 0);
+  const cases: Array<[string, number, number]> = [
+    ['/models/voi-mamut.glb', -1, Math.PI / 2],
+    ['/models/voi-trang.glb', 1, -Math.PI / 2],
+  ];
+  for (const [url, headX, corr] of cases) {
+    assert.equal(yawCorrectionFor(url), corr, url);
+    for (const yaw of [0, 0.7, Math.PI, -2.1]) {
+      const fwd = new THREE.Vector3(headX, 0, 0).applyAxisAngle(up, yaw + yawCorrectionFor(url));
+      assert.ok(Math.abs(fwd.x - Math.sin(yaw)) < 1e-6 && Math.abs(fwd.z - Math.cos(yaw)) < 1e-6, `${url} yaw=${yaw}: got ${fwd.x},${fwd.z}`);
+    }
+  }
+});
+
+test('other skinned packs keep yaw 0 (already face +Z)', () => {
+  for (const url of ['/models/velociraptor.glb', '/models/ninja.glb', '/models/rong-xanh.glb', '/models/phap-su.glb']) {
+    assert.equal(yawCorrectionFor(url), 0, url);
+  }
+});
+
+test('groundLift scales the lift so feet land exactly on y = 0', () => {
+  // bake() scales vertices by NORMALIZED_HEIGHT / height but three applies position after
+  // scale: feet end at minY * s + lift. The old unscaled lift left voi-mamut.glb
+  // (minY ≈ -0.6) ~0.4 m sunk; the scaled lift zeroes it for any height.
+  for (const [minY, height] of [[-0.6177, 1.2281], [-0.02, 1.8], [0, 2], [-1.2, 3.5]] as const) {
+    const s = NORMALIZED_HEIGHT / height;
+    assert.ok(Math.abs(minY * s + groundLift(minY, height)) < 1e-9, `minY=${minY} height=${height}`);
+  }
+  assert.ok(groundLift(0, 2) === 0);
+});
+
+test('giant-golem.glb: hammer is the attack clip, leap the dash clip', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'giant-golem.glb');
+  assert.ok(existsSync(file), 'public/models/giant-golem.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Hammer');
+  assert.equal(pickClipName(names, 'leap'), 'Attack_Leap');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+  assert.equal(pickClipName(names, 'walk'), 'Walk');
+  const asset = SEED.assets.find((a) => a.id === 'm-giant')!;
+  assert.equal(asset.glb?.url, '/models/giant-golem.glb');
+  assert.deepEqual(SEED.units.find((u) => u.id === 'giant')!.skillIds, ['golem-nhay']);
+});
+
+test('elephant files seat riders on top of their back, others keep the horse-height seat', () => {
+  // Backs measured at ~1.85–1.95 (normalised); the old 1.15 seat buried the riders.
+  for (const url of ['/models/voi-mamut.glb', '/models/voi-trang.glb']) assert.ok(mountSeatFor(url)[1] > 1.8, url);
+  assert.deepEqual(mountSeatFor('/models/horse.glb'), [0, 1.15, -0.05]);
+});
+
+test('walk clip speed is known for the elephants (clip is sped up to the real ground speed)', () => {
+  assert.ok(walkSpeedFor('/models/voi-trang.glb?v=2') > 0);
+  assert.ok(walkSpeedFor('/models/voi-mamut.glb') > 0);
+  assert.equal(walkSpeedFor('/models/velociraptor.glb'), 0);
+});
+
+const LINH_MELEE_CLIPS = ['Idle', 'Run', 'Attack_Punch', 'Attack_Slash', 'Attack_Palm', 'Hit', 'Death'];
+
+test('linh-melee.glb: punch attack, palm skill, slash doubles as the stone throw', () => {
+  assert.equal(pickClipName(LINH_MELEE_CLIPS, 'run'), 'Run');
+  assert.equal(pickClipName(LINH_MELEE_CLIPS, 'attack'), 'Attack_Punch');
+  assert.equal(pickClipName(LINH_MELEE_CLIPS, 'palm'), 'Attack_Palm');
+  assert.equal(pickClipName(LINH_MELEE_CLIPS, 'toss'), 'Attack_Slash');
+  // Elephants keep their trunk clip for toss.
+  assert.equal(pickClipName(VOI_TRANG_CLIPS, 'toss'), 'Attack_TrunkSweep');
+  const unit = (id: string) => SEED.units.find((u) => u.id === id)!;
+  const weapon = (id: string) => SEED.weapons.find((w) => w.id === id)!;
+  assert.deepEqual(unit('clubber').skillIds, ['chuong']);
+  assert.equal(weapon('chuong').castStyle, 'palm');
+  assert.equal(weapon(unit('stoner').weaponId).castStyle, 'throw');
+  for (const id of ['m-clubber', 'm-stoner']) assert.equal(SEED.assets.find((a) => a.id === id)!.glb?.url, '/models/linh-melee.glb');
+  assert.ok(existsSync(path.join(process.cwd(), 'public/models/linh-melee.glb')));
 });

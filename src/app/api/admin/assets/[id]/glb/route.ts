@@ -1,6 +1,5 @@
 // Upload/remove a custom .glb/.gltf override for one asset (static-rig kinds: baked;
-// SKINNED_GLB_KINDS: kept skeletal, the file's animation clips play in battle;
-// RIGID_GLB_KINDS: baked rigid but keep body motion + saddle).
+// SKINNED_GLB_KINDS: kept skeletal, the file's animation clips play in battle).
 import { assetSchema, RIG_OF_KIND, RIGID_GLB_KINDS, SKINNED_GLB_KINDS, type AssetDef } from '@/shared/schema';
 import { getDoc, putDoc } from '@/server/content';
 import { checkRefs, guard, issuesOf, jsonError, unsupportedOnVercel } from '@/server/admin';
@@ -34,7 +33,7 @@ export async function POST(req: Request, ctx: Ctx) {
   if (ext === '.glb' && buf.toString('ascii', 0, 4) !== 'glTF') return jsonError(422, 'File .glb không hợp lệ');
 
   const { url, fileName } = await saveAssetGlb(id, ext, buf);
-  const updated: AssetDef = { ...doc, glb: { url, fileName: file.name, uploadedAt: Date.now(), tint: {}, hide: [] }, sculpt: null };
+  const updated: AssetDef = { ...doc, glb: { url, fileName: file.name, uploadedAt: Date.now(), tint: {}, hide: [] } };
   const parsed = assetSchema.safeParse(updated);
   if (!parsed.success) {
     await deleteAssetGlb(url);

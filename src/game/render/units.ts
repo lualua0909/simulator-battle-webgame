@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { AssetDef, ConfigBundle, Settings, WeaponDef } from '@/shared/schema';
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
 import { createAssetModel, getUnitTemplate } from '../models';
-import { cloneSkinned, releaseSkinned, setSkinState, stepSkin, type SkinnedInstance, type SkinState, type SkinTint } from '../models/glbSkinned';
+import { cloneSkinned, mountSeatFor, releaseSkinned, setSkinState, stepSkin, walkSpeedFor, type SkinnedInstance, type SkinState, type SkinTint } from '../models/glbSkinned';
 import type { ModelTemplate } from '../models/bake';
 import type { Side } from '../sim/terrain';
 import { SIM_DT, type BattleSim, type SimEvent, type SimUnit } from '../sim/world';
@@ -16,16 +16,15 @@ import type { Ragdoll, RagdollWorld } from './ragdoll';
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
 const smoothMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
 const STRIKE_TIME = 0.45;
-/** Where a rider's hips should land on a skinned mount's back, in the mount's normalised (NORMALIZED_HEIGHT=2) local space; follows the mount's root only (no per-bone gallop bounce). */
-const MOUNT_SEAT = new THREE.Vector3(0, 1.15, -0.05);
-
 /**
  * Bends a static rider's legs into a riding stance (thighs splayed out, knees bent) so it
  * straddles a skinned mount instead of standing on its back in the idle rest pose (matches
  * the seg.mounted leg pose the procedural Poser uses for baked mounts; see animate.ts), and
- * drops the rider so its hips — not its feet — land on `MOUNT_SEAT`.
+ * drops the rider so its hips — not its feet — land on `seat`: the mount's back in its
+ * normalised (NORMALIZED_HEIGHT=2) local space (see mountSeatFor); follows the mount's root
+ * only (no per-bone gallop bounce).
  */
-function seatRider(rider: THREE.Object3D): void {
+function seatRider(rider: THREE.Object3D, seat: readonly [number, number, number]): void {
   const parts = new Map<string, THREE.Object3D>();
   rider.traverse((o) => {
     if (o.userData.part) parts.set(o.userData.part as string, o);
@@ -35,7 +34,7 @@ function seatRider(rider: THREE.Object3D): void {
   parts.get('shinL')?.rotation.set(1.25, 0, 0);
   parts.get('shinR')?.rotation.set(1.25, 0, 0);
   const hipY = parts.get('hips')?.position.y ?? 0;
-  rider.position.copy(MOUNT_SEAT);
+  rider.position.fromArray(seat);
   rider.position.y -= hipY * rider.scale.y;
 }
 const EMIT_SOCKETS = ['mouth', 'muzzle', 'staff.tip', 'hand.R', 'rider.muzzle', 'rider.staff.tip', 'rider.hand.R'];
@@ -94,6 +93,10 @@ interface UnitVis {
   fall: number;
   /** Seconds the attack clip keeps showing after a swing starts (covers the strike). */
   atkT: number;
+  /** Last attack was a dash skill: skeletal files play their leap clip. */
+  atkLeap: boolean;
+  /** Skinned clip for the current attack (castStyle slam/swing/throw/palm pick stomp/sweep/toss/palm). */
+  atkClip: SkinState;
   radius: number;
   height: number;
   /** Root transform `world` was last posed with (a LOD frame moves the posed limbs by the root's change). */
@@ -108,6 +111,9 @@ const COLLAPSE_TIME = 2.4;
 
 type HitEvent = Extract<SimEvent, { type: 'hit' }>;
 type DeathEvent = Extract<SimEvent, { type: 'death' }>;
+
+/** Skill castStyle → skinned clip state (stomp / trunk sweep / trunk toss / palm); others use 'attack'. */
+const SKIN_CAST_STATES: Partial<Record<WeaponDef['castStyle'], SkinState>> = { slam: 'stomp', swing: 'sweep', throw: 'toss', palm: 'palm' };
 
 export class UnitRenderer {
   readonly group = new THREE.Group();
@@ -217,6 +223,8 @@ export class UnitRenderer {
         skinHide: skin?.hide ?? [],
         fall: 0,
         atkT: 0,
+        atkLeap: false,
+        atkClip: 'attack',
         radius: u.def.radius,
         height: u.def.height,
         root: new THREE.Matrix4(),
@@ -443,7 +451,7 @@ export class UnitRenderer {
         const rider = template.clone();
         // Counter the mount's own scale so the rider keeps its own asset scale.
         rider.scale.multiplyScalar(1 / Math.max(0.0001, v.skinScale));
-        seatRider(rider);
+        seatRider(rider, mountSeatFor(v.skinUrl));
         inst.group.add(rider);
       }
     }
@@ -463,15 +471,24 @@ export class UnitRenderer {
       v.atkT = Math.max(0, v.atkT - dt);
     }
     const attacking = (u.action && u.windupLeft >= 0 && u.windupTotal > 0) || u.channelLeft > 0;
-    if (attacking) v.atkT = 0.8;
+    if (attacking) {
+      v.atkT = 0.8;
+      v.atkLeap = u.action?.def.attack === 'dash';
+      v.atkClip = SKIN_CAST_STATES[u.action?.def.castStyle ?? 'auto'] ?? 'attack';
+    }
     let state: SkinState;
     if (!u.alive) state = 'death';
-    else if (attacking || v.atkT > 0) state = 'attack';
+    else if (u.dashWeapon) state = 'leap';
+    else if (attacking || v.atkT > 0) state = v.atkLeap ? 'leap' : v.atkClip;
     else if ((u.airborne && !u.dashWeapon) || u.climb !== null) state = 'jump';
     else if (v.speed > Math.max(1.5, v.type.refSpeed * 0.75)) state = 'run';
     else if (v.speed > 0.4) state = 'walk';
     else state = 'idle';
     setSkinState(skin, state);
+    // Match the walk cycle to the ground speed so planted feet do not slide (see walkSpeedFor).
+    const act = skin.actions.get(state);
+    const ws = walkSpeedFor(v.skinUrl ?? '');
+    if (act && ws > 0) act.timeScale = state === 'walk' || state === 'run' ? THREE.MathUtils.clamp(v.speed / (ws * v.skinScale), 0.5, 4) : 1;
     // Off screen: keep its place (emit points follow it) but skip the skeletal animation.
     skin.group.visible = !view || (u.alive ? this.standingInView(view, u, x, y, z) : view.intersectsSphere(this.sphere.set(this.tmpP.set(x, y, z), Math.max(v.height, v.radius) + 1)));
     if (skin.group.visible) stepSkin(skin, dt);

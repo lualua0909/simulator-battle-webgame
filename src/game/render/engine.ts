@@ -22,12 +22,13 @@ import { ParticleSystem } from './particles';
 import { ProjectileRenderer } from './projectiles';
 import { FrameRateGovernor, LOWER_TIER, QUALITY, type QualityTier } from './quality';
 import { loadRapier, RagdollWorld } from './ragdoll';
+import { createIsland } from './island';
 import { createScenery } from './scenery';
 import { DebrisSystem } from './debris';
 import { WallRenderer } from './walls';
 import { createSkirt, createTerrainMesh, createWater, createZoneOverlay, type Water } from './terrainMesh';
 import { UnitRenderer } from './units';
-import { angleDiff, UnitView, VIEW_MODES, type ViewMode } from './unitView';
+import { angleDiff, followsUnit, UnitView, VIEW_MODES, type ViewMode } from './unitView';
 import { XrControls } from './xr';
 
 export interface PointerInfo {
@@ -341,7 +342,8 @@ export class BattleEngine {
     this.terrain = terrain;
     this.heights = new HeightField(terrain);
     this.governor.hold();
-    this.mapGroup.add(createTerrainMesh(terrain), createSkirt(terrain));
+    if (terrain.island) this.mapGroup.add(createIsland(terrain));
+    else this.mapGroup.add(createTerrainMesh(terrain), createSkirt(terrain));
     this.water = createWater(terrain, this.gpu?.waterMaterial);
     if (this.water) this.mapGroup.add(this.water.mesh);
     this.mapGroup.add(createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a]))));
@@ -356,7 +358,9 @@ export class BattleEngine {
     const bottom = new THREE.Color(map.skyBottom);
     this.daySky.top.copy(top);
     this.daySky.bottom.copy(bottom);
-    this.scene.fog = new THREE.Fog(bottom, 40 + terrain.size * (1 - map.fog) * 0.8, 120 + terrain.size * (2.6 - map.fog * 1.4));
+    // An island is watched from further out (the whole of it in view), so its fog starts later.
+    const fogReach = terrain.island ? 1.8 : 1;
+    this.scene.fog = new THREE.Fog(bottom, (40 + terrain.size * (1 - map.fog) * 0.8) * fogReach, (120 + terrain.size * (2.6 - map.fog * 1.4)) * fogReach);
     this.hemi.color.copy(top).lerp(new THREE.Color('#ffffff'), 0.6);
     this.dusk.t = this.dusk.goal = 0;
     this.applyDusk();
@@ -584,7 +588,7 @@ export class BattleEngine {
   /** Overview (RTS camera / VR sandbox table) or a view that follows one soldier. */
   setViewMode(mode: ViewMode): void {
     if (mode === this.view.mode) return;
-    const leaving = this.view.mode !== 'overview' && mode === 'overview';
+    const leaving = followsUnit(this.view.mode) && !followsUnit(mode);
     this.view.mode = mode;
     this.xrRecenter = 1;
     this.xrTurn = 0;
@@ -604,7 +608,7 @@ export class BattleEngine {
   nextViewUnit(): void {
     if (!this.sim || this.mode !== 'battle') return;
     this.view.next(this.sim, this.director.side);
-    if (this.view.mode === 'overview') this.setViewMode('third');
+    if (!followsUnit(this.view.mode)) this.setViewMode('third');
   }
 
   /** A headset that can run the game in VR (Quest Browser; needs HTTPS or localhost). */
@@ -880,6 +884,12 @@ export class BattleEngine {
     return Math.atan2(c.z, c.x);
   }
 
+  /** Camera yaw looking across the battle line: screen-right points from the map centre to `side`'s zone. */
+  private flankYaw(side: Side): number {
+    const c = this.zoneCenter(side);
+    return Math.atan2(c.x, -c.z);
+  }
+
   private armyCenter(sim: BattleSim, side: Side): THREE.Vector3 {
     let x = 0;
     let z = 0;
@@ -951,6 +961,10 @@ export class BattleEngine {
   }
 
   private overviewCamera(dt: number): void {
+    // Side view: the director still picks the shot, but always from the own army's flank.
+    const side = this.view.mode === 'side' && this.mode === 'battle' && !!this.terrain;
+    this.director.flat = side;
+    this.rts.lockYaw = side ? this.flankYaw(this.director.side) : null;
     this.director.update(dt, this.mode === 'battle' ? this.sim : null);
     this.rts.update(dt);
   }
@@ -1082,7 +1096,7 @@ export class BattleEngine {
     const u = g && this.view.unitAt(sim, g.x, g.z, Math.max(2, this.xr.rig.scale.x * 0.05));
     if (!u) return;
     this.view.select(u.id);
-    if (this.view.mode === 'overview') this.setViewMode('third');
+    if (!followsUnit(this.view.mode)) this.setViewMode('third');
   }
 
   private resize(): void {
@@ -1253,7 +1267,7 @@ export class BattleEngine {
     this.flushPointerMove();
     const vr = this.renderer.xr.isPresenting;
     // A unit view needs the soldier where this frame's sim steps leave it, so it poses the camera further down.
-    const unitView = this.view.mode !== 'overview' && this.mode === 'battle' && !!this.sim && !this.cine;
+    const unitView = followsUnit(this.view.mode) && this.mode === 'battle' && !!this.sim && !this.cine;
     if (vr) this.xr.update(dt);
     else if (this.cine) {
       if (!this.cine.run.update(dt, this.camera)) this.finishCinematic();

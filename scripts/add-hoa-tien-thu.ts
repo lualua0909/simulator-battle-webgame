@@ -21,7 +21,7 @@ async function main() {
     console.log(`giữ nguyên assets/${ASSET_ID} (đã có)`);
     return;
   }
-  await putDoc('assets', { ...doc, sculpt: null, glb: { url: wantGlb.url, fileName: wantGlb.fileName, uploadedAt: Date.now(), tint: {}, hide: wantGlb.hide } });
+  await putDoc('assets', { ...doc, glb: { url: wantGlb.url, fileName: wantGlb.fileName, uploadedAt: Date.now(), tint: {}, hide: wantGlb.hide } });
   console.log(`đã trỏ assets/${ASSET_ID} -> ${wantGlb.url} (ẩn ${wantGlb.hide.length} vũ khí thừa)`);
 }
 

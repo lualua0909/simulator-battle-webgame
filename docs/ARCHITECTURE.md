@@ -1,6 +1,6 @@
 # Mini Battle Simulator — Tài liệu kiến trúc, PvP online, phân quyền và bảo mật
 
-Tài liệu mô tả hệ thống theo code hiện tại (Next.js 16 + Socket.IO trong một tiến trình Node, Firebase Auth/Firestore/FCM, SQLite, Claude API/CLI). Sơ đồ viết bằng Mermaid, xem được trực tiếp trên GitHub/VS Code.
+Tài liệu mô tả hệ thống theo code hiện tại (Next.js 16 + Socket.IO trong một tiến trình Node, Firebase Auth/Firestore/FCM). Sơ đồ viết bằng Mermaid, xem được trực tiếp trên GitHub/VS Code.
 
 Mục lục:
 
@@ -24,8 +24,8 @@ flowchart LR
   subgraph Browser["Trình duyệt"]
     Home["/ Màn chính<br/>ví coin, hộp quà, bộ sưu tập thẻ"]
     Game["/play<br/>Game client<br/>(Three.js + sim tất định)"]
-    Models["/models<br/>Xưởng mô hình (sửa lính, Claude)"]
-    CMS["/admin<br/>CMS + Xưởng"]
+    Models["/models<br/>Xưởng mô hình (sửa lính)"]
+    CMS["/admin<br/>CMS"]
     FBClient["Firebase Auth SDK<br/>(client)"]
   end
 
@@ -35,8 +35,6 @@ flowchart LR
     Ranked["ranked.ts<br/>chốt kết quả xếp hạng (transaction)"]
     Content["content.ts<br/>bản sao CMS trong RAM"]
     Players["players.ts<br/>ví coin (transaction)"]
-    Studio["studio/pipeline.ts"]
-    SQLite[("SQLite data/game.db<br/>job Xưởng")]
   end
 
   subgraph Google["Firebase / Google Cloud"]
@@ -44,8 +42,6 @@ flowchart LR
     FS[("Firestore<br/>users, players (+ledger), matches,<br/>ranked_seasons, ranked_pairs, ranked_flags,<br/>units, weapons, ..., settings/global")]
     FCM["Firebase Cloud Messaging"]
   end
-
-  Claude["Claude API<br/>hoặc Claude Code CLI"]
 
   Game -- "HTTP GET /api/config" --> Next
   Home -- "HTTP /api/player (cookie phiên)" --> Next
@@ -69,15 +65,12 @@ flowchart LR
   Next -- "verifySessionCookie, quản lý user" --> FAuth
   Next -- "users/{uid}" --> FS
   Next -- "gửi thông báo" --> FCM
-  Next --> Studio
-  Studio --> SQLite
-  Studio -- "HTTPS / spawn claude -p" --> Claude
 ```
 
 Điểm chính:
 
 - **Một tiến trình Node** chạy cả Next.js và Socket.IO trên cùng cổng. Không có microservice, không có server-to-server giữa các node game. Muốn chạy nhiều instance cần thêm adapter (Redis) cho Socket.IO và sticky session — hiện **chưa có**.
-- **Giao tiếp server-to-server** thực tế chỉ có: Node ↔ Firebase (Auth, Firestore, FCM qua Admin SDK) và Node ↔ Anthropic (Claude API) hoặc tiến trình con `claude` CLI.
+- **Giao tiếp server-to-server** thực tế chỉ có: Node ↔ Firebase (Auth, Firestore, FCM qua Admin SDK).
 - **Nội dung CMS** là nguồn chuẩn cho cả game, bot và kiểm tra đội hình online. Server giữ bản sao RAM qua snapshot listener; sửa trên CMS hay Firebase Console đều áp dụng từ trận sau.
 - **Ví coin** (coin, thẻ, sao, lính đã mở khóa, giờ mở hộp, vé trận bot, hạng xếp hạng) nằm ở Firestore `players/{uid}`, chỉ server đọc/ghi, mỗi thay đổi là một transaction kèm dòng sổ giao dịch (mục 6).
 - **Xếp hạng** dùng lại phòng online nhưng ghép tự động, không vào bằng mã; kết quả trận xếp hạng đổi ♦ của cả hai người trong một transaction (mục 7).
@@ -177,13 +170,6 @@ mindmap
       Trận xếp hạng nghi gian lận
         Duyệt cờ
         Mở khóa xếp hạng
-      Xưởng img2threejs
-        Ảnh mẫu và mô tả
-        Claude viết sculpt spec
-        Gate tất định
-        Review 4 góc, tự sửa
-        Xuất TS GLB OBJ STL PLY USDZ
-        Thay model trong game / hoàn tác
 ```
 
 Bảng tính năng theo module code:
@@ -200,7 +186,6 @@ Bảng tính năng theo module code:
 | Tài khoản | Phiên, hồ sơ, vai trò | [users.ts](../src/server/users.ts), [shared/users.ts](../src/shared/users.ts), [session route](../src/app/api/auth/session/route.ts) |
 | CMS | CRUD collection, settings, bundle | [src/app/api/admin/](../src/app/api/admin/) |
 | CMS | Quản lý user, FCM | [users routes](../src/app/api/admin/users/), [userAdmin.ts](../src/server/userAdmin.ts) |
-| Xưởng | Pipeline Claude, gate, xuất file | [studio/](../src/server/studio/), [sculpt/](../src/game/sculpt/) |
 | Kinh tế | Luật thuần: hộp quà, thưởng thắng bot (vé trận, giới hạn ngày), nâng sao, mở khóa, mua thẻ, cộng/trừ coin | [economy.ts](../src/shared/economy.ts) |
 | Kinh tế | Ví Firestore trong transaction + sổ giao dịch, API người chơi / admin | [players.ts](../src/server/players.ts), [api/player](../src/app/api/player/route.ts), [wallet route](../src/app/api/admin/users/[uid]/wallet/route.ts) |
 | Kinh tế | HUD coin, menu hộp quà, màn mở hộp, bộ sưu tập thẻ | [src/components/player/](../src/components/player/) |
@@ -476,7 +461,7 @@ Lưu ở Firestore `users/{uid}.role` ([src/shared/users.ts](../src/shared/users
 | Giá trị | Vai trò | Quyền |
 | --- | --- | --- |
 | `0` | Root | toàn quyền CMS, quản lý mọi user khác (kể cả root/admin khác), cấp mọi vai trò |
-| `1` | Admin | toàn quyền nội dung CMS + Xưởng; chỉ quản lý user role `2`; chỉ cấp role `2` |
+| `1` | Admin | toàn quyền nội dung CMS; chỉ quản lý user role `2`; chỉ cấp role `2` |
 | `2` | Người dùng | chơi mọi chế độ kể cả online (kết quả lưu theo `uid`), đăng ký FCM token, có ví coin (hộp quà, mở khóa, mua thẻ, nâng sao); không vào `/admin`, không vào `/models` (bị chuyển về trang đăng nhập CMS) |
 | — | Khách (chưa đăng nhập) | chơi với máy, 2 người 1 máy **chỉ với lính miễn phí** (`unlockCost = 0`), đọc `/api/config`; **không** đấu online, không có ví, không vào `/models` |
 
@@ -530,10 +515,10 @@ flowchart TD
   LM -- "root/admin" --> PM["render Xưởng mô hình"]
   LM -. "dev mode (NODE_ENV != production):<br/>mở để npm run shots chụp ảnh" .-> PM
 
-  T -- "/api/admin/{collection}, settings, bundle, studio" --> G["guard() = requireCms()"]
+  T -- "/api/admin/{collection}, settings, bundle" --> G["guard() = requireCms()"]
   G -- "không cookie / cookie sai / bị khóa" --> E401["401 Chưa đăng nhập"]
   G -- "role 2" --> E403["403 Chỉ root/admin"]
-  G -- "ok" --> V["readJson (bắt buộc application/json)<br/>zod schema<br/>kiểm tra tham chiếu"] --> W["ghi Firestore / SQLite"]
+  G -- "ok" --> V["readJson (bắt buộc application/json)<br/>zod schema<br/>kiểm tra tham chiếu"] --> W["ghi Firestore"]
 
   T -- "/api/admin/users/{uid} PATCH, DELETE" --> M["requireManageable(uid)<br/>requireCms + canManage"]
   M -- "tự sửa mình / target quyền ≥ actor" --> E403b["403"]
@@ -564,7 +549,6 @@ Ma trận quyền theo endpoint:
 | Trang `/admin/*` | ✗ | ✗ | ✓ | ✓ |
 | Trang `/models` (production; dev mở để chụp ảnh) | ✗ | ✗ | ✓ | ✓ |
 | `/api/admin/{collection}[/{id}]`, `settings`, `bundle` | ✗ | ✗ | ✓ | ✓ |
-| `/api/admin/studio/**` (gọi Claude, tốn chi phí) | ✗ | ✗ | ✓ | ✓ |
 | `GET /api/admin/users[/{uid}]` | ✗ | ✗ | ✓ (xem tất cả) | ✓ |
 | `POST /api/admin/users` | ✗ | ✗ | chỉ tạo role 2 | mọi role |
 | `PATCH/DELETE /api/admin/users/{uid}` | ✗ | ✗ | chỉ target role 2, không phải mình | mọi target trừ mình |
@@ -597,7 +581,7 @@ Ma trận quyền theo endpoint:
 - Mọi payload API và Socket.IO đi qua **zod** (`COLLECTION_SCHEMAS`, `settingsSchema`, `armySchema`, `createUserSchema`, ...). Không đổi được `id` qua PUT.
 - Kiểm tra tham chiếu chéo (`findRefIssues`) khi tạo/sửa/nhập, chặn xóa khi còn phụ thuộc (`findDependents`).
 - Tài liệu Firestore sửa tay sai schema bị bỏ qua và ghi log, không làm hỏng game.
-- Giới hạn kích thước: ảnh Xưởng ≤ 12 MB dạng data URL PNG/JPEG/WebP/GIF, sheet review ≤ 8 MB, prompt ≤ 4000 ký tự, idToken ≤ 4096, gói Socket.IO ≤ 100 KB.
+- Giới hạn kích thước: idToken ≤ 4096, gói Socket.IO ≤ 100 KB.
 
 **Firestore**
 
@@ -622,12 +606,6 @@ Ma trận quyền theo endpoint:
 - Số coin nguyên, không âm; dữ liệu ví sai schema bị từ chối (không reset về 0).
 - Admin cộng/trừ coin theo luật `canManage` (không tự cộng cho mình, admin chỉ với user role 2), bắt buộc ghi lý do, ledger lưu `by` = uid admin.
 - Sao và lính đã mở khóa trong đấu online lấy từ ví trên server.
-
-**Xưởng img2threejs (AI)**
-
-- Claude **chỉ trả JSON sculpt spec**, không trả code. Spec được parse bằng schema và dựng bởi generator tin cậy trong [src/game/sculpt](../src/game/sculpt/); không có `eval`/`new Function` nào chạy nội dung AI.
-- CLI chạy với `--safe-mode --tools ""` (không tool, không đọc CLAUDE.md/hook/MCP), `cwd` là thư mục tạm, không lưu session.
-- `ANTHROPIC_API_KEY` chỉ ở server. Chỉ root/admin gọi được Xưởng.
 
 **Khác**
 
@@ -656,18 +634,17 @@ Xếp theo mức độ ưu tiên khuyến nghị. Đây là nhận định từ 
 | 1 | Trung bình | **Thông đồng / nhường trận** | Hai client cùng sửa đổi (hoặc một người hai tài khoản) khai được kết quả bất kỳ. Phòng mã: không có thưởng. Xếp hạng: bị giới hạn (mục 7.5) nhưng vẫn làm được với nhiều acc phụ đủ tuổi, đội hình đủ tiền nhưng cố tình yếu. Người gian lận một mình khai thắng khi thua thì trận bị hủy (tranh chấp) thay vì ghi thua, tối đa `maxDisputes` lần/mùa. (Rời trận để né thua đã được xử: rời = bị loại = thua.) | Server chạy lại trận từ `seed` + `armies` trong `worker_threads`, ít nhất cho các trận bị tranh chấp hoặc bị gắn cờ. |
 | 2 | Trung bình | **Chưa giới hạn theo IP / tổng số phòng** | Mỗi tài khoản chỉ một kết nối, nhưng nhiều tài khoản (tạo tự do bằng email) vẫn tạo được nhiều phòng. Handshake gọi Firebase cho mỗi lần kết nối. | Giới hạn kết nối theo IP ở reverse proxy, giới hạn tổng số phòng, bắt buộc xác minh email. |
 | 3 | Thấp–TB | **Không có security header** | Chưa đặt CSP, `X-Frame-Options`/`frame-ancestors`, `Referrer-Policy`, HSTS trong [next.config.ts](../next.config.ts). `/admin` có thể bị nhúng iframe (clickjacking). | Thêm `headers()` trong Next config hoặc ở reverse proxy. |
-| 4 | Thấp–TB | **Không rate limit API HTTP** | `/api/auth/session` và các route admin không giới hạn tốc độ. Xưởng có thể bị gọi dồn gây tốn chi phí Claude nếu tài khoản admin bị lộ. | Rate limit theo IP/uid ở reverse proxy hoặc middleware; giới hạn số job chạy song song. |
+| 4 | Thấp–TB | **Không rate limit API HTTP** | `/api/auth/session` và các route admin không giới hạn tốc độ. | Rate limit theo IP/uid ở reverse proxy hoặc middleware. |
 | 5 | Thấp | **Guard nằm rải rác trong từng route** | Không có `middleware`/`proxy` chung cho `/api/admin/*`; route mới quên gọi `guard()` sẽ mở công khai. | Thêm middleware kiểm tra cookie cho `/api/admin` (lớp 1) và giữ `guard()` (lớp 2); thêm test liệt kê route. |
 | 6 | Thấp | **Root theo biến môi trường luôn được nâng lại** | Email trong `FIREBASE_ROOT_EMAILS` được đặt `role = 0` **mỗi lần đăng nhập**; hạ quyền trong CMS sẽ bị hoàn tác. Nếu tài khoản Google đó bị chiếm, không hạ quyền được bằng CMS (chỉ khóa `disabled` được, và chỉ root khác làm được). | Gỡ email khỏi biến môi trường sau khi bootstrap. |
 | 7 | Thấp | **Admin gửi thông báo tới mọi user** | `notify` chỉ dùng `requireCms`, không dùng `canManage`: admin gửi được push tới root/admin khác. `GET /api/admin/users` trả cả `fcmTokens` cho admin. | Dùng `requireManageable` cho notify; ẩn `fcmTokens` trong response danh sách. |
-| 8 | Thấp | **Lộ `e.message` của lỗi không xác định** | `firebaseErrorResponse` và stream Xưởng trả thông điệp lỗi gốc cho client (chỉ root/admin thấy). | Log chi tiết ở server, trả thông báo chung ở production. |
+| 8 | Thấp | **Lộ `e.message` của lỗi không xác định** | `firebaseErrorResponse` trả thông điệp lỗi gốc cho client (chỉ root/admin thấy). | Log chi tiết ở server, trả thông báo chung ở production. |
 | 9 | Vận hành | **Trạng thái phòng chỉ trong RAM, một instance** | Restart/deploy làm mất mọi phòng và trận đang chờ xác nhận; không scale ngang được. Map "một kết nối mỗi uid" cũng chỉ đúng trong một instance. | Redis adapter + sticky session + khóa phân tán nếu cần nhiều instance. |
-| 10 | Vận hành | **Engine CLI dùng login `claude` của máy chủ** | Tài khoản Claude của người vận hành gắn với server; ai chiếm được quyền admin CMS là dùng được quota đó. | Ưu tiên `ANTHROPIC_API_KEY` riêng có giới hạn chi tiêu ở production. |
-| 11 | Trung bình | **Chưa rate limit `/api/player`** | Mỗi request là một transaction Firestore (tốn phí đọc/ghi); spam request không làm sai số dư nhưng tăng chi phí. | Rate limit theo uid/IP ở reverse proxy hoặc middleware. |
-| 12 | Trung bình | **Admin là người cộng coin** | Chưa có cổng thanh toán: admin bị lộ tài khoản có thể cộng coin cho user khác (vẫn để lại dấu vết ledger). | Cổng thanh toán có webhook ký (MONETIZATION.md), báo cáo ledger `admin`, giới hạn số coin mỗi lần cộng. |
-| 13 | Trung bình | **Thưởng đánh bot không chứng minh được thắng** | Trận bot chạy trên client (client sửa được cả sao của mình). Script vẫn gọi `bot-start`, chờ 15 giây rồi `bot-win` được, tối đa `botWinDailyCap` lần/ngày với bot khó nhất. | Chỉnh `botWinDailyCap` / phần thưởng bot cho hợp; muốn chặn hẳn thì server chạy lại trận từ seed + đội hình ghi trong vé. |
-| 14 | Pháp lý | **Chưa đủ điều kiện thu tiền thật** | Chưa có giấy phép G1, chưa xác thực số điện thoại, chưa giới hạn giờ chơi người dưới 18 tuổi. | Xem [MONETIZATION.md mục 5](MONETIZATION.md#5-pháp-lý-tại-việt-nam). |
-| 15 | Thấp | **IP cho luật cùng IP lấy từ `cf-connecting-ip`** | App được public qua Cloudflare Tunnel nên header này do Cloudflare ghi. Nếu cổng Node bị mở thẳng ra Internet, client tự đặt header này để né luật cùng IP. | Chỉ public qua tunnel/proxy ghi đè header; hoặc chỉ tin header khi request đến từ proxy. |
+| 10 | Trung bình | **Chưa rate limit `/api/player`** | Mỗi request là một transaction Firestore (tốn phí đọc/ghi); spam request không làm sai số dư nhưng tăng chi phí. | Rate limit theo uid/IP ở reverse proxy hoặc middleware. |
+| 11 | Trung bình | **Admin là người cộng coin** | Chưa có cổng thanh toán: admin bị lộ tài khoản có thể cộng coin cho user khác (vẫn để lại dấu vết ledger). | Cổng thanh toán có webhook ký (MONETIZATION.md), báo cáo ledger `admin`, giới hạn số coin mỗi lần cộng. |
+| 12 | Trung bình | **Thưởng đánh bot không chứng minh được thắng** | Trận bot chạy trên client (client sửa được cả sao của mình). Script vẫn gọi `bot-start`, chờ 15 giây rồi `bot-win` được, tối đa `botWinDailyCap` lần/ngày với bot khó nhất. | Chỉnh `botWinDailyCap` / phần thưởng bot cho hợp; muốn chặn hẳn thì server chạy lại trận từ seed + đội hình ghi trong vé. |
+| 13 | Pháp lý | **Chưa đủ điều kiện thu tiền thật** | Chưa có giấy phép G1, chưa xác thực số điện thoại, chưa giới hạn giờ chơi người dưới 18 tuổi. | Xem [MONETIZATION.md mục 5](MONETIZATION.md#5-pháp-lý-tại-việt-nam). |
+| 14 | Thấp | **IP cho luật cùng IP lấy từ `cf-connecting-ip`** | App được public qua Cloudflare Tunnel nên header này do Cloudflare ghi. Nếu cổng Node bị mở thẳng ra Internet, client tự đặt header này để né luật cùng IP. | Chỉ public qua tunnel/proxy ghi đè header; hoặc chỉ tin header khi request đến từ proxy. |
 
 ### 5.4 Checklist triển khai production
 
@@ -677,11 +654,10 @@ Xếp theo mức độ ưu tiên khuyến nghị. Đây là nhận định từ 
 - [ ] Bật provider Email/Password + Google; cân nhắc bắt buộc xác minh email.
 - [ ] Sau khi có root: xóa email khỏi `FIREBASE_ROOT_EMAILS` (rủi ro 6).
 - [ ] Reverse proxy: **giữ nguyên `Host` hoặc gửi `X-Forwarded-Host`** (không thì Origin check chặn mọi kết nối online), hỗ trợ WebSocket upgrade, rate limit, security header, giới hạn kích thước body.
-- [ ] `ANTHROPIC_API_KEY` riêng, đặt giới hạn chi tiêu.
-- [ ] Sao lưu Firestore định kỳ, **đặc biệt `players` (ví coin)** — bundle JSON của CMS không chứa ví; và file SQLite `data/game.db`.
+- [ ] Sao lưu Firestore định kỳ, **đặc biệt `players` (ví coin)** — bundle JSON của CMS không chứa ví.
 - [ ] Đặt giá cho lính trên Firestore đang có dữ liệu: Tổng quan CMS → *Nội dung mặc định mới* → *Đặt giá…* (hoặc sửa từng lính ở `/models`, tab Thẻ & sao).
 - [ ] Chạy một instance (hoặc thêm Redis adapter trước khi scale). Hàng chờ xếp hạng cũng chỉ nằm trong RAM.
-- [ ] Chỉ public app qua Cloudflare Tunnel (hoặc proxy ghi đè `cf-connecting-ip`), không mở thẳng cổng Node (rủi ro 15).
+- [ ] Chỉ public app qua Cloudflare Tunnel (hoặc proxy ghi đè `cf-connecting-ip`), không mở thẳng cổng Node (rủi ro 14).
 - [ ] Xếp hạng: đặt `ranked.seasonStart`; bộ đếm `botWinTotal` của mọi người chơi cũ bắt đầu từ 0, nên cân nhắc hạ `ranked.minBotWins` lúc mới mở.
 
 ---
@@ -929,10 +905,6 @@ Huy hiệu là SVG trong [ranked.tsx](../src/components/game/ranked.tsx): cúp +
 | GET / PUT / DELETE | `/api/admin/{collection}/{id}` | root/admin | đọc / sửa / xóa (chặn khi còn phụ thuộc) |
 | GET / PUT | `/api/admin/settings` | root/admin | cài đặt game |
 | GET / PUT / POST | `/api/admin/bundle` | root/admin | tải bundle JSON / nhập thay toàn bộ / `{action:"reset"}` / `{action:"merge", docs, skills, prices}` thêm nội dung mặc định còn thiếu, gán kỹ năng / giá mặc định cho lính mặc định chưa có (không sửa mục khác) |
-| GET / POST | `/api/admin/studio` | root/admin | trạng thái engine + danh sách job / tạo job |
-| GET / DELETE | `/api/admin/studio/{id}` | root/admin | chi tiết job / xóa job (không khi đang chạy) |
-| POST | `/api/admin/studio/{id}/run` | root/admin | chạy bước `spec` / `review` (stream NDJSON) hoặc `stop` |
-| POST | `/api/admin/studio/codegen` | root/admin | sinh file TypeScript từ sculpt spec (version hoặc asset đã áp dụng) |
 | GET / POST | `/api/admin/users` | root/admin | danh sách / tạo user (giới hạn role cấp được) |
 | GET / PATCH / DELETE | `/api/admin/users/{uid}` | root/admin + `canManage` cho PATCH/DELETE | xem / sửa / xóa user (xóa cả ví `players/{uid}` và ledger) |
 | POST | `/api/admin/users/{uid}/notify` | root/admin | gửi push FCM tới mọi thiết bị của user |

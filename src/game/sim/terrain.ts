@@ -56,6 +56,12 @@ export class Terrain {
   /** Width of the only shallow crossing of a deep river (0 = wadeable everywhere). */
   readonly ford: number;
   readonly obstacles: Obstacle[] = [];
+  /** Floating island map: the land is a disc with a wobbly coast; past it the ground drops to islandFloor. */
+  readonly island: boolean;
+  /** Mean coast radius (island only). */
+  readonly islandRadius: number;
+  /** Ground height past the coast (island only): the sea at the foot of the cliffs. */
+  readonly islandFloor = -9;
 
   private readonly seed: number;
   private readonly heightScale: number;
@@ -77,6 +83,8 @@ export class Terrain {
     this.seed = map.seed;
     this.heightScale = map.heightScale;
     this.freq = 0.018 * map.hilliness;
+    this.island = map.shape === 'island';
+    this.islandRadius = this.half - 2;
 
     const usable = this.half - EDGE_MARGIN;
     const base = Math.min(map.deployDepth, usable - 8);
@@ -101,6 +109,8 @@ export class Terrain {
       const size = Math.min(base * 2, usable * 0.45);
       const half2 = size / 2;
       const r = usable - half2 * 1.15;
+      // On an island the 4 corners move in to the same radius as the 3-side layout (r·√½ per axis).
+      const c4 = this.island ? r * 0.7071067811865476 : r;
       const corners: Array<[number, number]> =
         activeSides.length === 3
           ? [
@@ -109,10 +119,10 @@ export class Terrain {
               [-r / 2, -r * 0.8660254037844387],
             ]
           : [
-              [r, r],
-              [-r, r],
-              [-r, -r],
-              [r, -r],
+              [c4, c4],
+              [-c4, c4],
+              [-c4, -c4],
+              [c4, -c4],
             ];
       inner = Infinity;
       activeSides.forEach((side, i) => {
@@ -156,6 +166,32 @@ export class Terrain {
     return this.riverDistance(x, z) < this.riverHalfWidth;
   }
 
+  /** Coast radius toward the unit direction (nx, nz): the mean radius ±7%, smooth around the island. No trig, so every engine agrees. */
+  coastRadius(nx: number, nz: number): number {
+    const w = valueNoise(nx * 1.6 + 11, nz * 1.6 + 11, this.seed + 55) * 0.7 + valueNoise(nx * 4 + 3, nz * 4 + 3, this.seed + 66) * 0.3;
+    return this.islandRadius * (0.93 + w * 0.14);
+  }
+
+  /** On the island, at least `margin` m inside the coast (always true on a square map). */
+  onLand(x: number, z: number, margin = 0): boolean {
+    if (!this.island) return true;
+    const r2 = x * x + z * z;
+    const inner = this.islandRadius * 0.93 - margin;
+    if (inner > 0 && r2 <= inner * inner) return true;
+    const r = Math.sqrt(r2);
+    return r <= this.coastRadius(x / r, z / r) - margin;
+  }
+
+  /** Pulls a point straight toward the island's centre until it is `margin` m inside the coast. */
+  clampToLand(x: number, z: number, margin: number): [number, number] {
+    const r = Math.sqrt(x * x + z * z);
+    if (r < 1e-6) return [x, z];
+    const lim = this.coastRadius(x / r, z / r) - margin;
+    if (r <= lim) return [x, z];
+    const k = Math.max(0, lim) / r;
+    return [x * k, z * k];
+  }
+
   private baseHeight(x: number, z: number): number {
     const f = this.freq;
     const n =
@@ -168,6 +204,7 @@ export class Terrain {
       const s = this.map.rise > 0 ? x : -x;
       h += (this.map.rise < 0 ? -this.map.rise : this.map.rise) * smooth01((s + this.size * 0.02) / (this.size * 0.2));
     }
+    if (this.island) return h;
     const ax = x < 0 ? -x : x;
     const az = z < 0 ? -z : z;
     const e = (ax > az ? ax : az) / this.half;
@@ -180,6 +217,7 @@ export class Terrain {
   }
 
   height(x: number, z: number): number {
+    if (!this.onLand(x, z)) return this.islandFloor;
     let h = this.baseHeight(x, z);
     if (this.riverEnabled) {
       const d = this.riverDistance(x, z);
@@ -213,7 +251,7 @@ export class Terrain {
 
   inZone(side: Side, x: number, z: number): boolean {
     const zone = this.zones[side];
-    return !!zone && x >= zone.x0 && x <= zone.x1 && z >= zone.z0 && z <= zone.z1;
+    return !!zone && x >= zone.x0 && x <= zone.x1 && z >= zone.z0 && z <= zone.z1 && this.onLand(x, z, 1);
   }
 
   private scatter(assets: readonly AssetDef[]): void {
@@ -237,6 +275,7 @@ export class Terrain {
         const jitter = rng.next();
         if (this.activeSides.some((s) => this.inZone(s, x, z)) && roll > 0.12) continue;
         if (this.riverDistance(x, z) < this.riverHalfWidth + 1.5) continue;
+        if (!this.onLand(x, z, 1.2)) continue;
         const asset = byId.get(assetId)!;
         const scale =
           asset.scale * (kind === 'tree' ? 0.8 + jitter * 0.45 : kind === 'rock' ? 0.5 + jitter * 1.1 : 0.7 + jitter * 0.5);

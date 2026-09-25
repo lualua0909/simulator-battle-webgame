@@ -1,10 +1,10 @@
 'use client';
 
-import { Check, FlaskConical } from 'lucide-react';
+import { Check } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { ASSET_KINDS, SKINNED_GLB_KINDS, type AssetDef, type AssetGlb, type AssetKind, type CollectionName, type ConfigBundle } from '@/shared/schema';
+import { ASSET_KINDS, SKINNED_GLB_KINDS, type AssetGlb, type AssetKind, type CollectionName, type ConfigBundle } from '@/shared/schema';
 import { assetParamDefaults, COLLECTION_SPECS } from '@/shared/fields';
 import { useConfig } from '@/game/useConfig';
 import TintEditor from '../models/TintEditor';
@@ -13,10 +13,6 @@ import DocForm from './DocForm';
 import { AssetPreview, BotTester, FactionPreview, MapPreview, ParticlePreview, ProjectilePreview, UnitPreview, WeaponPreview } from './Previews';
 
 type Doc = Record<string, unknown>;
-
-function isSculpted(doc: Doc | null): doc is Doc & { sculpt: NonNullable<AssetDef['sculpt']> } {
-  return Boolean(doc && doc.sculpt);
-}
 
 /** Draft asset with an uploaded skeletal .glb whose colours are tint-editable. */
 function tintableGlb(doc: Doc | null): (AssetGlb & { kind: string }) | null {
@@ -27,7 +23,7 @@ function tintableGlb(doc: Doc | null): (AssetGlb & { kind: string }) | null {
   return { ...glb, kind };
 }
 
-/** `modelId` pre-selects the model of a new unit (e.g. an asset just made in the img2threejs studio). */
+/** `modelId` pre-selects the model of a new unit. */
 export default function DocEditor({ collection, id, from, modelId }: { collection: CollectionName; id: string; from?: string; modelId?: string }) {
   const router = useRouter();
   const spec = COLLECTION_SPECS[collection];
@@ -151,19 +147,6 @@ export default function DocEditor({ collection, id, from, modelId }: { collectio
               ))}
             </ul>
           )}
-        </div>
-      )}
-      {collection === 'assets' && isSculpted(doc) && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-ink bg-gold/30 px-3 py-2 text-sm">
-          <span>
-            <FlaskConical /> Asset đang dùng model img2threejs <b>{doc.sculpt.spec.name}</b> (v{doc.sculpt.version}). Các tham số procedural bên dưới chỉ có tác dụng khi hoàn tác.
-          </span>
-          <Link className="underline" href={`/models?asset=${String(doc.id)}`}>
-            Mở trong Xưởng mô hình
-          </Link>
-          <button className="btn ml-auto px-2 py-0.5 text-xs" onClick={() => change({ ...doc, sculpt: null })}>
-            Hoàn tác về procedural
-          </button>
         </div>
       )}
       {!doc ? (

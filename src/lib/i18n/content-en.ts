@@ -11,7 +11,7 @@ export const FACTION_EN: Record<string, string> = {
 };
 
 export const UNIT_EN: Record<string, { name: string; description?: string }> = {
-  clubber: { name: 'Club Warrior', description: 'Cheap, swarming, smashes wildly.' },
+  clubber: { name: 'Melee Soldier', description: 'Cheap, swarming, punches wildly and blasts foes away with a palm strike.' },
   protector: { name: 'Tribal Shield', description: 'Wooden shields block arrows well.' },
   'spear-thrower': { name: 'Spear Thrower' },
   stoner: { name: 'Stone Thrower' },
@@ -30,7 +30,7 @@ export const UNIT_EN: Record<string, { name: string; description?: string }> = {
   'war-elephant': { name: 'War Elephant' },
   eagle: { name: 'Giant Eagle', description: 'Flies, dives to claw.' },
   wizard: { name: 'Wizard' },
-  giant: { name: 'Giant', description: 'One club sends a whole row flying.' },
+  giant: { name: 'Giant', description: 'Leaps in and slams down; one hammer sends a whole row flying.' },
   dragon: { name: 'Fire Dragon', description: 'Breathes fire from above.' },
   'baby-dragon': { name: 'Azure Dragon', description: 'Chubby baby dragon, low flight, burns groups.' },
   raptor: { name: 'Raptor', description: 'Hunts in packs, dashes in to shred.' },
@@ -56,6 +56,7 @@ export const UNIT_EN: Record<string, { name: string; description?: string }> = {
 };
 
 export const WEAPON_EN: Record<string, string> = {
+  dam: 'Punch',
   club: 'Wooden Club',
   'small-club': 'Short Club',
   'throw-spear': 'Spear Throw',
@@ -103,8 +104,13 @@ export const WEAPON_EN: Record<string, string> = {
   'thien-thach': 'Meteor',
   'mua-thien-thach': 'Meteor Shower',
   'dam-dat': 'Ground Slam',
+  'voi-dam-chan': 'Stomp',
+  'voi-quet-voi': 'Trunk Sweep',
+  'voi-hat-voi': 'Trunk Toss',
   'mua-ten': 'Arrow Rain',
   'mua-hoa-tien': 'Fire Arrow Rain',
+  chuong: 'Palm Blast',
+  'golem-nhay': 'Leap Slam',
   'nem-tang-da': 'Boulder Hurl',
   'loat-dan': 'Rapid Fire',
   'hoi-mau-dien-rong': 'Mass Heal',
@@ -113,6 +119,7 @@ export const WEAPON_EN: Record<string, string> = {
 export const MAP_EN: Record<string, string> = {
   'dong-co': 'Meadow',
   'song-xanh': 'River',
+  'mini-map': 'Mini map',
   'rung-thong': 'Pine Forest',
   'thanh-tren-doi': 'Hill Castle',
   'deo-song': 'River Pass',

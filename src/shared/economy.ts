@@ -2,7 +2,7 @@
 // Pure rules shared by the server — the only place coins move, inside Firestore transactions
 // (src/server/players.ts) — the browser (display, countdowns) and the tests.
 import { z } from 'zod';
-import { idSchema, RANK_TIERS, STAR_MAX, type BotDef, type BoxConfig, type Economy, type UnitDef } from './schema';
+import { CHEST_VARIANTS, idSchema, RANK_TIERS, STAR_MAX, type BotDef, type BoxConfig, type Economy, type UnitDef } from './schema';
 
 export const PLAYERS_COLLECTION = 'players';
 export const LEDGER_COLLECTION = 'ledger';
@@ -213,6 +213,21 @@ export function liveBoxes(b: BoxStatus, now: number): BoxStatus {
 export interface BoxReward {
   coins: number;
   cards: Array<{ unitId: string; count: number }>;
+  /** Per-box breakdown when one claim opens several boxes (Sunday: 2 regular + 1 premium, premium last); totals above. */
+  boxes?: BoxReward[];
+}
+
+/** Boxes the Sunday (7th) daily claim opens. */
+export const SUNDAY_DAILY_BOXES = 3;
+
+function mergeRewards(boxes: BoxReward[]): BoxReward {
+  const cards = new Map<string, number>();
+  for (const b of boxes) for (const c of b.cards) cards.set(c.unitId, (cards.get(c.unitId) ?? 0) + c.count);
+  return {
+    coins: boxes.reduce((sum, b) => sum + b.coins, 0),
+    cards: [...cards].map(([unitId, count]) => ({ unitId, count })).sort((a, b) => b.count - a.count),
+    boxes,
+  };
 }
 
 /** Uniform number in [0, 1): crypto on the server, seeded in tests. */
@@ -307,7 +322,9 @@ export function openBox(p: PlayerState, kind: BoxKind, units: readonly UnitDef[]
   if (kind === 'daily' && !status.daily.ready) throw new EconomyError('Hôm nay bạn đã mở hộp quà hằng ngày');
   if (kind === 'hourly' && !status.hourly.unlocked) throw new EconomyError('Hãy mở hộp quà hằng ngày trước');
   if (kind === 'hourly' && !status.hourly.ready) throw new EconomyError('Hộp chưa tới giờ mở');
-  const reward = rollBox(units, kind === 'daily' ? economy.dailyBox : economy.hourlyBox, random);
+  const box = kind === 'daily' ? economy.dailyBox : economy.hourlyBox;
+  const count = kind === 'daily' && vnWeekday(now) === 6 ? SUNDAY_DAILY_BOXES : 1;
+  const reward = count === 1 ? rollBox(units, box, random) : mergeRewards(Array.from({ length: count }, () => rollBox(units, box, random)));
   const cards = { ...p.cards };
   for (const c of reward.cards) cards[c.unitId] = (cards[c.unitId] ?? 0) + c.count;
   let weekStart = p.weekStart;
@@ -321,6 +338,11 @@ export function openBox(p: PlayerState, kind: BoxKind, units: readonly UnitDef[]
   const state: PlayerState = { ...p, coins: p.coins + reward.coins, cards, lastBoxAt: now, dailyDay: kind === 'daily' ? vnDay(now) : p.dailyDay, weekStart, weekClaims };
   const entry: LedgerEntry = { type: kind === 'daily' ? 'daily-box' : 'hourly-box', coins: reward.coins, balance: state.coins, cards: Object.fromEntries(reward.cards.map((c) => [c.unitId, c.count])) };
   return { state, entry, reward };
+}
+
+/** Rive `tierNum` (6…10) of a box: its own setting, else ranked from the chest variant. */
+export function boxTierNum(box: Pick<BoxConfig, 'chest' | 'tierNum'>): number {
+  return box.tierNum ?? Math.min(10, 6 + Math.max(0, CHEST_VARIANTS.indexOf(box.chest)));
 }
 
 /** The reward box tier for a bot's difficulty (1‑5). */

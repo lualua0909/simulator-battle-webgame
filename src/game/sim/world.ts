@@ -844,6 +844,11 @@ export class BattleSim {
     u.dashWeapon = null;
     u.kx *= 0.2;
     u.kz *= 0.2;
+    // Area leaps (giant's stomp) quake the ground around the landing spot.
+    if (w.splashRadius > 0) {
+      this.nova(u, w);
+      return;
+    }
     if (!t || !t.alive || t.side === u.side) return;
     const dx = t.x - u.x;
     const dz = t.z - u.z;
@@ -873,6 +878,7 @@ export class BattleSim {
     const lim = this.terrain.half - EDGE_MARGIN * 0.5;
     u.x = clamp(u.x, -lim, lim);
     u.z = clamp(u.z, -lim, lim);
+    if (this.terrain.island) [u.x, u.z] = this.terrain.clampToLand(u.x, u.z, EDGE_MARGIN * 0.25);
   }
 
   private scratch: SimUnit[] = [];

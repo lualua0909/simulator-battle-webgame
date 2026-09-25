@@ -18,10 +18,11 @@
     "shots": "tsx scripts/screenshots.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.125.0",
     "@dicebear/core": "^10.7.0",
     "@dicebear/styles": "^10.6.0",
     "@dimforge/rapier3d-compat": "0.20.0",
+    "@rive-app/react-canvas": "^4.35.0",
+    "@rive-app/react-webgl2": "^4.35.0",
     "@vercel/analytics": "^1.4.1",
     "@vercel/speed-insights": "^1.1.0",
     "better-sqlite3": "^13.0.3",

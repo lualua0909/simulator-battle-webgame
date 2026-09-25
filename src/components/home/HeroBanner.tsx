@@ -93,12 +93,12 @@ function HeroHills({ hillsRef }: { hillsRef: RefObject<SVGSVGElement | null> }) 
   return (
     <svg
       ref={hillsRef}
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[14vh] w-full will-change-transform sm:h-[22vh]"
-      viewBox="0 0 1200 400"
-      preserveAspectRatio="xMidYMax slice"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-24 w-full will-change-transform sm:h-36"
+      viewBox="0 100 1200 300"
+      preserveAspectRatio="none"
       aria-hidden
     >
-      <path d="M0 250 L150 170 L300 230 L470 120 L640 220 L820 140 L1000 230 L1200 160 L1200 400 L0 400Z" fill="#8fbf6a" stroke="#2d3232" strokeWidth="8" />
+      <path d="M-20 250 L150 170 L300 230 L470 120 L640 220 L820 140 L1000 230 L1220 160 L1220 420 L-20 420Z" fill="#8fbf6a" stroke="#2d3232" strokeWidth="4" vectorEffect="non-scaling-stroke" />
       <path d="M0 310 L200 250 L380 300 L560 240 L760 305 L950 255 L1200 300 L1200 400 L0 400Z" fill="#6fae4b" />
       <path d="M0 360 L300 330 L620 365 L900 335 L1200 360 L1200 400 L0 400Z" fill="#5a9440" />
     </svg>

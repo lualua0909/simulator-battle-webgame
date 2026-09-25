@@ -19,8 +19,6 @@ const FILES = [
   { file: 'bui-co.glb', asset: 'bush-green', textured: true },
   { file: 'bui-qua-mong.glb', asset: 'bush-berry', textured: true },
   { file: 'bui-kho.glb', asset: 'bush-dry', textured: true },
-  { file: 'voi.glb', asset: 'm-mammoth', textured: true },
-  { file: 'voi.glb', asset: 'm-war-elephant', textured: true },
 ] as const;
 
 for (const f of FILES) {

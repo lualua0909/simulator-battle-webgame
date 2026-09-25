@@ -1,33 +1,36 @@
-// Points the elephant assets (m-mammoth + m-war-elephant, the latter is the mount of
-// tượng binh / Chiến tượng) at the committed GLB file, keeping riders and all other fields.
+// Points each elephant asset at its own committed skeletal GLB, keeping the war elephant rider
+// and removing the mammoth rider. Mammoth stays voi-mamut.glb; Chiến tượng (tượng binh)
+// uses voi-trang.glb. Do not mix the two files.
 //   npx tsx scripts/add-voi.ts
 import { loadEnvConfig } from '@next/env';
 
-const URL = '/models/voi.glb';
-const FILE_NAME = 'voi.glb';
-
-// Authored height of voi.glb is ~8.29 m; scale down to the units' ~4 m body height
-// (mammoth stays slightly bigger, as with the procedural presets).
+// Skinned files normalise to 2 m at scale 1, so scale = unit height / 2
+// (mammoth 4.2 m stays slightly bigger, as with the procedural presets).
 const TARGETS = [
-  { id: 'm-mammoth', scale: 0.55 },
-  { id: 'm-war-elephant', scale: 0.5 },
+  { id: 'm-mammoth', scale: 2.1, url: '/models/voi-mamut.glb', fileName: 'voi-mamut.glb' },
+  { id: 'm-war-elephant', scale: 2, url: '/models/voi-trang.glb', fileName: 'voi-trang.glb' },
 ] as const;
 
 async function main() {
   loadEnvConfig(process.cwd());
   const { getDoc, putDoc } = await import('../src/server/content');
+  const mammoth = await getDoc('units', 'mammoth');
+  if (mammoth && mammoth.riderModelId !== null) {
+    await putDoc('units', { ...mammoth, riderModelId: null });
+    console.log('đã bỏ người cưỡi units/mammoth');
+  }
   for (const t of TARGETS) {
     const doc = await getDoc('assets', t.id);
     if (!doc) {
       console.log(`bỏ qua assets/${t.id} (không có)`);
       continue;
     }
-    if (doc.glb?.url === URL && doc.scale === t.scale) {
+    if (doc.glb?.url === t.url && doc.scale === t.scale) {
       console.log(`giữ nguyên assets/${t.id} (đã có)`);
       continue;
     }
-    await putDoc('assets', { ...doc, scale: t.scale, sculpt: null, glb: { url: URL, fileName: FILE_NAME, uploadedAt: Date.now(), tint: {}, hide: [] } });
-    console.log(`đã trỏ assets/${t.id} -> ${URL} (scale ${t.scale})`);
+    await putDoc('assets', { ...doc, scale: t.scale, glb: { url: t.url, fileName: t.fileName, uploadedAt: Date.now(), tint: {}, hide: [] } });
+    console.log(`đã trỏ assets/${t.id} -> ${t.url} (scale ${t.scale})`);
   }
 }
 

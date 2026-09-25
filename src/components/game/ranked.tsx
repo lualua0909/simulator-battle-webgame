@@ -6,7 +6,7 @@ import { ArrowLeft, ChevronDown, ChevronUp, Gem, Gift, Lock, Star, Swords, Troph
 import Link from 'next/link';
 import { useCallback, useEffect, useId, useState } from 'react';
 import BoxOpening from '@/components/player/BoxOpening';
-import { formatCoins, type RankState } from '@/shared/economy';
+import { boxTierNum, formatCoins, type RankState } from '@/shared/economy';
 import type { AckResult, RoomState } from '@/shared/net';
 import { rankLabel, rankScore, seasonName, type RankResult, type RankView, type StandingRow } from '@/shared/ranked';
 import { RANK_TIERS, type ConfigBundle, type RankTier } from '@/shared/schema';
@@ -274,7 +274,7 @@ export function RankedLobby(props: {
           bundle={bundle}
           action={{ action: 'rank-claim' }}
           title={`Thưởng ${seasonName(view.pending.season)}: ${cfg.tiers[view.pending.tier].name}`}
-          chest={cfg.tiers[view.pending.tier].seasonBox.chest}
+          tier={boxTierNum(cfg.tiers[view.pending.tier].seasonBox)}
           thumbs={props.thumbs}
           onClose={() => {
             setClaiming(false);

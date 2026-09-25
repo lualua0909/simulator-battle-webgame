@@ -14,7 +14,7 @@ import { api, ApiError, detailsToErrors } from '../admin/api';
 import DocForm from '../admin/DocForm';
 import UnitCard from '../player/UnitCard';
 import AbilityForm from './AbilityForm';
-import ModelTab, { type Candidate } from './ModelTools';
+import ModelTab from './ModelTools';
 
 type Doc = Record<string, unknown>;
 type Tab = 'stats' | 'skills' | 'price' | 'cards' | 'model';
@@ -39,8 +39,6 @@ interface Props {
   setDraft(unit: UnitDef | null): void;
   skillDrafts: Record<string, WeaponDef>;
   setSkillDrafts(drafts: Record<string, WeaponDef>): void;
-  candidate: Candidate | null;
-  setCandidate(c: Candidate | null): void;
   onSaved(id: string): void;
   onDuplicate(): void;
   onDeleted(): void;
@@ -157,7 +155,7 @@ export default function UnitEditor(props: Props) {
       {tab === 'skills' && <SkillsTab bundle={bundle} draft={draft} setDraft={setDraft} skillDrafts={skillDrafts} setSkillDrafts={setSkillDrafts} errors={errors} />}
       {tab === 'price' && <PriceTab bundle={bundle} draft={draft} setDraft={setDraft} skillDrafts={skillDrafts} errors={errors} />}
       {tab === 'cards' && <CardsTab bundle={bundle} draft={draft} setDraft={setDraft} errors={errors} />}
-      {tab === 'model' && <ModelTab bundle={bundle} reload={reload} unit={draft} setUnit={setDraft} errors={errors} candidate={props.candidate} setCandidate={props.setCandidate} />}
+      {tab === 'model' && <ModelTab bundle={bundle} reload={reload} unit={draft} setUnit={setDraft} errors={errors} />}
     </div>
   );
 }

@@ -7,7 +7,7 @@
 import { LogOut, User, WalletCards, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { formatCoins, liveBoxes, type BoxKind } from '@/shared/economy';
+import { boxTierNum, formatCoins, liveBoxes, type BoxKind } from '@/shared/economy';
 import type { ChestVariant, ConfigBundle } from '@/shared/schema';
 import { canAccessCms } from '@/shared/users';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -21,12 +21,12 @@ import Collection from './Collection';
 import { CoinIcon } from './icons';
 import PlayerAvatar from './PlayerAvatar';
 import { usePlayer, useTick } from './PlayerProvider';
-import WeeklyReward from './WeeklyReward';
+import RiveDailyBonus from './RiveDailyBonus';
 
 export function CoinBar({ value, loading }: { value: number; loading?: boolean }) {
   const { t } = useLanguage();
   return (
-    <Link href="/nap-xu" className="coin-bar min-w-0" title={t('hud.topupTitle')}>
+    <Link href="/nap-xu" className="coin-bar w-28 min-w-28" title={t('hud.topupTitle')}>
       <span className="text-outline ml-auto truncate text-xl leading-none tabular-nums">{loading ? '…' : formatCoins(value)}</span>
       <CoinIcon size={42} className="absolute -right-4 top-1/2 -translate-y-1/2 shrink-0 drop-shadow" />
     </Link>
@@ -126,7 +126,13 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
             <ChestThumb variant={economy.dailyBox.chest} wobble size={46} />
           </button>
         ) : (
-          <button className={`reward-slot ${status.hourly.ready ? 'reward-slot-ready' : ''}`} onClick={() => status.hourly.ready && setOpening('hourly')} title={`${economy.boxHours.toLocaleString('en-US')} ${t('hud.hourlyBox')}`}>
+          <button
+            className={`reward-slot ${status.hourly.ready ? 'reward-slot-ready' : ''}`}
+            // Hourly ready → claim it; otherwise show the daily-bonus calendar
+            // popup in place (view-only) so the icon never dead-ends.
+            onClick={() => (status.hourly.ready ? setOpening('hourly') : setWeekly(true))}
+            title={`${economy.boxHours.toLocaleString('en-US')} ${t('hud.hourlyBox')}`}
+          >
             <ChestThumb variant={economy.hourlyBox.chest} wobble={status.hourly.ready} size={46} />
             {!status.hourly.ready && <span className="reward-badge">{countdown((status.hourly.readyAt ?? 0) - now())}</span>}
           </button>
@@ -149,22 +155,13 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
         </div>
       )}
       {bundle && collection && <Collection bundle={bundle} thumbs={thumbs} onClose={() => setCollection(false)} />}
-      {bundle && weekly && (
-        <WeeklyReward
-          bundle={bundle}
-          onClose={() => setWeekly(false)}
-          onClaim={() => {
-            setWeekly(false);
-            setOpening('daily');
-          }}
-        />
-      )}
+      {bundle && weekly && <RiveDailyBonus bundle={bundle} thumbs={thumbs} onClose={() => setWeekly(false)} />}
       {bundle && economy && opening && (
         <BoxOpening
           bundle={bundle}
           action={{ action: 'open-box', kind: opening }}
           title={opening === 'daily' ? t('hud.dailyBox') : `${economy.boxHours.toLocaleString('en-US')} ${t('hud.hourlyBox')}`}
-          chest={opening === 'daily' ? economy.dailyBox.chest : economy.hourlyBox.chest}
+          tier={boxTierNum(opening === 'daily' ? economy.dailyBox : economy.hourlyBox)}
           thumbs={thumbs}
           onClose={() => setOpening(null)}
         />

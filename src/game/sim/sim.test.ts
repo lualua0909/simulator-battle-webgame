@@ -337,3 +337,19 @@ test('a trampling war platform closes to melee while its riders keep shooting', 
   assert.ok(duel('archer') > 20, 'archers should hold at bow range');
   assert.ok(duel('war-elephant') < 10, 'war-elephant held at bow range instead of closing to trample');
 });
+
+test('island map: zones stop at the coast and a brawl never leaves the land', () => {
+  const map = SEED.maps.find((m) => m.shape === 'island')!;
+  const terrain = new Terrain(map, SEED.assets);
+  const zone = terrain.zoneOf('blue');
+  assert.ok(!terrain.inZone('blue', zone.x0 + 0.5, zone.z0 + 0.5), 'zone corner is off the coast');
+  assert.ok(terrain.height(0, terrain.half - 0.5) === terrain.islandFloor, 'past the coast the ground drops');
+  const bot = SEED.bots[1];
+  const blue = generateBotArmy({ bot, content: SEED, terrain, side: 'blue', budget: 3000, seed: 1 });
+  const red = generateBotArmy({ bot, content: SEED, terrain, side: 'red', budget: 3000, seed: 2 });
+  const sim = new BattleSim(SEED, map, terrain, armies({ blue, red }), 5);
+  for (let i = 0; i < 30 * 40 && !sim.result; i++) {
+    sim.step();
+    for (const u of sim.units) assert.ok(!u.alive || terrain.onLand(u.x, u.z), `${u.def.id} off the island at ${u.x.toFixed(1)},${u.z.toFixed(1)}`);
+  }
+});

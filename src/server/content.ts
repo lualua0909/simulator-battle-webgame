@@ -47,23 +47,13 @@ const g = globalThis as unknown as { __battleContent?: Store };
 
 const plain = (value: unknown): DocumentData => JSON.parse(JSON.stringify(value));
 
-/** Firestore rejects arrays nested in arrays, which sculpt specs use (lathe profiles, triangles), so `sculpt` is stored as JSON text. */
 export function toFirestore(collection: CollectionName, doc: AnyDoc): DocumentData {
-  const data = plain(doc);
-  if (collection === 'assets' && data.sculpt) data.sculpt = JSON.stringify(data.sculpt);
-  return data;
+  return plain(doc);
 }
 
 /** Validated document with defaults applied, or null (logged) when it is invalid, e.g. after a hand edit in the Console. */
 export function parseDoc<K extends CollectionName>(collection: K, id: string, data: DocumentData): CollectionDocs[K] | null {
   const raw: DocumentData = { ...data, id };
-  if (collection === 'assets' && typeof raw.sculpt === 'string') {
-    try {
-      raw.sculpt = JSON.parse(raw.sculpt);
-    } catch {
-      // left as a string; the schema reports it
-    }
-  }
   const parsed = COLLECTION_SCHEMAS[collection].safeParse(raw);
   if (!parsed.success) {
     console.error(`Nội dung ${collection}/${id} không hợp lệ, bỏ qua:`, parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
@@ -248,7 +238,8 @@ export async function deleteDoc(collection: CollectionName, id: string): Promise
 }
 
 export async function getSettings(): Promise<Settings> {
-  return (await loaded())?.settings ?? SEED.settings;
+  // Re-parse: the cached copy survives dev hot reloads parsed by an older schema, missing newer fields (NaN budgets).
+  return settingsSchema.parse((await loaded())?.settings ?? SEED.settings);
 }
 
 export async function putSettings(settings: Settings): Promise<void> {

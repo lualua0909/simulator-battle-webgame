@@ -8,7 +8,7 @@ import { armies as fullArmies, snapToCell, validateArmy, type Armies, type Place
 import { Terrain } from './terrain';
 import { BattleSim, type SimEvent } from './world';
 
-const ARENA: MapDef = { ...SEED.maps[0], id: 'arena', size: 80, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
+const ARENA: MapDef = { ...SEED.maps[0], id: 'arena', size: 80, deployDepth: 28, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
 const NOOP: WeaponDef = { ...SEED.weapons.find((w) => w.id === 'club')!, id: 'noop', damage: 0, range: 0.3, cooldown: 60, knockback: 0 };
 const DUMMY: UnitDef = { ...SEED.units.find((u) => u.id === 'clubber')!, id: 'dummy', hp: 5000, speed: 0, weaponId: 'noop' };
 const CONTENT = { ...SEED, units: [...SEED.units, DUMMY], weapons: [...SEED.weapons, NOOP] };

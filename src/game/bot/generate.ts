@@ -197,12 +197,17 @@ function layout(units: UnitDef[], formation: BotDef['formation'], terrain: Terra
   const zMax = zone.z1 - 1.5;
   const width = zMax - zMin;
   const out: Placement[] = [];
+  const cx = (zone.x0 + zone.x1) / 2;
+  const cz = (zone.z0 + zone.z1) / 2;
   const put = (u: UnitDef, x: number, z: number) => {
-    out.push({
-      unitId: u.id,
-      x: clamp(x, Math.min(front, back), Math.max(front, back)),
-      z: clamp(z, zMin, zMax),
-    });
+    x = clamp(x, Math.min(front, back), Math.max(front, back));
+    z = clamp(z, zMin, zMax);
+    // Island: the zone's corners are off the coast; slide toward the zone centre until on land.
+    for (let i = 0; i < 30 && !terrain.onLand(x, z, 1.5); i++) {
+      x = cx + (x - cx) * 0.9;
+      z = cz + (z - cz) * 0.9;
+    }
+    out.push({ unitId: u.id, x, z });
   };
 
   if (formation === 'scatter') {

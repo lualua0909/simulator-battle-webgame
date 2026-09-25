@@ -9,17 +9,15 @@ function terrainSegments(terrain: Terrain): number {
   return Math.min(200, Math.round(terrain.size / 0.85));
 }
 
-export function createTerrainMesh(terrain: Terrain): THREE.Mesh {
+/**
+ * Faceted ground builder: `emit` adds one triangle coloured like the terrain (grass, dirt patches,
+ * rock on slopes, sand by the river). Shared by the square field and the floating island's top.
+ */
+export function groundTriangles(terrain: Terrain, triangles: number) {
   const map = terrain.map;
   const half = terrain.half;
-  const seg = terrainSegments(terrain);
-  const step = terrain.size / seg;
-  const n = seg + 1;
-  const hts = new Float32Array(n * n);
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) hts[j * n + i] = terrain.height(-half + i * step, -half + j * step);
-
-  const pos = new Float32Array(seg * seg * 18);
-  const col = new Float32Array(seg * seg * 18);
+  const pos = new Float32Array(triangles * 9);
+  const col = new Float32Array(triangles * 9);
   const grass = new THREE.Color(map.grassColor);
   const grass2 = grass.clone().offsetHSL(0.025, 0.04, -0.07);
   const dirt = new THREE.Color(map.dirtColor);
@@ -47,11 +45,34 @@ export function createTerrainMesh(terrain: Terrain): THREE.Mesh {
     if (rd < hw + 2.5) c.lerp(sand, Math.min(1, (hw + 2.5 - rd) / 2.5));
     if (terrain.riverEnabled && my < terrain.waterLevel - 0.05) c.copy(sand).multiplyScalar(0.72);
     const edge = Math.max(Math.abs(mx), Math.abs(mz)) / half;
-    if (edge > 0.9) c.multiplyScalar(0.92);
+    if (edge > 0.9 && !terrain.island) c.multiplyScalar(0.92);
     c.multiplyScalar(0.95 + hash2(Math.floor(mx * 7), Math.floor(mz * 7), 3) * 0.1);
     for (let v = 0; v < 3; v++) col.set([c.r, c.g, c.b], k + v * 3);
     k += 9;
   };
+
+  const mesh = () => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, k), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, k), 3));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+    m.name = 'terrain';
+    m.receiveShadow = true;
+    m.castShadow = true;
+    return m;
+  };
+  return { emit, mesh };
+}
+
+export function createTerrainMesh(terrain: Terrain): THREE.Mesh {
+  const half = terrain.half;
+  const seg = terrainSegments(terrain);
+  const step = terrain.size / seg;
+  const n = seg + 1;
+  const hts = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) hts[j * n + i] = terrain.height(-half + i * step, -half + j * step);
+  const { emit, mesh } = groundTriangles(terrain, seg * seg * 2);
 
   for (let j = 0; j < seg; j++) {
     for (let i = 0; i < seg; i++) {
@@ -72,15 +93,7 @@ export function createTerrainMesh(terrain: Terrain): THREE.Mesh {
       }
     }
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.computeVertexNormals();
-  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
-  mesh.name = 'terrain';
-  mesh.receiveShadow = true;
-  mesh.castShadow = true;
-  return mesh;
+  return mesh();
 }
 
 /** Flat ground ring around the playable square, and the bank from the map's edge down to it, so the map never ends in a void. */
@@ -203,9 +216,10 @@ export function createZoneOverlay(terrain: Terrain, side: Side, color: string): 
   const p = plane.getAttribute('position') as THREE.BufferAttribute;
   const cx = (zone.x0 + zone.x1) / 2;
   const cz = (zone.z0 + zone.z1) / 2;
+  // Island: the zone's corners hang past the coast; pull them onto it (the fill and border follow the cliff edge).
+  const onLand = (x: number, z: number): [number, number] => (terrain.island ? terrain.clampToLand(x, z, 1) : [x, z]);
   for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i) + cx;
-    const z = p.getZ(i) + cz;
+    const [x, z] = onLand(p.getX(i) + cx, p.getZ(i) + cz);
     p.setXYZ(i, x, Math.max(terrain.height(x, z), terrain.riverEnabled ? terrain.waterLevel : -Infinity) + 0.12, z);
   }
   plane.computeVertexNormals();
@@ -218,8 +232,7 @@ export function createZoneOverlay(terrain: Terrain, side: Side, color: string): 
   const edge = (x0: number, z0: number, x1: number, z1: number) => {
     const steps = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 2);
     for (let s = 0; s <= steps; s++) {
-      const x = x0 + ((x1 - x0) * s) / steps;
-      const z = z0 + ((z1 - z0) * s) / steps;
+      const [x, z] = onLand(x0 + ((x1 - x0) * s) / steps, z0 + ((z1 - z0) * s) / steps);
       border.push(new THREE.Vector3(x, terrain.height(x, z) + 0.2, z));
     }
   };

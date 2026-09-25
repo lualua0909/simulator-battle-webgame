@@ -6,7 +6,7 @@ Game mô phỏng đại chiến kiểu *Totally Accurate Battle Simulator*: xế
 - **4 chế độ**: đấu với máy (6 bot có hồ sơ riêng), 2 người 1 máy (xếp quân bí mật), đấu online qua mã phòng (Socket.IO), **xếp hạng** (ghép trận tự động, 6 bậc kiểu Pokemon Unite, mùa giải, bảng xếp hạng).
 - **CMS** tại `/admin`: quản lý lính, kỹ năng & vũ khí, đạn, particle, asset 3D, bản đồ, bot, cài đặt + bảng khắc chế giáp. Lưu trên Firestore, có preview trực tiếp và đấu thử với hình nộm.
 - **Kỹ năng hoành tráng**: sét chuỗi phóng từ tay, thiên lôi và bão sấm giáng từ trời, lốc xoáy / lốc lửa hút bổng quân địch, thiên thạch, phun lửa, dậm đất, súng hỏa mai, mưa tên, ném tảng đá, hồi máu diện rộng. Admin gán kỹ năng cho từng lính và chỉnh tốc độ đánh, tốc độ chạy, tốc độ ra kỹ năng.
-- **Xưởng mô hình** tại `/models` (chỉ root/admin; user thường và khách bị chuyển về trang đăng nhập CMS): xem mọi lính/kỹ năng/asset, sửa ngay tại đó thông số, kỹ năng (gán + chỉ số), giá lính, tải model (TypeScript/GLB/OBJ/STL/PLY/USDZ) và yêu cầu Claude generate lại model bằng img2threejs.
+- **Xưởng mô hình** tại `/models` (chỉ root/admin; user thường và khách bị chuyển về trang đăng nhập CMS): xem mọi lính/kỹ năng/asset, sửa ngay tại đó thông số, kỹ năng (gán + chỉ số), giá lính, tải model (TypeScript/GLB/OBJ/STL/PLY/USDZ).
 - **Mô hình 3D procedural** theo chuẩn img2threejs, dựng hoàn toàn bằng code: người (nhiều kiểu giáp/mũ/vũ khí), ngựa, voi/ma mút, rồng, đại bàng, máy bắn đá, cây (thông/sồi/bạch dương/khô/cọ/xương rồng), đá, bụi, sông, địa hình, 6 kiểu rương hộp quà.
 - **Coin, thẻ bài, hộp quà** (Phase 2): ví coin trên Firestore (1.000 VNĐ = 1.000 coin), hộp quà hằng ngày + hộp x giờ (rương 3D nhún nhảy, mở có ánh sáng), bộ sưu tập thẻ kiểu Clash Royale, mở khóa lính, mua thẻ, nâng lính 1–5 sao. Kế hoạch nạp tiền thật: [docs/MONETIZATION.md](docs/MONETIZATION.md).
 
@@ -27,16 +27,16 @@ npm start
 
 | Lệnh | Việc |
 | --- | --- |
-| `npm test` | test mô phỏng (tất định, bot hợp lệ, seed CMS hợp lệ, sao nâng cấp) + luật coin/hộp quà/nâng sao/thưởng thắng bot + luật xếp hạng (♦, mùa, ghép trận, chống nhường trận) + phòng online và phòng xếp hạng (lính chưa mở khóa, sao, ghép cặp, đầu hàng) + sculpt spec (gate, phản chiếu, file TS xuất ra khớp model) |
+| `npm test` | test mô phỏng (tất định, bot hợp lệ, seed CMS hợp lệ, sao nâng cấp) + luật coin/hộp quà/nâng sao/thưởng thắng bot + luật xếp hạng (♦, mùa, ghép trận, chống nhường trận) + phòng online và phòng xếp hạng (lính chưa mở khóa, sao, ghép cặp, đầu hàng) |
 | `npm run typecheck` | kiểm tra TypeScript |
 | `npm run db:reset` | ghi đè nội dung CMS trên Firestore bằng dữ liệu mặc định |
 | `npm run shots -- models` | chụp ảnh mọi mô hình vào `.shots/models` (cần server đang chạy) |
 
-Biến môi trường: xem `.env.example` (`FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_ROOT_EMAILS`, `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, `DATABASE_PATH`, `PORT`, `ANTHROPIC_API_KEY`).
+Biến môi trường: xem `.env.example` (`FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_ROOT_EMAILS`, `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, `DATABASE_PATH`, `PORT`).
 
 Tài khoản: Firebase Auth (email/mật khẩu + Google). Hồ sơ lưu ở Firestore `users/{uid}` (`role`: 0 root, 1 admin, 2 user; `fcmTokens`), ví coin ở `players/{uid}` + sổ giao dịch `players/{uid}/ledger` (chỉ server đọc/ghi). Chỉ root/admin vào `/admin`; quản lý user ở `/admin/users`. Root đầu tiên: thêm email vào `FIREBASE_ROOT_EMAILS` rồi đăng nhập bằng Google. Firebase Console cần bật provider Email/Password + Google, và triển khai `firestore.rules` (client chỉ đọc hồ sơ của mình, mọi ghi đi qua server).
 
-> **Triển khai:** chế độ online cần Node server chạy lâu dài (VPS, Railway, Render, Fly.io…) vì dùng WebSocket và SQLite file. Không chạy được trên serverless (Vercel).
+> **Triển khai:** chế độ online cần Node server chạy lâu dài (VPS, Railway, Render, Fly.io…) vì dùng WebSocket. Không chạy được trên serverless (Vercel).
 
 ## Coin, thẻ bài & hộp quà
 
@@ -78,12 +78,10 @@ Mọi con số chỉnh ở CMS *Cài đặt* (mục Xếp hạng). Chi tiết: [
 ```
 server.ts                  custom server: Next.js + Socket.IO
 src/shared/                schema zod (nguồn chuẩn cho CMS + game), seed, form CMS, kiểm tra tham chiếu
-src/server/                nội dung CMS trên Firestore (bản sao sống trong RAM), SQLite cho job Xưởng, phiên đăng nhập, phòng online
+src/server/                nội dung CMS trên Firestore (bản sao sống trong RAM), phiên đăng nhập, phòng online
 src/game/sim/              mô phỏng tất định 30 Hz: địa hình, mục tiêu, di chuyển, va chạm, đòn đánh, đạn, nổ lan
 src/game/bot/              bot chọn quân theo chiến thuật + khắc chế + xếp đội hình
 src/game/models/           factory mô hình procedural (img2threejs), bake thành part cho instancing
-src/game/sculpt/           sculpt spec → Three.js (kit, builder, gate, rig contract, xuất TypeScript)
-src/server/studio/         xưởng img2threejs: gọi Claude (API hoặc CLI), prompt, pipeline, lưu job/version
 src/game/render/           engine Three.js: lính instanced + animation lò xo, ragdoll Rapier, particle, đạn, hiệu ứng kỹ năng, camera
 src/game/arena.ts          đấu trường thử kỹ năng (1 lính vs hình nộm) cho preview CMS và /models
 src/shared/economy.ts      luật coin, thẻ, sao, mở khóa, hộp quà, thưởng thắng bot (thuần, có test)
@@ -99,7 +97,7 @@ src/components/            UI game + CMS
 
 **Đấu online cần đăng nhập** (Socket.IO kiểm tra cookie phiên và Origin khi bắt tay, mỗi tài khoản một kết nối, giới hạn số sự kiện/giây). Kết quả chỉ được lưu vào Firestore `matches` khi cả hai máy cùng báo kết thúc ở cùng tick, một thắng một thua hoặc cả hai hòa, không desync và đủ checksum; báo thắng/thua mâu thuẫn hoặc lệch trận thì hủy kết quả. Đầu hàng hoặc mất kết nối trước khi báo kết thúc thì bị loại: trận 2 người, bên còn lại thắng ngay. Chi tiết: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-**Nội dung CMS trên Firestore:** mỗi collection CMS là một collection Firestore cùng tên (`units`, `weapons`, `assets`…, id tài liệu = id nội dung) cộng tài liệu `settings/global`. Server giữ bản sao trong RAM qua snapshot listener, nên lưu trong CMS hay sửa trực tiếp trên Firebase Console đều có hiệu lực ở trận tiếp theo, không cần khởi động lại. Tài liệu sửa tay bị sai schema sẽ bị bỏ qua và ghi log. Trường `sculpt` của asset lưu dạng chuỗi JSON (Firestore không nhận mảng lồng mảng). Lần đầu gặp Firestore trống, server tự chuyển nội dung từ SQLite cũ (`data/game.db`) nếu có, không thì ghi dữ liệu mặc định. Chưa kết nối được Firestore (thiếu credential, mất mạng) thì game chạy bằng dữ liệu mặc định, CMS từ chối lưu, server tự thử lại.
+**Nội dung CMS trên Firestore:** mỗi collection CMS là một collection Firestore cùng tên (`units`, `weapons`, `assets`…, id tài liệu = id nội dung) cộng tài liệu `settings/global`. Server giữ bản sao trong RAM qua snapshot listener, nên lưu trong CMS hay sửa trực tiếp trên Firebase Console đều có hiệu lực ở trận tiếp theo, không cần khởi động lại. Tài liệu sửa tay bị sai schema sẽ bị bỏ qua và ghi log. Lần đầu gặp Firestore trống, server tự chuyển nội dung từ SQLite cũ (`data/game.db`) nếu có, không thì ghi dữ liệu mặc định. Chưa kết nối được Firestore (thiếu credential, mất mạng) thì game chạy bằng dữ liệu mặc định, CMS từ chối lưu, server tự thử lại.
 
 **Hiển thị:** mỗi (loại lính × bộ phận) là một `InstancedMesh`, nên số draw call không tăng theo quân số. Lính chết được giao cho ragdoll Rapier (khớp cầu tại pivot, vũ khí rơi tự do), sau vài giây đóng băng thành xác. Giới hạn ragdoll/xác chỉnh trong CMS. Lính ngoài khung hình (kể cả bóng) không được vẽ, lính ở xa chỉ cập nhật dáng mỗi 2–3 khung. Engine có 3 mức chất lượng (`src/game/render/quality.ts`): điện thoại bắt đầu ở mức trung bình, máy nào dưới 40 fps liên tục thì tự hạ một mức (độ phân giải, bóng đổ, đèn chớp, giới hạn ragdoll/xác). Vì vậy giới hạn trong CMS là mức trần: mức trung bình tối đa 30 ragdoll / 300 xác, mức thấp 12 / 150.
 
@@ -131,31 +129,16 @@ Các factory trong `src/game/models/` tuân theo quy ước của skill img2thre
 
 ## Xưởng mô hình (`/models`, chỉ root/admin)
 
-Mọi chức năng liên quan tới nhân vật gộp ở đây (editor lính và `/admin/studio` cũ chuyển hướng về trang này). User thường và khách mở trang này bị chuyển về trang đăng nhập CMS. Root/admin có panel bên phải với 5 tab, mọi chỉnh sửa là bản nháp xem trước trực tiếp trong khung 3D / *Đấu thử*, bấm *Lưu* (Ctrl/⌘+S) để ghi:
+Mọi chức năng liên quan tới nhân vật gộp ở đây (editor lính cũ chuyển hướng về trang này). User thường và khách mở trang này bị chuyển về trang đăng nhập CMS. Root/admin có panel bên phải với 5 tab, mọi chỉnh sửa là bản nháp xem trước trực tiếp trong khung 3D / *Đấu thử*, bấm *Lưu* (Ctrl/⌘+S) để ghi:
 
 - **Thông số:** tên, phe, vai trò, tốc độ, máu, giáp, va chạm, bay…
 - **Kỹ năng:** đòn cơ bản, tối đa 6 kỹ năng (thêm/bỏ/đổi thứ tự) và sửa chỉ số từng kỹ năng. Kỹ năng dùng chung giữa các lính, panel báo lính nào bị ảnh hưởng.
 - **Giá:** giá, DPS, máu hiệu dụng, hiệu quả/giá xếp hạng với mọi lính, gợi ý giá cân bằng.
 - **Thẻ & sao:** giá mở khóa (0 = miễn phí), giá 1 thẻ (0 = không bán), số thẻ và coin cho từng bậc 1★–5★, kèm thẻ xem trước.
-- **Mô hình:** chọn model/người cưỡi, tải về, hoàn tác model img2threejs, và *Yêu cầu Claude generate lại* (pipeline bên dưới). Chọn version để xem thử trong khung 3D trước khi *Thay model của asset* hoặc *Tạo asset riêng cho lính này*.
+- **Mô hình:** chọn model/người cưỡi, chỉnh kích cỡ, upload .glb, đổi màu model upload, tải về.
 
 Chọn asset ở danh sách bên trái để dùng tab Mô hình cho cây/đá/bụi; chọn kỹ năng để sửa chỉ số và xem đấu thử; chọn một kiểu rương ở mục *Hộp quà* để xem và bấm *Mở thử* (`/models?chest=golden&open=1&bare=1` cho ảnh chụp).
 
-### Claude generate lại model (img2threejs)
+### Xuất file
 
-Claude dựng model mới dựa trên asset gốc, **góp ý/mô tả (tuỳ chọn) + ảnh mẫu (tuỳ chọn)**.
-
-**Engine.** Có `ANTHROPIC_API_KEY` thì server gọi Claude API (`claude-sonnet-5`, effort medium, streaming, structured output). Không có key thì dùng Claude Code CLI (`claude -p --safe-mode`, không tool) với login sẵn trên máy chủ. Cách này chỉ chạy trên máy đã đăng nhập `claude`.
-
-**Pipeline** (theo thứ tự của img2threejs):
-
-1. Claude phân tích ảnh/mô tả (nhận dạng → silhouette → macro/meso/micro → vật liệu → đặc điểm nhận dạng → phần bị che) và viết **sculpt spec**: danh sách node gồm part (khớp), socket, mesh. Mesh chỉ dùng primitive: box, sphere, ellipsoid, dome, capsule, cylinder, cone, beam, torus, lathe, extrude, sweep, triangles.
-2. **Generator tin cậy** (`src/game/sculpt`) dựng Three.js từ spec. Cặp trái/phải được tạo bằng phản chiếu. Không có code nào do AI viết được chạy.
-3. **Gate tất định**: cấu trúc spec, rig khớp animation (tên part, cha–con, khớp không xoay), socket, chạm đất, kích thước so với model gốc, mảnh lơ lửng, ngân sách tam giác, vị trí khớp. Gate chặn thì Claude tự sửa, tối đa 2 lần.
-4. Trình duyệt render 4 góc (trước, ¾, trái, sau). Claude so với ảnh mẫu, chấm điểm từng đặc điểm, rồi quyết định dừng hay sửa. Chỉ dừng khi độ giống ≥ 80%, mọi đặc điểm quan trọng ≥ 70% và không có gate chặn. Số vòng tự sửa tối đa là 3, và vòng lặp dừng sớm nếu điểm không tăng. Mỗi lần sửa tạo một version mới, admin có thể góp ý để sửa tiếp.
-
-**Xuất file:** TypeScript (model img2threejs: file độc lập gồm kit + code dựng, chỉ cần `three`, test đảm bảo dựng ra đúng model đã xem; preset procedural: module độc lập chứa cây node/part/socket và lưới đã bake), GLB/glTF (giữ `userData` part/socket/rig trong extras), OBJ và PLY (màu theo đỉnh), STL, USDZ, spec JSON.
-
-**Dùng trong game:** bấm *Thay model của asset*. Spec được lưu trong asset (`sculpt`), nên game, thumbnail, preview, chế độ online và file JSON sao lưu đều dùng được ngay; animation, ragdoll và người cưỡi vẫn chạy. Bấm *Hoàn tác về procedural* để trở về model cũ. *Tạo asset riêng cho lính này* không đụng asset dùng chung (nhớ *Lưu* lính).
-
-**Giới hạn:** đây là bản rút gọn chạy trong web. Không còn tạo đạo cụ tự do (prop) từ số 0: model luôn dựa trên một asset. Pipeline không chạy bộ gate Python, `state.json` hay các phép đo Divine Eye của skill img2threejs. Model dựng hoàn toàn từ primitive (hợp style low-poly của game), và mặt bị che trong ảnh chỉ là suy đoán. Mỗi model tốn vài lượt gọi Claude; số token hiện trong từng job.
+TypeScript (module độc lập chứa cây node/part/socket và lưới đã bake, chỉ cần `three`), GLB/glTF (giữ `userData` part/socket/rig trong extras), OBJ và PLY (màu theo đỉnh), STL, USDZ.

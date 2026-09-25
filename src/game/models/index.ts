@@ -1,7 +1,6 @@
 // Asset preset → procedural model, plus unit composition (mount + rider) and template cache.
 import * as THREE from 'three';
 import { parseAssetParams, type AssetDef, type UnitDef } from '@/shared/schema';
-import { buildSculptModel } from '../sculpt/build';
 import { bakeModel, mergeTemplate, type ModelTemplate } from './bake';
 import { createBirdModel } from './bird';
 import { createCatapultModel } from './catapult';
@@ -20,16 +19,8 @@ export type { ModelTemplate } from './bake';
 export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.Group {
   const seed = seedOverride ?? asset.seed;
   let root: THREE.Group;
-  // An img2threejs studio model replaces the procedural preset.
-  if (asset.sculpt) {
-    root = buildSculptModel(asset.sculpt.spec);
-    root.scale.setScalar(asset.scale);
-    root.userData.assetId = asset.id;
-    return root;
-  }
-  // An admin-uploaded glb/gltf replaces the procedural preset (static-rig kinds only, plus
-  // RIGID_GLB_KINDS which bake rigid but keep body motion + saddle; see assetSchema).
-  // Skinned kinds (SKINNED_GLB_KINDS) skip this baked path: the battle renderer plays the file's
+  // An admin-uploaded glb/gltf replaces the procedural preset (static-rig kinds only;
+  // see assetSchema). Skinned kinds (SKINNED_GLB_KINDS) skip this baked path: the battle renderer plays the file's
   // skeletal clips instead, and everything else falls back to the procedural model below.
   // Wall blocks (wall/brick-wall) never use glb: they are lightweight Three.js boxes.
   const skinned = (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind);

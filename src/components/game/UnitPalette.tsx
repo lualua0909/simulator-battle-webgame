@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { isUnlocked, starScale, type PlayerState } from '@/shared/economy';
 import type { ConfigBundle, UnitDef } from '@/shared/schema';
 import { unitPower } from '@/game/bot/generate';
-import { LockIcon, StarIcon } from '@/components/player/icons';
+import UnitCardFace from '@/components/player/UnitCardFace';
 import { NamedIcon } from '@/components/ui/NamedIcon';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
@@ -54,12 +54,11 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
         {action && <div className="ml-auto shrink-0">{action}</div>}
       </div>
       <div className="flex min-h-0 flex-1 gap-2">
-        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(84px,1fr))] content-start gap-1 overflow-y-auto overscroll-contain px-0.5 pb-0.5 pt-1 sm:grid-cols-[repeat(auto-fill,minmax(108px,1fr))] sm:gap-1.5">
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(84px,1fr))] content-start gap-2 overflow-y-auto overscroll-contain px-1.5 pb-2 pt-2 sm:grid-cols-[repeat(auto-fill,minmax(108px,1fr))] sm:gap-1.5">
           {units.map((u) => {
             const faction = bundle.factions.find((f) => f.id === u.factionId);
             const locked = !isUnlocked(u, player);
             const tooExpensive = u.cost > budgetLeft;
-            const star = stars?.[u.id] ?? 0;
             return (
               <button
                 key={u.id}
@@ -70,24 +69,22 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
                 }}
                 onMouseEnter={() => setHover(u)}
                 onMouseLeave={() => setHover(null)}
-                className={`relative flex min-w-0 touch-pan-y flex-col items-center rounded-lg border-2 bg-white p-1 text-center transition hover:-translate-y-0.5 sm:touch-none ${selected === u.id ? 'border-ink ring-2 ring-gold' : 'border-ink/30'} ${tooExpensive || locked ? 'opacity-50' : ''} ${draggingId === u.id ? 'opacity-40' : ''}`}
-                style={{ boxShadow: `inset 0 -4px 0 ${faction?.color ?? '#999'}` }}
+                className={`unit-card palette-unit-card touch-pan-y sm:touch-none ${selected === u.id ? 'unit-card-selected' : ''} ${tooExpensive ? 'unit-card-unaffordable' : ''} ${draggingId === u.id ? 'unit-card-dragging' : ''}`}
+                aria-pressed={selected === u.id}
                 title={`${unitName(u.id, u.name)} · ${u.cost}`}
               >
-                {thumbs[u.id] ? <img src={thumbs[u.id]} alt="" className={`h-10 w-10 object-contain sm:h-14 sm:w-14 ${locked ? 'grayscale' : ''}`} draggable={false} /> : <div className="h-10 w-10 animate-pulse rounded bg-parch sm:h-14 sm:w-14" />}
-                {locked && <LockIcon size={24} className="absolute right-1 top-1" />}
-                {star > 0 && (
-                  <span className="absolute left-1 top-0.5 flex items-center leading-none">
-                    <StarIcon size={18} />
-                  </span>
-                )}
-                <span className="line-clamp-2 flex min-h-[2em] w-full items-start justify-center break-words text-xs leading-tight sm:text-[13px]">{unitName(u.id, u.name)}</span>
-                <span className="text-sm font-bold text-amber-700">{u.cost}</span>
+                <UnitCardFace
+                  name={unitName(u.id, u.name)}
+                  cost={u.cost}
+                  thumb={thumbs[u.id]}
+                  color={faction?.color}
+                  locked={locked}
+                />
               </button>
             );
           })}
         </div>
-        {info && <UnitInfo unit={info} bundle={bundle} star={stars?.[info.id] ?? 0} />}
+        {info && <UnitInfo unit={info} bundle={bundle} star={stars?.[info.id] ?? 0} thumb={thumbs[info.id]} />}
       </div>
       {info && (
         <div className="shrink-0 truncate border-t-2 border-ink/10 px-1 pt-1 text-xs sm:hidden" title={`${unitName(info.id, info.name)} · HP ${Math.round(info.hp * starScale(stars?.[info.id] ?? 0, bundle.settings.economy.starBonus))} · ${info.cost}`}>
@@ -106,7 +103,7 @@ function Tab({ active, onClick, children, color, label }: { active: boolean; onC
   );
 }
 
-function UnitInfo({ unit, bundle, star }: { unit: UnitDef; bundle: ConfigBundle; star: number }) {
+function UnitInfo({ unit, bundle, star, thumb }: { unit: UnitDef; bundle: ConfigBundle; star: number; thumb?: string }) {
   const { t, locale, unitName, unitDesc, weaponName } = useLanguage();
   const ROLE_LABEL: Record<UnitDef['role'], string> = { melee: t('palette.melee'), ranged: t('palette.ranged'), support: t('palette.support'), siege: t('palette.siege') };
   const ARMOR_LABEL: Record<string, string> =
@@ -117,14 +114,22 @@ function UnitInfo({ unit, bundle, star }: { unit: UnitDef; bundle: ConfigBundle;
   const skills = unit.skillIds.map((id) => bundle.weapons.find((w) => w.id === id)).filter((w) => !!w);
   const { dps } = unitPower(unit, bundle);
   const scale = starScale(star, bundle.settings.economy.starBonus);
+  const color = bundle.factions.find((f) => f.id === unit.factionId)?.color ?? '#4384f5';
   return (
     <div className="hidden w-64 shrink-0 overflow-y-auto break-words rounded-lg border-2 border-ink/30 bg-white p-2 text-sm md:block">
-      <div className="font-display text-sm">
-        {unitName(unit.id, unit.name)}
-        {star > 0 && <span className="text-amber-700"> · {star} {locale === 'vi' ? 'sao' : star > 1 ? 'stars' : 'star'}</span>}
-      </div>
-      <div className="opacity-70">
-        {ROLE_LABEL[unit.role]} · {weapon ? weaponName(weapon.id, weapon.name) : ''}
+      <div className="flex items-center gap-2">
+        <div className="size-20 shrink-0 overflow-hidden rounded-md border-2 border-ink/40" style={{ background: `linear-gradient(160deg, ${color}, color-mix(in srgb, ${color} 80%, #131840))` }}>
+          {thumb && <img src={thumb} alt="" draggable={false} className="h-full w-full scale-125 object-contain" />}
+        </div>
+        <div className="min-w-0">
+          <div className="font-display text-sm">
+            {unitName(unit.id, unit.name)}
+            {star > 0 && <span className="text-amber-700"> · {star} {locale === 'vi' ? 'sao' : star > 1 ? 'stars' : 'star'}</span>}
+          </div>
+          <div className="opacity-70">
+            {ROLE_LABEL[unit.role]} · {weapon ? weaponName(weapon.id, weapon.name) : ''}
+          </div>
+        </div>
       </div>
       <dl className="mt-1 grid grid-cols-2 gap-x-2">
         <dt>{t('collection.hp')}</dt>

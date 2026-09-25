@@ -1,10 +1,13 @@
 // Admin-uploaded .glb/.gltf overrides: static-rig assets (structures, trees, rocks, bushes)
 // are baked once to the same flat-shaded, vertex-coloured geometry the procedural pipeline expects
-// (see bake.ts), and RIGID_GLB_KINDS mounts (elephant) bake the same way but keep a quadruped
-// `body` pivot + `saddle` socket (see getCustomGlbGroup). Solid-colour packs bake material.color; diffuse textures (pbr baseColor map)
+// (see bake.ts). Former RIGID_GLB_KINDS mounts (elephant/voi.glb: one mesh, no skeleton)
+// baked the same way on a quadruped `body` pivot with a `saddle` socket (see getCustomGlbGroup);
+// since voi-mamut.glb ships a skeleton, elephant is a SKINNED_GLB_KINDS kind and never
+// reaches this baked path. Solid-colour packs bake material.color; diffuse textures (pbr baseColor map)
 // are sampled per vertex through the mesh UVs, so textured packs keep their look too.
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import type { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { getGLTFLoader } from './gltfLoader';
 import { SKINNED_GLB_KINDS, RIGID_GLB_KINDS, type AssetDef } from '@/shared/schema';
 import { modelRoot, mesh } from './common';
 import { buildVoiRig } from './voiRig';
@@ -167,7 +170,7 @@ async function loadOne(loader: GLTFLoader, url: string): Promise<void> {
 function ensureLoading(url: string): Promise<void> {
   let p = pending.get(url);
   if (!p) {
-    p = loadOne(new GLTFLoader(), url).catch((err) => {
+    p = loadOne(getGLTFLoader(), url).catch((err) => {
       console.error(`glb load failed: ${url}`, err);
     });
     pending.set(url, p);
@@ -194,7 +197,7 @@ export function preloadCustomGlbs(assets: ReadonlyArray<Pick<AssetDef, 'glb' | '
 export function getCustomGlbGroup(url: string, kind?: string): THREE.Group | undefined {
   const baked = cache.get(url);
   if (!baked) return undefined;
-  // Rigid-baked mounts (e.g. elephant/voi.glb: one mesh, no skeleton). The file is cut
+  // Rigid-baked mounts (RIGID_GLB_KINDS, currently empty): a static file is cut
   // into the quadruped part names (legs, trunk, ears…) so walk/attack articulation applies;
   // see voiRig.ts. A `saddle` socket on the back keeps riders seating.
   if ((RIGID_GLB_KINDS as readonly string[]).includes(kind ?? '')) {

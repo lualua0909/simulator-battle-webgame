@@ -2,9 +2,9 @@
 
 // Model workshop (/models): root/admin only (the page redirects everyone else to
 // /admin/login). Admins browse units, abilities and assets in the turntable or the practice
-// arena, and edit them in the side panel — unit stats, abilities, price, model download and
-// Claude img2threejs regeneration — previewed live from unsaved drafts.
-import { ArrowLeft, Check, FlaskConical, Pencil, RotateCcw, Sparkles, Swords } from 'lucide-react';
+// arena, and edit them in the side panel — unit stats, abilities, price and model download —
+// previewed live from unsaved drafts.
+import { ArrowLeft, Check, Pencil, RotateCcw, Sparkles, Swords } from 'lucide-react';
 import Link from 'next/link';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { Object3D } from 'three';
@@ -17,7 +17,7 @@ import { createAssetModel, createUnitModel } from '@/game/models';
 import { useConfig } from '@/game/useConfig';
 import { useAuth } from './auth/AuthProvider';
 import AbilityForm from './models/AbilityForm';
-import { AssetModelTools, withCandidate, type Candidate } from './models/ModelTools';
+import { AssetModelTools } from './models/ModelTools';
 import UnitEditor from './models/UnitEditor';
 import { api, ApiError } from './admin/api';
 import ModelViewer, { type PreviewAnim } from './ModelViewer';
@@ -79,7 +79,6 @@ export default function ModelsGallery(props: Props) {
   // Admin drafts (unsaved). A null unit draft means "same as saved".
   const [unitDraft, setUnitDraft] = useState<UnitDef | null>(null);
   const [skillDrafts, setSkillDrafts] = useState<Record<string, WeaponDef>>({});
-  const [candidate, setCandidate] = useState<Candidate | null>(null);
 
   const creating = sel.unit === 'new';
   const savedUnit = bundle?.units.find((u) => u.id === (sel.unit ?? (!sel.asset && !sel.skill && !sel.chest ? bundle.units[0]?.id : undefined))) ?? null;
@@ -98,8 +97,7 @@ export default function ModelsGallery(props: Props) {
 
   const unit = creating ? unitDraft : (unitDraft ?? savedUnit);
   const deferredUnit = useDeferredValue(unit);
-  const assetList = useMemo(() => withCandidate(bundle?.assets ?? [], candidate), [bundle, candidate]);
-  const assets = useMemo(() => new Map(assetList.map((a) => [a.id, a])), [assetList]);
+  const assets = useMemo(() => new Map((bundle?.assets ?? []).map((a) => [a.id, a])), [bundle]);
   const weapons = useMemo(() => (bundle?.weapons ?? []).map((w) => skillDrafts[w.id] ?? w), [bundle, skillDrafts]);
   const skillIds = useMemo(() => new Set((bundle?.units ?? []).flatMap((u) => u.skillIds)), [bundle]);
   const weapon = unit ? weapons.find((w) => w.id === unit.weaponId) : undefined;
@@ -113,13 +111,11 @@ export default function ModelsGallery(props: Props) {
   }, [modelKey, skill]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A skinned asset (uploaded skeletal .glb) previews from the file itself — the same
-  // source the battle renders — unless a Claude sculpt candidate is being tried on it.
+  // source the battle renders.
   const skinAsset: AssetDef | undefined = asset ?? (deferredUnit && !skill ? assets.get(deferredUnit.modelId) : undefined);
-  const previewingCandidate = candidate?.assetId === skinAsset?.id ? candidate : null;
-  const skinnedUrl = !previewingCandidate && skinAsset?.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(skinAsset.kind) ? skinAsset.glb.url : null;
+  const skinnedUrl = skinAsset?.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(skinAsset.kind) ? skinAsset.glb.url : null;
 
   // The arena runs the real engine on the drafts: settle them so typing does not restart it every key.
-  const arenaBundle = useMemo(() => (bundle ? { ...bundle, assets: assetList, version: `${bundle.version}|${candidate ? `${candidate.assetId}@${candidate.sculpt.studioId}v${candidate.sculpt.version}` : ''}` } : null), [bundle, assetList, candidate]);
   const parsedUnit = unit ? unitSchema.safeParse({ ...unit, id: unit.id || 'draft' }) : null;
   const fighter = useSettled(parsedUnit?.success ? parsedUnit.data : null);
   const abilities = useSettled(Object.values(skillDrafts).flatMap((w) => (weaponSchema.safeParse(w).success ? [{ ...w, initialCooldown: Math.min(w.initialCooldown, 0.8) }] : [])));
@@ -135,13 +131,12 @@ export default function ModelsGallery(props: Props) {
   }, [dirty]);
 
   if (error) return <p className="p-6 text-red-700">Lỗi tải cấu hình: {error}</p>;
-  if (!bundle || !arenaBundle) return <p className="p-6">Đang tải…</p>;
+  if (!bundle) return <p className="p-6">Đang tải…</p>;
 
   const select = (next: Selection) => {
     if (dirty && !confirm('Bỏ các thay đổi chưa lưu?')) return;
     setUnitDraft(null);
     setSkillDrafts({});
-    setCandidate(null);
     setPicked(null);
     setChestOpen(false);
     setSel(next);
@@ -152,9 +147,9 @@ export default function ModelsGallery(props: Props) {
   const viewer = sel.chest ? (
     <ChestStage variant={sel.chest} mode={chestOpen ? 'open' : 'idle'} />
   ) : skill ? (
-    practice ? <SkillArena bundle={arenaBundle} caster={practice.caster} abilities={practice.abilities} /> : <p className="p-4 text-sm">Dữ liệu kỹ năng chưa hợp lệ</p>
+    practice ? <SkillArena bundle={bundle} caster={practice.caster} abilities={practice.abilities} /> : <p className="p-4 text-sm">Dữ liệu kỹ năng chưa hợp lệ</p>
   ) : arena && unit && !asset ? (
-    fighter ? <SkillArena bundle={arenaBundle} caster={fighter} abilities={abilities} /> : <p className="p-4 text-sm">Dữ liệu lính chưa hợp lệ</p>
+    fighter ? <SkillArena bundle={bundle} caster={fighter} abilities={abilities} /> : <p className="p-4 text-sm">Dữ liệu lính chưa hợp lệ</p>
   ) : skinnedUrl ? (
     <SkinnedModelViewer url={skinnedUrl} scale={skinAsset?.scale ?? 1} tint={skinAsset?.glb?.tint} hide={skinAsset?.glb?.hide} anim={anim} yaw={props.yaw} />
   ) : (
@@ -226,7 +221,6 @@ export default function ModelsGallery(props: Props) {
                 asset?.id === a.id,
                 () => select({ asset: a.id }),
                 <>
-                  {a.sculpt && <><FlaskConical />{' '}</>}
                   {a.name} <span className="text-xs opacity-60">({a.kind})</span>
                 </>,
               )}
@@ -272,7 +266,6 @@ export default function ModelsGallery(props: Props) {
           )}
           {picked && <span className="max-w-full truncate rounded bg-white px-2 py-0.5 font-mono text-xs" title={picked}>{picked}</span>}
         </div>
-        {candidate && <div className="absolute bottom-3 left-3 right-3 rounded-lg border-2 border-ink bg-gold px-3 py-1 text-sm font-bold break-words lg:right-auto lg:max-w-[calc(100%-1.5rem)]"><FlaskConical /> Đang xem thử v{candidate.sculpt.version} của Claude — chưa áp dụng</div>}
         {dirty && <div className="absolute bottom-3 right-3 rounded-lg border-2 border-ink bg-white px-2 py-1 text-xs font-bold lg:bottom-auto lg:top-3">Xem trước bản nháp chưa lưu</div>}
       </main>
       {admin && (
@@ -287,8 +280,6 @@ export default function ModelsGallery(props: Props) {
               setDraft={setUnitDraft}
               skillDrafts={skillDrafts}
               setSkillDrafts={setSkillDrafts}
-              candidate={candidate}
-              setCandidate={setCandidate}
               onSaved={(id) => {
                 setSel({ unit: id });
                 window.history.replaceState(null, '', `/models?unit=${id}`);
@@ -296,7 +287,6 @@ export default function ModelsGallery(props: Props) {
               onDuplicate={() => {
                 if (Object.keys(skillDrafts).length && !confirm('Bỏ các thay đổi kỹ năng chưa lưu?')) return;
                 setSkillDrafts({});
-                setCandidate(null);
                 setSel({ unit: 'new' });
                 setUnitDraft({ ...unit, id: `${unit.id}-copy`, name: `${unit.name} (bản sao)` });
                 window.history.replaceState(null, '', '/models?unit=new');
@@ -332,8 +322,6 @@ export default function ModelsGallery(props: Props) {
                 bundle={bundle}
                 reload={reload}
                 asset={assetDef}
-                candidate={candidate}
-                setCandidate={setCandidate}
                 onDeleted={() => {
                   setSel({});
                   window.history.replaceState(null, '', '/models');

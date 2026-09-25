@@ -78,7 +78,7 @@ export default function Home() {
   ];
 
   return (
-    <main className="game-ui relative min-h-screen bg-[#1a1446]">
+    <main className="game-ui home-page relative min-h-screen bg-[#1a1446]">
       {/* ===== NAV BAR ===== */}
       <header className="sticky top-0 z-20 border-b-[3px] border-[#2d3232] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2">
@@ -119,12 +119,9 @@ export default function Home() {
             <p className="mt-2 max-w-xl rounded-2xl border-2 border-white/40 bg-black/25 px-4 py-2 text-lg text-white">
               {t('home.subtitle')}
             </p>
-            <div className="mt-6 flex max-w-full flex-wrap items-center justify-center gap-3">
-              <a href="#choi-ngay" className="btn btn-gold max-w-full break-words px-6 py-3 text-xl sm:px-8 sm:text-2xl">
+            <div className="mt-8 flex justify-center">
+              <a href="#choi-ngay" className="btn btn-gold hero-play px-10 py-4 text-2xl sm:px-14 sm:py-5 sm:text-4xl">
                 <Swords /> {t('home.ctaPlay')}
-              </a>
-              <a href="#cach-choi" className="btn max-w-full bg-white px-6 py-3 text-lg break-words sm:text-xl">
-                <Gamepad2 /> {t('nav.howTo')}
               </a>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[#2d3232]">

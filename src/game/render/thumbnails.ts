@@ -60,7 +60,7 @@ async function render(bundle: ConfigBundle): Promise<Record<string, string>> {
   });
   if (missing.length === 0) return out;
   const fresh = new Map<string, string>();
-  const size = 112;
+  const size = 224;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setSize(size, size);
   renderer.setPixelRatio(1);
@@ -130,7 +130,7 @@ function thumbKey(unit: UnitDef, assets: ReadonlyMap<string, AssetDef>, weapons:
   const deps = JSON.stringify([unit, assets.get(unit.modelId) ?? null, unit.riderModelId ? assets.get(unit.riderModelId) ?? null : null, weapons.get(unit.weaponId) ?? null]);
   let h = 0x811c9dc5;
   for (let i = 0; i < deps.length; i++) h = Math.imul(h ^ deps.charCodeAt(i), 0x01000193);
-  return `${BUILD}:${unit.id}:${(h >>> 0).toString(36)}`;
+  return `${BUILD}:portrait224:${unit.id}:${(h >>> 0).toString(36)}`;
 }
 
 /** The cache is optional: private windows, blocked storage or old browsers just render every time. */

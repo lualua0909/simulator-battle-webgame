@@ -7,7 +7,7 @@
 import { ArrowRight, Palette } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { getGLTFLoader } from '@/game/models/gltfLoader';
 import type { AssetGlb } from '@/shared/schema';
 
 type Tint = NonNullable<AssetGlb['tint']>;
@@ -24,7 +24,7 @@ const loaders = new Map<string, Promise<{ materials: MaterialInfo[]; suggested: 
 function loadFile(url: string): Promise<{ materials: MaterialInfo[]; suggested: string | null }> {
   let p = loaders.get(url);
   if (!p) {
-    p = new GLTFLoader()
+    p = getGLTFLoader()
       .loadAsync(url)
       .then((gltf) => {
         const materials: MaterialInfo[] = [];

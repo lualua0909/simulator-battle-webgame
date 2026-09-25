@@ -1,4 +1,4 @@
-// SQLite file for img2threejs studio jobs (CMS content lives in Firestore, see content.ts).
+// Legacy SQLite file, read once to migrate old CMS content into Firestore (see content.ts).
 // Shared by Next.js route handlers and the Socket.IO server; both run in one Node
 // process but load separate module instances, so the connection lives on globalThis.
 import Database from 'better-sqlite3';

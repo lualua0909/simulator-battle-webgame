@@ -7,13 +7,83 @@
 // stays where the artist put it on X/Z) and uniformly scaled so its rest height is
 // NORMALIZED_HEIGHT, meaning asset.scale behaves the same as for procedural models.
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+import { getGLTFLoader } from './gltfLoader';
 
-export type SkinState = 'idle' | 'walk' | 'run' | 'attack' | 'death' | 'jump';
+export type SkinState = 'idle' | 'walk' | 'run' | 'attack' | 'leap' | 'death' | 'jump' | 'stomp' | 'sweep' | 'toss' | 'palm';
 
 /** Rest height (m) every skinned file is normalised to at scale 1. */
 export const NORMALIZED_HEIGHT = 2;
+
+/**
+ * Per-file yaw correction (radians) baked into the model so its walk direction matches the
+ * engine's forward +Z convention (see updateSkinned in render/units.ts, which drives
+ * `rotation.y = yaw`).
+ *
+ * voi-mamut.glb is authored with forward -X (head at -X, tail at +X) and needs +90°;
+ * voi-trang.glb is authored with forward +X and needs -90°. Without it they walk sideways. Matched by URL suffix so tint/hide
+ * variants and re-uploads under a new path with the same file name keep the fix.
+ */
+const YAW_CORRECTIONS: Array<[string, number]> = [
+  ['voi-mamut.glb', Math.PI / 2],
+  ['voi-trang.glb', -Math.PI / 2],
+];
+
+/** Yaw correction for `url` in radians (0 when the file already faces +Z). Pure — unit-tested. */
+export function yawCorrectionFor(url: string): number {
+  const file = url.split('?')[0].split('#')[0].split('/').pop() ?? url;
+  for (const [suffix, yaw] of YAW_CORRECTIONS) if (file === suffix) return yaw;
+  return 0;
+}
+
+/**
+ * Ground speed (m/s at asset scale 1) the file's walk clip covers at timeScale 1, measured
+ * from the planted front foot (stance travel ÷ stance time, normalised units). The battle
+ * speeds the clip up to the unit's real speed; without it voi-trang.glb (≈0.53 m/s) at
+ * 3.2 m/s slid its planted feet forward and read as walking backwards. 0 = unknown (no sync).
+ */
+const WALK_SPEEDS: Array<[string, number]> = [
+  ['voi-mamut.glb', 0.41],
+  ['voi-trang.glb', 0.53],
+];
+
+/**
+ * Rider hip seat on the mount's back (normalised local space, +Z forward), measured from the
+ * spine-line top of each file. The default suits horse-height backs; the elephants' backs sit
+ * at ~1.85–1.95, so riders seated at the default ended up buried inside the body.
+ */
+const MOUNT_SEATS: Array<[string, [number, number, number]]> = [
+  ['voi-mamut.glb', [0, 1.9, -0.3]],
+  ['voi-trang.glb', [0, 1.85, -0.05]],
+];
+const DEFAULT_MOUNT_SEAT: [number, number, number] = [0, 1.15, -0.05];
+
+function fileOf(url: string): string {
+  return url.split('?')[0].split('#')[0].split('/').pop() ?? url;
+}
+
+/** Walk-clip ground speed for `url` (see WALK_SPEEDS), 0 when unmeasured. Pure — unit-tested. */
+export function walkSpeedFor(url: string): number {
+  const file = fileOf(url);
+  return WALK_SPEEDS.find(([f]) => f === file)?.[1] ?? 0;
+}
+
+/** Rider hip seat for `url` (see MOUNT_SEATS). Pure — unit-tested. */
+export function mountSeatFor(url: string): [number, number, number] {
+  const file = fileOf(url);
+  return MOUNT_SEATS.find(([f]) => f === file)?.[1] ?? DEFAULT_MOUNT_SEAT;
+}
+
+/**
+ * Lift (in normalised units) that puts the file's lowest point on y = 0.
+ * The lift must be scaled: the inner group scales vertices by NORMALIZED_HEIGHT / height
+ * but three applies the position after the scale, so an unscaled `-minY` leaves feet at
+ * `minY * (scale - 1)` — invisible when feet sit near the origin, but voi-mamut.glb hangs
+ * ~0.6 m below it and sank ~0.4 m (× asset scale) into the ground. Pure — unit-tested.
+ */
+export function groundLift(minY: number, height: number): number {
+  return (-minY * NORMALIZED_HEIGHT) / Math.max(0.01, height);
+}
 
 interface Baked {
   scene: THREE.Group;
@@ -23,23 +93,42 @@ interface Baked {
 const cache = new Map<string, Baked>();
 const pending = new Map<string, Promise<void>>();
 
-const loader = new GLTFLoader();
+const loader = getGLTFLoader();
 
 /** Clip keywords per battle state; matches Quaternius-style names like "Armature|Velociraptor_Run". */
 const KEYWORDS: Record<SkinState, string[]> = {
   idle: ['idle', 'hover', 'fly'],
   walk: ['walk', 'fly'],
-  run: ['run', 'fly'],
-  attack: ['spell', 'cast', 'staff_attack', 'attack', 'shoot', 'bite', 'strike', 'punch', 'slash', 'kick', 'hit'],
+  // No 'run' clip in some packs (e.g. voi-mamut.glb ships only Walk): fall back to
+  // the walk cycle so a fast unit never glides in the idle pose.
+  run: ['run', 'walk', 'fly'],
+  // 'hammer' before 'attack': giant-golem.glb ships Attack_Leap ahead of Attack_Hammer.
+  attack: ['spell', 'cast', 'staff_attack', 'hammer', 'attack', 'shoot', 'bite', 'strike', 'punch', 'slash', 'kick', 'hit'],
+  // Dash/leap skill (giant-golem.glb Attack_Leap); packs without one reuse the attack clip.
+  leap: ['attack_leap', 'leap', 'spell', 'cast', 'staff_attack', 'attack', 'bite', 'strike', 'slash'],
   death: ['death', 'die', 'dead'],
   jump: ['jump', 'leap', 'fly'],
+  // Skill clips picked by castStyle (slam / swing / throw), e.g. the elephants' stomp and
+  // trunk skills; files without one fall back to the attack clip.
+  stomp: ['attack_stomp', 'stomp'],
+  sweep: ['attack_trunksweep', 'trunksweep', 'sweep'],
+  // linh-melee.glb has no throw clip: its Attack_Slash doubles as the stone throw.
+  toss: ['attack_trunktoss', 'toss', 'attack_trunksweep', 'trunksweep', 'sweep', 'attack_slash', 'slash'],
+  // Palm strike (linh-melee.glb Attack_Palm, the chưởng skill).
+  palm: ['attack_palm', 'palm'],
 };
 
-/** Best clip name in `names` for `state` (case-insensitive substring), or null. Pure — unit-tested. */
+/** Skill states that fall back to the attack clip (not idle) when the file lacks a match. */
+const ATTACK_LIKE: readonly SkinState[] = ['stomp', 'sweep', 'toss', 'palm'];
+
+/**
+ * Best clip name in `names` for `state` (case-insensitive, keyword must start a word so 'run'
+ * never matches voi-trang.glb's Attack_TrunkSweep), or null. Pure — unit-tested.
+ */
 export function pickClipName(names: readonly string[], state: SkinState): string | null {
   const low = names.map((n) => n.toLowerCase());
   for (const k of KEYWORDS[state]) {
-    const i = low.findIndex((n) => n.includes(k));
+    const i = low.findIndex((n) => new RegExp(`(^|[^a-z])${k}`).test(n));
     if (i >= 0) return names[i];
   }
   return null;
@@ -185,8 +274,12 @@ function bake(url: string, tint: SkinTint, hide: readonly string[], gltf: { scen
   const inner = new THREE.Group();
   inner.add(scene);
   // Lift feet to y = 0 and normalise height; X/Z pivot stays as authored (hips/legs).
-  inner.position.y -= box.min.y;
-  inner.scale.setScalar(NORMALIZED_HEIGHT / height);
+  // The lift is pre-scaled (see groundLift): three applies position after scale.
+  const s = NORMALIZED_HEIGHT / height;
+  inner.scale.setScalar(s);
+  inner.position.y = groundLift(box.min.y, height);
+  // Face authored-forward files toward the engine's +Z (see YAW_CORRECTIONS).
+  inner.rotation.y = yawCorrectionFor(url);
   const root = new THREE.Group();
   root.add(inner);
   root.traverse((o) => {
@@ -197,7 +290,18 @@ function bake(url: string, tint: SkinTint, hide: readonly string[], gltf: { scen
       m.frustumCulled = false;
     }
   });
-  cache.set(cacheKey(url, tint, hide), { scene: root, clips: gltf.animations });
+  cache.set(cacheKey(url, tint, hide), { scene: root, clips: gltf.animations.map(stripLeapRootMotion) });
+}
+
+/**
+ * Leap/jump clips that lift the skeleton root (giant-golem.glb Attack_Leap raises Root) would
+ * stack on the sim's own ballistic arc and leave the unit hanging in the air at touchdown:
+ * drop the root bone's translation so the sim alone moves the body.
+ */
+function stripLeapRootMotion(clip: THREE.AnimationClip): THREE.AnimationClip {
+  if (!/leap|jump/i.test(clip.name)) return clip;
+  const tracks = clip.tracks.filter((t) => !/^root\.position$/i.test(t.name));
+  return tracks.length === clip.tracks.length ? clip : new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
 /** Rendered bounds of every skinned mesh at bind pose (bindMatrix-aware), or null without skinning. */
@@ -318,6 +422,8 @@ export function cloneSkinned(url: string, tint: SkinTint = {}, hide: readonly st
     if (clip) actions.set(state, mixer.clipAction(clip));
   }
   // Whatever the file calls its clips, something must play: fill missing states from idle (or the first clip).
+  const attack = actions.get('attack');
+  if (attack) for (const state of ATTACK_LIKE) if (!actions.has(state)) actions.set(state, attack);
   if (actions.size > 0) {
     const any = actions.get('idle') ?? [...actions.values()][0];
     for (const state of Object.keys(KEYWORDS) as SkinState[]) if (!actions.has(state)) actions.set(state, any);

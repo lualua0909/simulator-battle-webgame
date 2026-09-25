@@ -8,8 +8,14 @@ import * as THREE from 'three';
 import type { Side, Terrain } from '../sim/terrain';
 import type { BattleSim, SimUnit } from '../sim/world';
 
-export type ViewMode = 'overview' | 'third' | 'first' | 'second';
-export const VIEW_MODES: readonly ViewMode[] = ['overview', 'third', 'first', 'second'];
+// `side` is not a unit view: it films the whole battle from the flank, enemy on the left and the own army on the right.
+export type ViewMode = 'overview' | 'side' | 'third' | 'first' | 'second';
+export const VIEW_MODES: readonly ViewMode[] = ['overview', 'side', 'third', 'first', 'second'];
+
+/** The camera rides along with one soldier (first / second / third person). */
+export function followsUnit(mode: ViewMode): boolean {
+  return mode === 'third' || mode === 'first' || mode === 'second';
+}
 
 /** Smallest signed difference a − b between two angles. */
 export function angleDiff(a: number, b: number): number {

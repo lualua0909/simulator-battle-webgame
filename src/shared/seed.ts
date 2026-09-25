@@ -129,10 +129,11 @@ const W = (w: Partial<WeaponDef> & Pick<WeaponDef, 'id' | 'name' | 'attack' | 'd
 });
 
 const weapons: WeaponDef[] = [
+  W({ id: 'dam', name: 'Đấm', attack: 'melee', damage: 20, damageType: 'blunt', range: 1.1, cooldown: 1.1, windup: 0.35, knockback: 3, hitParticleId: 'hit-dust' }),
   W({ id: 'club', name: 'Gậy gỗ', attack: 'melee', damage: 20, damageType: 'blunt', range: 1.1, cooldown: 1.1, windup: 0.35, knockback: 3, hitParticleId: 'hit-dust' }),
   W({ id: 'small-club', name: 'Gậy ngắn', attack: 'melee', damage: 12, damageType: 'blunt', range: 1.0, cooldown: 1.2, windup: 0.3, knockback: 2, hitParticleId: 'hit-dust' }),
   W({ id: 'throw-spear', name: 'Ném lao', attack: 'projectile', damage: 45, damageType: 'pierce', range: 22, cooldown: 3, windup: 0.5, knockback: 3, projectileId: 'spear', projectileSpeed: 18, spread: 0.8, hitParticleId: 'hit-chunk' }),
-  W({ id: 'throw-stone', name: 'Ném đá', attack: 'projectile', damage: 22, damageType: 'blunt', range: 16, cooldown: 1.8, windup: 0.4, knockback: 3, projectileId: 'stone', projectileSpeed: 14, spread: 1, hitParticleId: 'hit-dust' }),
+  W({ id: 'throw-stone', name: 'Ném đá', attack: 'projectile', damage: 22, damageType: 'blunt', range: 16, cooldown: 1.8, windup: 0.4, knockback: 3, projectileId: 'stone', projectileSpeed: 14, spread: 1, hitParticleId: 'hit-dust', castStyle: 'throw' }),
   W({ id: 'chief-axe', name: 'Rìu tù trưởng', attack: 'melee', damage: 70, damageType: 'slash', range: 1.6, cooldown: 1.4, windup: 0.45, knockback: 9, knockUp: 4, cleaveArc: 100, maxTargets: 4, hitParticleId: 'spark' }),
   W({ id: 'mammoth-tusks', name: 'Ngà voi ma mút', attack: 'melee', damage: 90, damageType: 'blunt', range: 2.2, cooldown: 1.8, windup: 0.6, knockback: 22, knockUp: 8, cleaveArc: 120, maxTargets: 6, hitParticleId: 'hit-dust' }),
   W({ id: 'sword', name: 'Kiếm', attack: 'melee', damage: 22, damageType: 'slash', range: 1.2, cooldown: 1.0, windup: 0.3, knockback: 3, hitParticleId: 'spark' }),
@@ -178,8 +179,15 @@ const weapons: WeaponDef[] = [
   W({ id: 'thien-thach', name: 'Thiên thạch', attack: 'strike', damage: 240, damageType: 'fire', range: 40, minRange: 6, cooldown: 22, windup: 1.2, knockback: 20, knockUp: 11, splashRadius: 5, strikeVfx: 'meteor', strikeDelay: 1.3, burnDps: 12, burnDuration: 3, minTargets: 4, initialCooldown: 5, projectileId: 'meteor', hitParticleId: 'hit-dust', areaParticleId: 'ember', vfxColor: '#ff7a2a', castStyle: 'raise' }),
   W({ id: 'mua-thien-thach', name: 'Mưa thiên thạch', attack: 'strike', damage: 110, damageType: 'fire', range: 40, cooldown: 25, windup: 1, knockback: 12, knockUp: 8, splashRadius: 3.2, strikeVfx: 'meteor', strikeCount: 6, strikeDelay: 1.1, strikeInterval: 0.3, strikeSpread: 7, burnDps: 8, burnDuration: 2, minTargets: 5, initialCooldown: 6, projectileId: 'meteor', hitParticleId: 'hit-dust', areaParticleId: 'ember', vfxColor: '#ff7a2a' }),
   W({ id: 'dam-dat', name: 'Dậm đất (chấn động)', attack: 'nova', damage: 90, damageType: 'blunt', range: 3, cooldown: 9, windup: 0.55, knockback: 20, knockUp: 9, splashRadius: 5, stunDuration: 0.8, minTargets: 3, initialCooldown: 2, hitParticleId: 'hit-dust', areaParticleId: 'shock-dust', vfxColor: '#f0dfb4', castStyle: 'slam' }),
+  // Elephant skills (Voi ma mút / Chiến tượng): castStyle picks the skinned clip — slam = Attack_Stomp, swing = Attack_TrunkSweep, throw = trunk toss (falls back to the sweep clip).
+  W({ id: 'voi-dam-chan', name: 'Dậm chân', attack: 'nova', damage: 120, damageType: 'blunt', range: 3, cooldown: 10, windup: 0.6, knockback: 18, knockUp: 12, splashRadius: 6.5, stunDuration: 1.2, minTargets: 3, initialCooldown: 3, hitParticleId: 'hit-dust', areaParticleId: 'shock-dust', vfxColor: '#f0dfb4', castStyle: 'slam' }),
+  W({ id: 'voi-quet-voi', name: 'Quét vòi', attack: 'melee', damage: 80, damageType: 'blunt', range: 3.5, cooldown: 7, windup: 0.5, knockback: 34, knockUp: 5, cleaveArc: 200, maxTargets: 10, minTargets: 2, initialCooldown: 2, hitParticleId: 'hit-dust', castStyle: 'swing' }),
+  W({ id: 'voi-hat-voi', name: 'Hất vòi', attack: 'melee', damage: 180, damageType: 'blunt', range: 3, cooldown: 9, windup: 0.45, knockback: 16, knockUp: 26, stunDuration: 1, maxTargets: 1, initialCooldown: 4, hitParticleId: 'hit-dust', castStyle: 'throw' }),
   W({ id: 'mua-ten', name: 'Mưa tên', attack: 'projectile', damage: 22, damageType: 'pierce', range: 36, cooldown: 12, windup: 0.9, knockback: 1, projectileId: 'arrow', projectileSpeed: 16, spread: 4.5, volley: 14, minTargets: 4, initialCooldown: 3, hitParticleId: 'hit-chunk', castStyle: 'bow' }),
   W({ id: 'mua-hoa-tien', name: 'Mưa hỏa tiễn', attack: 'projectile', damage: 18, damageType: 'fire', range: 36, cooldown: 14, windup: 1, knockback: 3, knockUp: 1, splashRadius: 2, projectileId: 'fire-arrow', projectileSpeed: 16, spread: 4, volley: 10, burnDps: 8, burnDuration: 2.5, minTargets: 4, initialCooldown: 3, castStyle: 'bow' }),
+  // Lính cận chiến's palm blast: linh-melee.glb plays Attack_Palm (castStyle palm).
+  W({ id: 'chuong', name: 'Chưởng', attack: 'melee', damage: 45, damageType: 'blunt', range: 2.5, cooldown: 6, windup: 0.4, knockback: 16, knockUp: 4, cleaveArc: 90, maxTargets: 4, stunDuration: 0.4, initialCooldown: 2, hitParticleId: 'hit-dust', vfxColor: '#9fe8ff', castStyle: 'palm' }),
+  W({ id: 'golem-nhay', name: 'Nhảy đập', attack: 'dash', damage: 150, damageType: 'blunt', range: 14, minRange: 4, cooldown: 8, windup: 0.35, knockback: 24, knockUp: 10, splashRadius: 7, initialCooldown: 2, hitParticleId: 'hit-dust', areaParticleId: 'hit-dust', vfxColor: '#8a6a45', castStyle: 'slam' }),
   W({ id: 'nem-tang-da', name: 'Ném tảng đá', attack: 'projectile', damage: 160, damageType: 'blunt', range: 26, minRange: 5, cooldown: 10, windup: 1, knockback: 22, knockUp: 10, splashRadius: 3.5, projectileId: 'boulder', projectileSpeed: 15, spread: 1, minTargets: 2, initialCooldown: 2, hitParticleId: 'hit-dust', castStyle: 'throw' }),
   W({ id: 'loat-dan', name: 'Loạt đạn liên thanh', attack: 'projectile', damage: 24, damageType: 'pierce', range: 30, cooldown: 11, windup: 0.4, knockback: 3, projectileId: 'bullet', projectileSpeed: 110, spread: 1.6, duration: 1.4, interval: 0.18, initialCooldown: 4, hitParticleId: 'hit-chunk', fireParticleId: 'muzzle-flash', areaParticleId: 'gun-smoke', castStyle: 'gun' }),
   W({ id: 'hoi-mau-dien-rong', name: 'Hồi máu diện rộng', attack: 'heal', damage: 55, damageType: 'magic', range: 10, cooldown: 10, windup: 0.8, splashRadius: 6, minTargets: 3, initialCooldown: 2, hitParticleId: 'heal', areaParticleId: 'heal-burst', vfxColor: '#b8ff9e', castStyle: 'raise' }),
@@ -221,12 +229,12 @@ const S = (u: Partial<UnitDef> & Pick<UnitDef, 'id' | 'name' | 'cost' | 'hp' | '
   U({ factionId: 'thanh-tri', role: 'support', weaponId: 'none', speed: 0, mass: 500, armorClass: 'siege', knockbackResist: 1, ...u });
 
 const units: UnitDef[] = [
-  U({ id: 'clubber', name: 'Chiến binh gậy', factionId: 'bo-lac', role: 'melee', cost: 70, hp: 100, speed: 3.6, weaponId: 'club', modelId: 'm-clubber', description: 'Rẻ, đông, đập bừa.' }),
+  U({ id: 'clubber', name: 'Lính cận chiến', factionId: 'bo-lac', role: 'melee', cost: 70, hp: 100, speed: 3.6, skillIds: ['chuong'], weaponId: 'dam', modelId: 'm-clubber', description: 'Rẻ, đông, đấm bừa, tung chưởng hất văng.' }),
   U({ id: 'protector', name: 'Khiên bộ lạc', factionId: 'bo-lac', role: 'melee', cost: 90, hp: 160, speed: 3.2, armorClass: 'light', blockChance: 0.6, weaponId: 'small-club', modelId: 'm-protector', description: 'Khiên gỗ chặn tên rất tốt.' }),
   U({ id: 'spear-thrower', name: 'Người ném lao', factionId: 'bo-lac', role: 'ranged', cost: 120, hp: 70, speed: 3.4, weaponId: 'throw-spear', modelId: 'm-spear-thrower' }),
   U({ id: 'stoner', name: 'Người ném đá', factionId: 'bo-lac', role: 'ranged', cost: 80, hp: 70, speed: 3.4, weaponId: 'throw-stone', modelId: 'm-stoner' }),
   U({ id: 'chieftain', name: 'Tù trưởng', factionId: 'bo-lac', role: 'melee', cost: 450, hp: 700, speed: 3.8, mass: 2, radius: 0.55, height: 2.1, armorClass: 'light', knockbackResist: 0.4, skillIds: ['dam-dat'], weaponId: 'chief-axe', modelId: 'm-chieftain', description: 'Rìu quét nhiều mục tiêu.' }),
-  U({ id: 'mammoth', name: 'Voi ma mút', factionId: 'bo-lac', role: 'melee', cost: 2200, hp: 4000, speed: 3, mass: 40, radius: 2.2, height: 4.2, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 60, skillIds: ['dam-dat'], weaponId: 'mammoth-tusks', modelId: 'm-mammoth', riderModelId: 'm-clubber', description: 'Giẫm nát mọi thứ.' }),
+  U({ id: 'mammoth', name: 'Voi ma mút', factionId: 'bo-lac', role: 'melee', cost: 2200, hp: 4000, speed: 3, mass: 40, radius: 2.2, height: 4.2, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 60, skillIds: ['voi-dam-chan', 'voi-quet-voi', 'voi-hat-voi'], weaponId: 'mammoth-tusks', modelId: 'm-mammoth', riderModelId: null, description: 'Giẫm nát mọi thứ.' }),
   U({ id: 'squire', name: 'Cận vệ', factionId: 'trung-co', role: 'melee', cost: 110, hp: 140, speed: 3.6, armorClass: 'light', blockChance: 0.35, weaponId: 'sword', modelId: 'm-squire' }),
   U({ id: 'archer', name: 'Cung thủ', factionId: 'trung-co', role: 'ranged', cost: 140, hp: 70, speed: 3.5, weaponId: 'bow', modelId: 'm-archer' }),
   U({ id: 'healer', name: 'Tu sĩ', factionId: 'trung-co', role: 'support', cost: 180, hp: 90, speed: 3.5, skillIds: ['hoi-mau-dien-rong'], weaponId: 'heal-staff', modelId: 'm-healer', description: 'Hồi máu đồng đội gần.' }),
@@ -237,10 +245,10 @@ const units: UnitDef[] = [
   U({ id: 'hoplite', name: 'Giáo binh', factionId: 'phuong-dong', role: 'melee', cost: 150, hp: 180, speed: 3.3, armorClass: 'light', blockChance: 0.5, weaponId: 'hoplite-spear', modelId: 'm-hoplite' }),
   U({ id: 'monk', name: 'Võ tăng', factionId: 'phuong-dong', role: 'melee', cost: 250, hp: 220, speed: 5.5, weaponId: 'monk-staff', modelId: 'm-monk', description: 'Nhanh, đánh liên hoàn.' }),
   U({ id: 'fire-archer', name: 'Hỏa tiễn thủ', factionId: 'phuong-dong', role: 'ranged', cost: 400, hp: 80, speed: 3.5, skillIds: ['mua-hoa-tien'], weaponId: 'fire-bow', modelId: 'm-fire-archer' }),
-  U({ id: 'war-elephant', name: 'Chiến tượng', factionId: 'phuong-dong', role: 'melee', cost: 2000, hp: 3000, speed: 3.2, mass: 40, radius: 2, height: 4, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 50, skillIds: ['mua-ten'], weaponId: 'elephant-bow', modelId: 'm-war-elephant' }),
+  U({ id: 'war-elephant', name: 'Chiến tượng', factionId: 'phuong-dong', role: 'melee', cost: 2000, hp: 3000, speed: 3.2, mass: 40, radius: 2, height: 4, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 50, skillIds: ['mua-ten', 'voi-dam-chan', 'voi-quet-voi', 'voi-hat-voi'], weaponId: 'elephant-bow', modelId: 'm-war-elephant' }),
   U({ id: 'eagle', name: 'Đại bàng', factionId: 'huyen-thoai', role: 'melee', cost: 300, hp: 150, speed: 8, mass: 0.8, radius: 0.8, height: 1.2, armorClass: 'beast', flying: true, altitude: 7, weaponId: 'talons', modelId: 'm-eagle', description: 'Bay, bổ nhào xuống cào.' }),
   U({ id: 'wizard', name: 'Pháp sư', factionId: 'huyen-thoai', role: 'ranged', cost: 700, hp: 120, speed: 3.4, skillIds: ['thien-thach'], weaponId: 'fireball-staff', modelId: 'm-wizard' }),
-  U({ id: 'giant', name: 'Người khổng lồ', factionId: 'huyen-thoai', role: 'melee', cost: 1600, hp: 2500, speed: 3.4, mass: 25, radius: 1.3, height: 4.6, armorClass: 'beast', knockbackResist: 0.7, trampleDamage: 20, skillIds: ['nem-tang-da', 'dam-dat'], weaponId: 'giant-club', modelId: 'm-giant', description: 'Một gậy bay cả hàng.' }),
+  U({ id: 'giant', name: 'Người khổng lồ', factionId: 'huyen-thoai', role: 'melee', cost: 1600, hp: 2500, speed: 3.4, mass: 25, radius: 1.3, height: 9.2, armorClass: 'beast', knockbackResist: 0.7, trampleDamage: 20, skillIds: ['golem-nhay'], weaponId: 'giant-club', modelId: 'm-giant', description: 'Nhảy tới đập xuống, một búa bay cả hàng.' }),
   U({ id: 'dragon', name: 'Rồng lửa', factionId: 'huyen-thoai', role: 'ranged', cost: 5000, hp: 6000, speed: 5, mass: 50, radius: 3, height: 3, armorClass: 'beast', flying: true, altitude: 9, knockbackResist: 0.95, skillIds: ['mua-thien-thach'], weaponId: 'dragon-breath', modelId: 'm-dragon', description: 'Phun lửa từ trên cao.' }),
   U({ id: 'baby-dragon', name: 'Rồng Xanh', factionId: 'huyen-thoai', role: 'ranged', cost: 1200, hp: 1400, speed: 5.5, mass: 8, radius: 1.4, height: 2.4, armorClass: 'beast', flying: true, altitude: 6, knockbackResist: 0.6, weaponId: 'baby-dragon-breath', modelId: 'm-baby-dragon', description: 'Rồng con mập ú, bay thấp phun lửa thiêu cả nhóm.' }),
   U({ id: 'raptor', name: 'Khủng long Raptor', factionId: 'huyen-thoai', role: 'melee', cost: 380, hp: 260, speed: 6.4, mass: 1.4, radius: 0.9, height: 2, armorClass: 'beast', chargeBonus: 1.6, knockbackResist: 0.15, weaponId: 'raptor-bite', modelId: 'm-raptor', description: 'Săn theo bầy, lao vào cắn xé cực nhanh.' }),
@@ -266,13 +274,13 @@ const units: UnitDef[] = [
   S({ id: 'nha-chinh', name: 'Nhà chính', structure: 'core', siegeSide: 'defense', cost: 50, hp: 6000, radius: 3.2, height: 9, weaponId: 'keep-arrows', modelId: 'm-keep', unlockCost: 0, description: 'Bắt buộc có 1. Bị phá là phe thủ thua.' }),
 ];
 
-const A = (a: Omit<AssetDef, 'scale' | 'seed' | 'sculpt' | 'glb'> & Partial<Pick<AssetDef, 'scale' | 'seed' | 'sculpt' | 'glb'>>): AssetDef => ({ scale: 1, seed: 1, sculpt: null, glb: null, ...a });
+const A = (a: Omit<AssetDef, 'scale' | 'seed' | 'glb'> & Partial<Pick<AssetDef, 'scale' | 'seed' | 'glb'>>): AssetDef => ({ scale: 1, seed: 1, glb: null, ...a });
 
 const assets: AssetDef[] = [
-  A({ id: 'm-clubber', name: 'Chiến binh gậy', kind: 'humanoid', params: { skin: '#e2a878', shirt: '#8a5a2b', pants: '#6b4424', armor: 'loincloth', armorColor: '#a8743c', hair: 'short', hairColor: '#2a1a10', weapon: 'club' } }),
+  A({ id: 'm-clubber', name: 'Lính cận chiến', kind: 'humanoid', scale: 0.9, params: { skin: '#e2a878', shirt: '#8a5a2b', pants: '#6b4424', armor: 'loincloth', armorColor: '#a8743c', hair: 'short', hairColor: '#2a1a10', weapon: 'club' }, glb: { url: '/models/linh-melee.glb', fileName: 'linh-melee.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-protector', name: 'Khiên bộ lạc', kind: 'humanoid', params: { skin: '#e2a878', shirt: '#7a4a24', pants: '#5a3a1e', armor: 'fur', armorColor: '#9a7048', head: 'headband', headColor: '#c8692f', hair: 'long', weapon: 'club', offhand: 'shield-round', shieldColor: '#a0672e' } }),
   A({ id: 'm-spear-thrower', name: 'Người ném lao', kind: 'humanoid', params: { skin: '#d99a6c', shirt: '#9a6a3a', armor: 'loincloth', armorColor: '#c8692f', head: 'headband', headColor: '#d8323a', hair: 'long', weapon: 'spear' } }),
-  A({ id: 'm-stoner', name: 'Người ném đá', kind: 'humanoid', params: { skin: '#e2a878', shirt: '#8a6a44', armor: 'loincloth', hair: 'mohawk', hairColor: '#c8692f', weapon: 'stone' } }),
+  A({ id: 'm-stoner', name: 'Người ném đá', kind: 'humanoid', params: { skin: '#e2a878', shirt: '#8a6a44', armor: 'loincloth', hair: 'mohawk', hairColor: '#c8692f', weapon: 'stone' }, scale: 0.9, glb: { url: '/models/linh-melee.glb', fileName: 'linh-melee.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-chieftain', name: 'Tù trưởng', kind: 'humanoid', scale: 1.15, params: { bulk: 1.3, skin: '#d99a6c', shirt: '#6b3a1e', armor: 'fur', armorColor: '#e8dcc0', head: 'headband', headColor: '#f2c230', hair: 'long', hairColor: '#1a1008', beard: 'long', cape: true, capeColor: '#7a2a10', weapon: 'axe' } }),
   A({ id: 'm-squire', name: 'Cận vệ', kind: 'humanoid', params: { shirt: '#3b6fd6', pants: '#3a3a4a', armor: 'vest', armorColor: '#c8cdd4', head: 'helmet', headColor: '#aab2bc', weapon: 'sword', offhand: 'shield-kite', shieldColor: '#2f5fb3' } }),
   A({ id: 'm-archer', name: 'Cung thủ', kind: 'humanoid', params: { shirt: '#2f7a3a', pants: '#4a3b2a', head: 'hood', headColor: '#2f6a34', hair: 'short', weapon: 'bow' } }),
@@ -285,10 +293,10 @@ const assets: AssetDef[] = [
   A({ id: 'm-fire-archer', name: 'Hỏa tiễn thủ', kind: 'humanoid', params: { shirt: '#d23c3c', pants: '#3a2a2a', head: 'strawhat', headColor: '#d8b25a', hair: 'short', weapon: 'bow' }, glb: { url: '/models/hoa-tien-thu.glb', fileName: 'hoa tien thu.glb', uploadedAt: 0, tint: {}, hide: ['Revolver', 'Revolver_Small', 'Pistol', 'GrenadeLauncher', 'ShortCannon', 'Shotgun', 'Sniper_2', 'Sniper', 'SMG', 'AK', 'Shovel', 'Knife_1', 'Knife_2'] } }),
   A({ id: 'm-archer-east', name: 'Cung thủ trên voi', kind: 'humanoid', params: { shirt: '#d23c3c', pants: '#3a2a2a', head: 'headband', headColor: '#f2c230', weapon: 'bow' } }),
   A({ id: 'm-wizard', name: 'Pháp sư', kind: 'humanoid', scale: 0.9, params: { shirt: '#4a2a8a', armor: 'robe', armorColor: '#4a2a8a', head: 'wizard', headColor: '#3a2070', hair: 'long', hairColor: '#e8e8e8', beard: 'long', weapon: 'staff', orbColor: '#ff7a1a' }, glb: { url: '/models/phap-su.glb', fileName: 'phap su.glb', uploadedAt: 0, tint: { Wizard_Texture: { from: '#2e44a8', to: '#4a2a8a' } }, hide: [] } }),
-  A({ id: 'm-giant', name: 'Người khổng lồ', kind: 'humanoid', scale: 2.5, params: { bulk: 1.4, skin: '#c9a27a', shirt: '#7a6a4a', pants: '#5a4a32', armor: 'loincloth', armorColor: '#6b4424', hair: 'none', beard: 'short', hairColor: '#4a3020', weapon: 'bigclub' } }),
+  A({ id: 'm-giant', name: 'Người khổng lồ', kind: 'humanoid', scale: 4.6, params: { bulk: 1.4, skin: '#c9a27a', shirt: '#7a6a4a', pants: '#5a4a32', armor: 'loincloth', armorColor: '#6b4424', hair: 'none', beard: 'short', hairColor: '#4a3020', weapon: 'bigclub' }, glb: { url: '/models/giant-golem.glb', fileName: 'giant-golem.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-warhorse', name: 'Chiến mã', kind: 'horse', params: { coat: '#6b4226', mane: '#1e140c', barding: true, bardingColor: '#2f5fb3' } }),
-  A({ id: 'm-mammoth', name: 'Voi ma mút', kind: 'elephant', scale: 0.55, params: { skin: '#8c9591', fur: true, tusks: true, tuskColor: '#f1ead8', howdah: false }, glb: { url: '/models/voi.glb', fileName: 'voi.glb', uploadedAt: 0, tint: {}, hide: [] } }),
-  A({ id: 'm-war-elephant', name: 'Chiến tượng', kind: 'elephant', scale: 0.5, params: { skin: '#8d8f96', tusks: true, howdah: false, blanket: '#d23c3c' }, glb: { url: '/models/voi.glb', fileName: 'voi.glb', uploadedAt: 0, tint: {}, hide: [] } }),
+  A({ id: 'm-mammoth', name: 'Voi ma mút', kind: 'elephant', scale: 2.1, params: { skin: '#8c9591', fur: true, tusks: true, tuskColor: '#f1ead8', howdah: false }, glb: { url: '/models/voi-mamut.glb', fileName: 'voi-mamut.glb', uploadedAt: 0, tint: {}, hide: [] } }),
+  A({ id: 'm-war-elephant', name: 'Chiến tượng', kind: 'elephant', scale: 2, params: { skin: '#8d8f96', tusks: true, howdah: false, blanket: '#d23c3c' }, glb: { url: '/models/voi-trang.glb', fileName: 'voi-trang.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-eagle', name: 'Đại bàng', kind: 'bird', scale: 1.4, params: {} }),
   A({ id: 'm-raptor', name: 'Khủng long Raptor', kind: 'raptor', params: { body: '#5f9e4d', belly: '#d9cf9e', back: '#3c6e35', eye: '#ffd23f' }, glb: { url: '/models/velociraptor.glb', fileName: 'Velociraptor by Quaternius.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-t-rex', name: 'Khủng long T-Rex', kind: 'raptor', scale: 2.6, params: { body: '#8a6a4a', belly: '#d9c49a', back: '#5a422a', eye: '#ffd23f' }, glb: { url: '/models/t-rex.glb', fileName: 'T-Rex by Quaternius.glb', uploadedAt: 0, tint: {}, hide: [] } }),
@@ -329,7 +337,8 @@ const assets: AssetDef[] = [
 ];
 
 const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef => ({
-  size: 140,
+  size: 70,
+  shape: 'square',
   heightScale: 3,
   hilliness: 1,
   river: { enabled: false, width: 8, meander: 10, ford: 0 },
@@ -344,7 +353,7 @@ const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef =>
   skyTop: '#5aa8f0',
   skyBottom: '#d6ecff',
   fog: 0.25,
-  deployDepth: 28,
+  deployDepth: 20,
   defenseDepth: 0,
   budget: 3000,
   ...m,
@@ -352,14 +361,16 @@ const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef =>
 
 const maps: MapDef[] = [
   M({ id: 'dong-co', name: 'Đồng cỏ', seed: 1234, trees: { perHectare: 12, kinds: ['tree-oak', 'tree-birch'] }, bushes: { perHectare: 30, kinds: ['bush-green', 'bush-berry'] } }),
-  M({ id: 'song-xanh', name: 'Dòng sông', seed: 777, size: 150, heightScale: 3.5, river: { enabled: true, width: 9, meander: 12, ford: 0 }, trees: { perHectare: 16, kinds: ['tree-oak', 'tree-pine'] }, rocks: { perHectare: 10, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 30, kinds: ['bush-green'] }, grassColor: '#62a34a', budget: 4000 }),
+  M({ id: 'song-xanh', name: 'Dòng sông', seed: 777, size: 75, heightScale: 3.5, river: { enabled: true, width: 9, meander: 12, ford: 0 }, trees: { perHectare: 16, kinds: ['tree-oak', 'tree-pine'] }, rocks: { perHectare: 10, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 30, kinds: ['bush-green'] }, grassColor: '#62a34a', budget: 4000 }),
   M({ id: 'rung-thong', name: 'Rừng thông', seed: 4242, heightScale: 5, hilliness: 1.4, trees: { perHectare: 55, kinds: ['tree-pine'] }, rocks: { perHectare: 12, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 20, kinds: ['bush-green'] }, grassColor: '#4f8f45', skyTop: '#6a9ccc', skyBottom: '#dfe9ef', fog: 0.45, budget: 5000 }),
   // ---- made for sieges (the red side has room for a castle)
-  M({ id: 'thanh-tren-doi', name: 'Thành trên đồi', seed: 3131, size: 150, heightScale: 2.2, hilliness: 0.9, rise: 9, trees: { perHectare: 6, kinds: ['tree-oak', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 18, kinds: ['bush-green'] }, grassColor: '#6aa84a', defenseDepth: 56, budget: 5000 }),
-  M({ id: 'deo-song', name: 'Đèo sông', seed: 5150, size: 160, heightScale: 3, hilliness: 1.1, river: { enabled: true, width: 11, meander: 4, ford: 14 }, trees: { perHectare: 12, kinds: ['tree-pine', 'tree-oak'] }, rocks: { perHectare: 12, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 20, kinds: ['bush-green'] }, grassColor: '#5e9e48', defenseDepth: 50, budget: 5000 }),
-  M({ id: 'thanh-sa-mac', name: 'Thành sa mạc', seed: 7272, size: 160, heightScale: 1.5, hilliness: 0.6, trees: { perHectare: 2, kinds: ['tree-palm', 'tree-cactus'] }, rocks: { perHectare: 4, kinds: ['rock-sand'] }, bushes: { perHectare: 4, kinds: ['bush-dry'] }, grassColor: '#dcbc78', dirtColor: '#c29a58', sandColor: '#ecd9a4', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.15, defenseDepth: 58, budget: 6000 }),
-  M({ id: 'thanh-tuyet', name: 'Thành tuyết', seed: 8484, size: 150, heightScale: 4, hilliness: 1.2, trees: { perHectare: 22, kinds: ['tree-snow', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray'] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#e8eef2', dirtColor: '#9aa3ad', sandColor: '#cfd8df', waterColor: '#6fa8c8', skyTop: '#9fb4c8', skyBottom: '#eef3f7', fog: 0.6, defenseDepth: 54, budget: 5000 }),
-  M({ id: 'sa-mac', name: 'Sa mạc', seed: 9001, size: 160, heightScale: 4, hilliness: 0.8, trees: { perHectare: 6, kinds: ['tree-palm', 'tree-cactus'] }, rocks: { perHectare: 14, kinds: ['rock-sand'] }, bushes: { perHectare: 8, kinds: ['bush-dry'] }, grassColor: '#d8b870', dirtColor: '#c29a58', sandColor: '#e8d39a', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.2, budget: 6000 }),
+  M({ id: 'thanh-tren-doi', name: 'Thành trên đồi', seed: 3131, size: 75, heightScale: 2.2, hilliness: 0.9, rise: 9, trees: { perHectare: 6, kinds: ['tree-oak', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 18, kinds: ['bush-green'] }, grassColor: '#6aa84a', defenseDepth: 28, budget: 5000 }),
+  M({ id: 'deo-song', name: 'Đèo sông', seed: 5150, size: 80, heightScale: 3, hilliness: 1.1, river: { enabled: true, width: 11, meander: 4, ford: 14 }, trees: { perHectare: 12, kinds: ['tree-pine', 'tree-oak'] }, rocks: { perHectare: 12, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 20, kinds: ['bush-green'] }, grassColor: '#5e9e48', defenseDepth: 25, budget: 5000 }),
+  M({ id: 'thanh-sa-mac', name: 'Thành sa mạc', seed: 7272, size: 80, heightScale: 1.5, hilliness: 0.6, trees: { perHectare: 2, kinds: ['tree-palm', 'tree-cactus'] }, rocks: { perHectare: 4, kinds: ['rock-sand'] }, bushes: { perHectare: 4, kinds: ['bush-dry'] }, grassColor: '#dcbc78', dirtColor: '#c29a58', sandColor: '#ecd9a4', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.15, defenseDepth: 29, budget: 6000 }),
+  M({ id: 'thanh-tuyet', name: 'Thành tuyết', seed: 8484, size: 75, heightScale: 4, hilliness: 1.2, trees: { perHectare: 22, kinds: ['tree-snow', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray'] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#e8eef2', dirtColor: '#9aa3ad', sandColor: '#cfd8df', waterColor: '#6fa8c8', skyTop: '#9fb4c8', skyBottom: '#eef3f7', fog: 0.6, defenseDepth: 27, budget: 5000 }),
+  // Small floating island for close combat (TABS style).
+  M({ id: 'mini-map', name: 'Mini map', seed: 2468, size: 60, shape: 'island', heightScale: 1.6, hilliness: 0.8, trees: { perHectare: 14, kinds: ['tree-oak', 'tree-birch'] }, rocks: { perHectare: 8, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 30, kinds: ['bush-green', 'bush-berry'] }, grassColor: '#9cc45c', dirtColor: '#8c7358', sandColor: '#d9cf9a', waterColor: '#5fc6bd', skyTop: '#8ec5e6', skyBottom: '#c4e2ee', fog: 0.05, deployDepth: 10, defenseDepth: 20 }),
+  M({ id: 'sa-mac', name: 'Sa mạc', seed: 9001, size: 80, heightScale: 4, hilliness: 0.8, trees: { perHectare: 6, kinds: ['tree-palm', 'tree-cactus'] }, rocks: { perHectare: 14, kinds: ['rock-sand'] }, bushes: { perHectare: 8, kinds: ['bush-dry'] }, grassColor: '#d8b870', dirtColor: '#c29a58', sandColor: '#e8d39a', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.2, budget: 6000 }),
 ];
 
 const bots: BotDef[] = [

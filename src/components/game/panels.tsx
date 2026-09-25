@@ -1,15 +1,16 @@
 'use client';
 
-import { ArrowLeft, ArrowRight, Castle, ChevronRight, Eye, Flame, Glasses, MapIcon, Pause, PersonStanding, Play, SkipForward, Square, Star, Swords, Timer, User, Volume2, VolumeX, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Castle, ChevronRight, Flame, Star, Swords, Timer, User } from 'lucide-react';
 import Link from 'next/link';
+import GameControlIcon from '@/components/ui/GameControlIcon';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import type { RoomSettings, RoomState } from '@/shared/net';
-import { levelBudget, playerLevel, type PlayerState } from '@/shared/economy';
+import { playerLevel, type PlayerState } from '@/shared/economy';
 import { ALL_SIDES, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import type { BattleStats, ViewState } from '@/game/render/engine';
-import type { ViewMode } from '@/game/render/unitView';
+import { followsUnit, type ViewMode } from '@/game/render/unitView';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export const SIDE_NAME: Record<Side, string> = { blue: 'Blue', red: 'Red', green: 'Green', yellow: 'Yellow' };
@@ -191,7 +192,7 @@ export function SetupPanel(props: {
   const modeTitle = mode === 'bot' ? t('modes.botTitle') : t('modes.localTitle');
   const lv = playerLevel(props.player?.xp ?? 0, bundle.settings.economy);
   return (
-    <div className="panel pointer-events-auto m-auto flex max-h-full w-[min(760px,94vw)] flex-col gap-2 overflow-y-auto overscroll-contain p-3 touch-pan-y sm:max-h-[88vh] sm:gap-3 sm:p-4">
+    <div className="panel glass-popup pointer-events-auto m-auto flex max-h-full w-[min(760px,94vw)] flex-col gap-2 overflow-y-auto overscroll-contain p-3 touch-pan-y sm:max-h-[88vh] sm:gap-3 sm:p-4">
       <h2 className="font-display text-2xl">{modeTitle}</h2>
       <section>
         <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{locale === 'vi' ? 'Chế độ' : 'Mode'}</h3>
@@ -219,9 +220,7 @@ export function SetupPanel(props: {
         </div>
       </section>
       <section className="flex items-center gap-2 sm:gap-3">
-        <h3 className="shrink-0 text-sm font-extrabold uppercase opacity-70">{t('game.budget')}</h3>
-        <span className="font-display text-lg tabular-nums">{levelBudget(lv.level, bundle.settings.economy)}</span>
-        <span className="min-w-0 flex-1 text-xs opacity-70">
+        <span className="min-w-0 flex-1 text-xs font-bold opacity-70">
           {t('game.level')} {lv.level}
           {lv.need > 0 && ` · ${lv.into}/${lv.need} XP`}
         </span>
@@ -413,12 +412,12 @@ export function HelpHint({ text, className = '' }: { text: string; className?: s
   return (
     <div className={`pointer-events-auto relative shrink-0 ${className}`}>
       <button
-        className="panel flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base opacity-70 hover:opacity-100"
+        className="btn btn-icon"
         onClick={() => setOpen((o) => !o)}
         title="Hướng dẫn điều khiển"
         aria-label="Hướng dẫn điều khiển"
       >
-        ?
+        <GameControlIcon name="help" />
       </button>
       {open && <div className="panel absolute bottom-9 left-0 z-10 w-60 max-w-[calc(100vw-2rem)] break-words p-2 text-xs leading-tight">{text}</div>}
     </div>
@@ -485,52 +484,53 @@ export function BattleHud(props: {
           ))}
         </div>
       </div>
-      <div className="panel pointer-events-auto absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 flex max-h-[28vh] max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 overflow-y-auto overscroll-contain p-1 sm:bottom-3 sm:max-h-none sm:overflow-visible">
+      <div className="battle-controls panel pointer-events-auto absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 flex max-h-[28vh] max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 overflow-y-auto overscroll-contain p-1 sm:bottom-3 sm:max-h-none sm:overflow-visible">
         <HelpHint text="Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE · V: đổi góc nhìn · N: lính kế · Bấm vào lính để theo lính đó" />
         {VIEW_BUTTONS.map((b) => (
           <button key={b.mode} className={`btn btn-icon ${props.view.mode === b.mode ? 'btn-gold' : ''}`} onClick={() => props.onView(b.mode)} title={b.title} aria-label={b.label}>
-            <b.icon />
+            <GameControlIcon name={b.mode} />
           </button>
         ))}
-        {props.view.mode !== 'overview' && (
+        {followsUnit(props.view.mode) && (
           <button className="btn btn-icon" onClick={props.onNextUnit} title={`Theo lính kế tiếp (N)${props.view.unit ? ` · đang theo: ${props.view.unit}` : ''}`} aria-label="Lính kế">
-            <SkipForward />
+            <GameControlIcon name="next" />
           </button>
         )}
         {props.onVR && (
           <button className={`btn btn-icon ${props.view.vr ? 'btn-gold' : ''}`} onClick={props.onVR} title={props.view.vr ? 'Thoát VR' : 'Chơi bằng kính VR (Quest)'} aria-label="VR">
-            <Glasses />
+            <GameControlIcon name="vr" />
           </button>
         )}
         <div className="mx-0.5 h-6 w-px shrink-0 bg-ink/15" />
         <button className={`btn btn-icon ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title="Bật/tắt âm thanh">
-          {props.muted ? <VolumeX /> : <Volume2 />}
+          <GameControlIcon name={props.muted ? 'muted' : 'sound'} />
         </button>
         {props.onPause && (
           <button className={`btn btn-icon ${props.paused ? 'btn-gold' : ''}`} onClick={props.onPause} title="Space">
-            {props.paused ? <Play /> : <Pause />}
+            <GameControlIcon name={props.paused ? 'play' : 'pause'} />
           </button>
         )}
         {props.onSpeed &&
-          [0.25, 1, 2, 4].map((s, i) => (
+          [1, 2].map((s, i) => (
             <button key={s} className={`btn btn-icon text-xs ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed?.(s)} title={`${s}× · Phím ${i + 1}`}>
-              {s === 0.25 ? '¼' : s}×
+              {s}×
             </button>
           ))}
         <div className="mx-0.5 h-6 w-px shrink-0 bg-ink/15" />
         <button className="btn btn-icon btn-red" onClick={props.onStop} title={props.stopLabel} aria-label={props.stopLabel}>
-          <Square />
+          <GameControlIcon name="stop" />
         </button>
       </div>
     </>
   );
 }
 
-const VIEW_BUTTONS: { mode: ViewMode; icon: LucideIcon; label: string; title: string }[] = [
-  { mode: 'overview', icon: MapIcon, label: 'Toàn cảnh', title: 'Toàn cảnh (V)' },
-  { mode: 'third', icon: User, label: 'Sau lưng', title: 'Góc nhìn thứ 3: đứng sau lưng lính (V)' },
-  { mode: 'first', icon: Eye, label: 'Mắt lính', title: 'Góc nhìn thứ 1: nhìn bằng mắt lính (V)' },
-  { mode: 'second', icon: PersonStanding, label: 'Trước mặt', title: 'Góc nhìn thứ 2: đứng trước mặt lính, nhìn nó lao tới (V)' },
+const VIEW_BUTTONS: { mode: ViewMode; label: string; title: string }[] = [
+  { mode: 'overview', label: 'Toàn cảnh', title: 'Toàn cảnh (V)' },
+  { mode: 'side', label: 'Nhìn ngang', title: 'Nhìn ngang: địch bên trái, quân ta bên phải (V)' },
+  { mode: 'third', label: 'Sau lưng', title: 'Góc nhìn thứ 3: đứng sau lưng lính (V)' },
+  { mode: 'first', label: 'Mắt lính', title: 'Góc nhìn thứ 1: nhìn bằng mắt lính (V)' },
+  { mode: 'second', label: 'Trước mặt', title: 'Góc nhìn thứ 2: đứng trước mặt lính, nhìn nó lao tới (V)' },
 ];
 
 function TeamBar({ side, alive, total, flip }: { side: Side; alive: number; total: number; flip: boolean }) {
@@ -554,8 +554,8 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
   return (
     <div className="pointer-events-auto absolute inset-0 flex items-center justify-center overflow-y-auto bg-ink/45 p-3 overscroll-contain">
       <div className="panel flex max-h-[92dvh] w-[min(420px,92vw)] flex-col items-center gap-3 overflow-y-auto overscroll-contain p-6 text-center">
-        <div className={`font-display text-3xl break-words sm:text-4xl ${color}`}>{title}</div>
-        <p className="text-sm opacity-80">
+        <div className={`result-title font-display text-3xl break-words sm:text-4xl ${color}`}>{title}</div>
+        <p className="result-description text-sm">
           {result.reason === 'surrender'
             ? props.mySide && result.winner === props.mySide
               ? 'Đối thủ đã dừng trận!'

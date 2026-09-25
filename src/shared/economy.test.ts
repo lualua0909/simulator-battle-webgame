@@ -227,3 +227,14 @@ test('online battles give XP by outcome, none when too short', () => {
   assert.equal(pvpXp('draw', long, economy), economy.xpPvpDraw);
   assert.equal(pvpXp('win', long - 1, economy), 0);
 });
+
+test('the Sunday daily claim opens 3 boxes and credits their totals', () => {
+  const sunday = MORNING + 6 * 24 * HOUR;
+  const { state, reward } = openBox(emptyPlayer(), 'daily', SEED.units, economy, sunday, random());
+  assert.equal(reward?.boxes?.length, 3);
+  assert.equal(reward?.coins, reward?.boxes?.reduce((s, b) => s + b.coins, 0));
+  assert.equal(state.coins, emptyPlayer().coins + (reward?.coins ?? 0));
+  const cardTotal = (r: { cards: Array<{ count: number }> }) => r.cards.reduce((s, c) => s + c.count, 0);
+  assert.equal(cardTotal(reward!), 3 * economy.dailyBox.cards);
+  assert.equal(openBox(emptyPlayer(), 'daily', SEED.units, economy, MORNING, random()).reward?.boxes, undefined);
+});

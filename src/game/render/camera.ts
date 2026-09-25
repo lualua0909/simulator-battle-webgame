@@ -1,7 +1,7 @@
 // RTS camera tuned for mouse, trackpad and touch:
 //   wheel / pinch                 zoom toward the cursor, proportional to the scroll amount
-//   right-drag                    orbit (yaw) + tilt around the screen centre
-//   middle-drag, Shift+right-drag grab-pan: the ground point under the cursor sticks to it
+//   right button                  ignored (does not move the camera)
+//   middle-drag                   grab-pan: the ground point under the cursor sticks to it
 //   left-drag when `leftPan`      grab-pan too (whenever the left button is not placing units)
 //   one-finger drag               grab-pan; two fingers pinch to zoom, twist to orbit, drag to pan
 //   WASD / arrows pan, Q/E rotate.
@@ -94,6 +94,8 @@ export class RtsCamera {
   onInput: ((e: CameraInput) => boolean) | null = null;
   /** Pitch the auto-director asks for (null = the pitch that follows the zoom distance). */
   autoPitch: number | null = null;
+  /** Yaw the camera is held at (null = free): Q/E, drag and twist no longer turn it. */
+  lockYaw: number | null = null;
   private panWithLeft = false;
   private tilt = 0;
   private readonly goal = { yaw: this.yaw, distance: this.distance, target: new THREE.Vector3() };
@@ -145,8 +147,8 @@ export class RtsCamera {
           return;
         }
       }
-      const pan = e.button === 1 || (e.button === 2 && e.shiftKey) || (e.button === 0 && this.panWithLeft);
-      if (!pan && e.button !== 2) return;
+      const pan = e.button === 1 || (e.button === 0 && this.panWithLeft);
+      if (!pan) return;
       this.spin = 0;
       this.onInput?.({ kind: pan ? 'pan' : 'orbit' });
       this.drag = { mode: pan ? 'pan' : 'orbit', x: e.clientX, y: e.clientY, grab: pan ? this.groundUnder(e.clientX, e.clientY)?.clone() ?? null : null };
@@ -228,7 +230,8 @@ export class RtsCamera {
   setTerrain(terrain: Terrain): void {
     this.terrain = terrain;
     // Zoomed all the way out the map just fills the frame — no further.
-    this.maxDistance = Math.max(70, terrain.size * 1.05);
+    // An island may be zoomed out further, to see it floating whole.
+    this.maxDistance = Math.max(70, terrain.size * (terrain.island ? 1.8 : 1.05));
     this.goal.target.set(0, 0, 0);
     this.setView(Math.PI, 0.8, terrain.size * 0.55);
   }
@@ -383,6 +386,7 @@ export class RtsCamera {
       if (k.has('e')) this.goal.yaw -= dt * 1.4;
     }
     this.goal.yaw += this.spin * dt;
+    if (this.lockYaw !== null) this.goal.yaw = this.yaw + angleDiff(this.lockYaw, this.yaw);
     this.clampTargets();
     if (this.terrain) this.goal.target.y = this.terrain.height(this.goal.target.x, this.goal.target.z);
     // Rotation settles fast (direct feel); zoom/moves glide a little longer.

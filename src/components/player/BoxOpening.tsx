@@ -1,113 +1,56 @@
 'use client';
 
-// Full-screen box opening: the chest hops while waiting for a tap, rattles while the server rolls
-// the rewards, bursts open, then the coins and unit cards pop out one by one.
-import { useEffect, useState } from 'react';
+// Box opening via the Rive prize-reveal modal (box_prize_reveal_modal_v25.riv): claims the box on
+// the server as soon as it mounts, then hands the rolled reward to RiveBoxReveal. `tier` (6…10)
+// picks the chest rarity inside the file (its `tierNum` key).
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { BoxReward, PlayerAction } from '@/shared/economy';
-import { formatCoins } from '@/shared/economy';
-import type { ChestVariant, ConfigBundle } from '@/shared/schema';
-import ChestStage, { type ChestMode } from './ChestStage';
-import { CoinIcon } from './icons';
-import { CoinBar } from './PlayerHud';
+import type { ConfigBundle } from '@/shared/schema';
 import { usePlayer } from './PlayerProvider';
-import UnitCard from './UnitCard';
+import RiveBoxReveal from './RiveBoxReveal';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface Props {
   bundle: ConfigBundle;
   action: PlayerAction;
   title: string;
-  chest: ChestVariant;
+  /** Rive `tierNum`: 6 (base) … 10 (rarest). */
+  tier: number;
   thumbs: Record<string, string>;
   onClose(): void;
 }
 
-export default function BoxOpening({ bundle, action, title, chest, thumbs, onClose }: Props) {
-  const { t, locale } = useLanguage();
-  const { player, act } = usePlayer();
-  const [mode, setMode] = useState<ChestMode>('idle');
+export default function BoxOpening({ bundle, action, title, tier, thumbs, onClose }: Props) {
+  const { locale } = useLanguage();
+  const { act } = usePlayer();
   const [reward, setReward] = useState<BoxReward | null>(null);
-  const [revealed, setRevealed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const started = useRef(false);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && mode !== 'shake' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [mode, onClose]);
-
-  // Lock the page behind the full-screen modal so only the box scrolls on mobile.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    // Once per mount (StrictMode re-runs effects): a second claim would be refused or double-spend.
+    if (started.current) return;
+    started.current = true;
+    act(action)
+      .then((res) => (res.reward ? setReward(res.reward) : setError(locale === 'vi' ? 'Không mở được hộp' : 'Could not open the box')))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const open = async () => {
-    if (mode !== 'idle') return;
-    setError(null);
-    setMode('shake');
-    // Let the rattle read even when the server answers instantly.
-    const [result] = await Promise.allSettled([act(action), new Promise((r) => setTimeout(r, 700))]);
-    if (result.status === 'fulfilled' && result.value.reward) {
-      setReward(result.value.reward);
-      setMode('open');
-    } else {
-      setError(result.status === 'rejected' ? (result.reason as Error).message : locale === 'vi' ? 'Không mở được hộp' : 'Could not open the box');
-      setMode('idle');
-    }
-  };
-
-  const units = new Map(bundle.units.map((u) => [u.id, u]));
-  const factions = new Map(bundle.factions.map((f) => [f.id, f]));
+  if (reward) return <RiveBoxReveal bundle={bundle} thumbs={thumbs} tier={tier} reward={reward} label={title} onClose={onClose} />;
 
   return createPortal(
-    <div className="game-ui box-backdrop fixed inset-0 z-50 flex flex-col items-center overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
-      <div className="absolute right-3 top-3 sm:right-7">
-        <CoinBar value={player?.coins ?? 0} />
-      </div>
-      <h2 className="text-outline mt-14 break-words px-2 text-center text-3xl sm:mt-2 sm:text-4xl">{title}</h2>
-      <div className={`relative w-full max-w-xl shrink-0 ${revealed ? 'h-[32vh]' : 'h-[56vh]'} transition-[height] duration-500`}>
-        <ChestStage variant={chest} mode={mode} onOpened={() => setRevealed(true)} />
-        {mode === 'idle' && <button className="absolute inset-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold" aria-label={locale === 'vi' ? 'Mở hộp' : 'Open box'} onClick={() => void open()} />}
-      </div>
-      {mode === 'idle' && (
-        <div className="flex flex-col items-center gap-3">
-          <button className="btn btn-gold animate-bounce px-8 py-3 text-2xl" onClick={() => void open()}>
-            {t('box.tapToOpen')}
+    <div className="game-ui fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/60 px-4" role="dialog" aria-label={title}>
+      {error ? (
+        <>
+          <p className="rounded-lg bg-white/90 px-3 py-1 text-red-team">{error}</p>
+          <button className="btn btn-gold px-8 py-2 text-xl" onClick={onClose}>
+            {locale === 'vi' ? 'Đóng' : 'Close'}
           </button>
-          {error && <p className="rounded-lg bg-white/90 px-3 py-1 text-red-team">{error}</p>}
-          <button className="text-outline underline" onClick={onClose}>
-            {locale === 'vi' ? 'Để sau' : 'Later'}
-          </button>
-        </div>
-      )}
-      {mode === 'shake' && <p className="text-outline text-2xl">{t('box.opening')}</p>}
-      {revealed && reward && (
-        <div className="flex w-full max-w-4xl flex-col items-center gap-4">
-          <div className="reward-pop flex items-center gap-2 rounded-2xl border-2 border-[#16181b] bg-[#1d2f55cc] px-5 py-2" style={{ animationDelay: '0ms' }}>
-            <CoinIcon size={40} />
-            <span className="text-outline text-3xl">+{formatCoins(reward.coins)}</span>
-          </div>
-          <div className="flex flex-wrap justify-center gap-4">
-            {reward.cards.map((c, i) => {
-              const unit = units.get(c.unitId);
-              if (!unit) return null;
-              const star = player?.stars[c.unitId] ?? 0;
-              return (
-                <div key={c.unitId} className="reward-pop" style={{ animationDelay: `${200 + i * 220}ms` }}>
-                  <UnitCard unit={unit} thumb={thumbs[c.unitId]} faction={factions.get(unit.factionId)} count={c.count} star={star} width={132} progress={{ have: player?.cards[c.unitId] ?? c.count, need: unit.starCards[star] ?? null }} />
-                </div>
-              );
-            })}
-          </div>
-          <button className="btn btn-gold px-10 py-3 text-2xl" onClick={onClose}>
-            {t('box.claim')}
-          </button>
-        </div>
+        </>
+      ) : (
+        <span className="text-outline animate-pulse text-xl">…</span>
       )}
     </div>,
     document.body,

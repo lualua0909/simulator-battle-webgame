@@ -96,7 +96,6 @@ const vi: UIDict = {
   game: {
     configError: 'Không tải được cấu hình game:',
     random: 'Ngẫu nhiên',
-    budget: 'Ngân sách',
     level: 'Cấp',
     opponent: 'Đối thủ',
     back: 'Quay lại',

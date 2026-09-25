@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { EXAMPLE_HUMANOID_SPEC } from '@/game/sculpt/example';
-import { assetSchema, COLLECTIONS } from '@/shared/schema';
+import { COLLECTIONS } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
 import { parseDoc, toFirestore } from './content';
 
@@ -23,10 +22,8 @@ function nestedArrayPath(value: unknown, path = ''): string | null {
 }
 
 test('every CMS document round-trips through its Firestore encoding', () => {
-  const sculpted = assetSchema.parse({ id: 'sculpted-knight', name: 'Knight', kind: 'humanoid', sculpt: { studioId: 'job1', version: 1, spec: EXAMPLE_HUMANOID_SPEC } });
   for (const c of COLLECTIONS) {
-    const docs = c === 'assets' ? [...SEED.assets, sculpted] : SEED[c];
-    for (const doc of docs) {
+    for (const doc of SEED[c]) {
       const data = toFirestore(c, doc);
       assert.equal(nestedArrayPath(data), null, `${c}/${doc.id} has an array nested in an array`);
       assert.deepEqual(parseDoc(c, doc.id, data), doc, `${c}/${doc.id}`);

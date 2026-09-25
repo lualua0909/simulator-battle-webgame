@@ -3,7 +3,7 @@
 import { ArrowLeft, ArrowRight, Castle, Check, Dices, Flame, LocateFixed, Plus, Swords, Trash2, Undo2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react';
-import { botBoxTier, isUnlocked, playerBudget } from '@/shared/economy';
+import { botBoxTier, boxTierNum, isUnlocked, playerBudget } from '@/shared/economy';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import { useAuth } from '@/components/auth/AuthProvider';
 import BoxOpening from '@/components/player/BoxOpening';
@@ -742,7 +742,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       }
       if (e.key.toLowerCase() === 'v' && phase === 'battle') engine?.cycleView();
       if (e.key.toLowerCase() === 'n' && phase === 'battle') engine?.nextViewUnit();
-      const speedKey = { '1': 0.25, '2': 1, '3': 2, '4': 4 }[e.key];
+      const speedKey = { '1': 1, '2': 2 }[e.key];
       if (speedKey && !online && (phase === 'battle' || phase === 'result')) setSpeed(speedKey);
     };
     window.addEventListener('keydown', onKey);
@@ -838,17 +838,6 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   {SIDE_NAME[mySide]}
                   {defense && <span className="hidden sm:inline">{defense === mySide ? <> · <Castle /> Thủ thành</> : <> · <Flame /> Công thành</>}</span>}
                 </span>
-                <div className="w-36 shrink-0 sm:w-52">
-                  <div className="flex items-baseline justify-between gap-2 text-xs font-bold">
-                    <span className="whitespace-nowrap">Ngân sách</span>
-                    <span className={`whitespace-nowrap tabular-nums ${spent > myBudget ? 'text-red-team' : ''}`}>
-                      {spent}/{myBudget}
-                    </span>
-                  </div>
-                  <div className="h-2.5 overflow-hidden rounded-full border-2 border-ink bg-white">
-                    <div className="h-full bg-gold" style={{ width: `${Math.min(100, (spent / myBudget) * 100)}%` }} />
-                  </div>
-                </div>
                 <span className="text-xs font-bold">
                   {myArmy.length - wallBlocks}/{maxUnits} lính
                   {wallBlocks > 0 && ` · ${wallBlocks} khối tường`}
@@ -999,7 +988,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           bundle={bundle}
           action={{ action: 'bot-win' }}
           title={`Chiến lợi phẩm: ${bot.name}`}
-          chest={botBoxTier(bundle.settings.economy, bot.difficulty).chest}
+          tier={boxTierNum(botBoxTier(bundle.settings.economy, bot.difficulty))}
           thumbs={thumbs}
           onClose={() => setRewardClosed(true)}
         />

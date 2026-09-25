@@ -1,7 +1,6 @@
 // Game content schema — single source of truth for the CMS (validation + forms),
 // the simulation (types) and the online server (army validation).
 import { z } from 'zod';
-import { checkSculptSpec, sculptSpecSchema, type SculptRig } from './sculpt';
 
 export const DAMAGE_TYPES = ['blunt', 'slash', 'pierce', 'fire', 'magic'] as const;
 export const ARMOR_CLASSES = ['unarmored', 'light', 'heavy', 'beast', 'siege'] as const;
@@ -347,7 +346,7 @@ export type TreeParams = z.infer<typeof treeParamsSchema>;
 export type RockParams = z.infer<typeof rockParamsSchema>;
 export type BushParams = z.infer<typeof bushParamsSchema>;
 
-/** Animation rig each asset kind uses; an img2threejs model must match it to replace the asset. */
+/** Animation rig each asset kind uses. */
 export const RIG_OF_KIND = {
   humanoid: 'humanoid',
   horse: 'quadruped',
@@ -360,23 +359,17 @@ export const RIG_OF_KIND = {
   tree: 'static',
   rock: 'static',
   bush: 'static',
-} as const satisfies Record<AssetKind, SculptRig>;
-
-/** img2threejs studio model that replaces the procedural preset (null = procedural). */
-export const assetSculptSchema = z.object({
-  studioId: z.string().max(64),
-  version: z.number().int().min(1),
-  spec: sculptSpecSchema,
-});
+} as const satisfies Record<AssetKind, string>;
 
 /** Asset kinds whose uploaded .glb keeps its skeletal animation (rendered skinned, see models/glbSkinned.ts). */
-export const SKINNED_GLB_KINDS = ['raptor', 'humanoid', 'dragon', 'horse'] as const satisfies readonly AssetKind[];
+export const SKINNED_GLB_KINDS = ['raptor', 'humanoid', 'dragon', 'horse', 'elephant'] as const satisfies readonly AssetKind[];
 /**
  * Asset kinds whose uploaded .glb has no skeleton: baked rigid to one vertex-coloured
  * mesh but mounted on a quadruped `body` pivot (walk bob/lean still apply) with a
- * `saddle` socket so riders keep seating (see models/glbStatic.ts).
+ * `saddle` socket so riders keep seating (see models/glbStatic.ts). Empty now that the
+ * elephant packs ship skeletons (voi-mamut.glb / voi-trang.glb); kept so old static uploads still validate.
  */
-export const RIGID_GLB_KINDS = ['elephant'] as const satisfies readonly AssetKind[];
+export const RIGID_GLB_KINDS = [] as const satisfies readonly AssetKind[];
 /**
  * An admin-uploaded .glb/.gltf that replaces the procedural preset outright. Static-rig kinds
  * are baked to one vertex-coloured mesh; kinds in SKINNED_GLB_KINDS keep their skeletal
@@ -409,7 +402,6 @@ export const assetSchema = z
     scale: z.number().min(0.1).max(10).default(1),
     seed: z.number().int().min(0).max(1_000_000).default(1),
     params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
-    sculpt: assetSculptSchema.nullable().default(null),
     glb: assetGlbSchema.nullable().default(null),
   })
   .superRefine((asset, ctx) => {
@@ -419,17 +411,8 @@ export const assetSchema = z
         ctx.addIssue({ code: 'custom', message: issue.message, path: ['params', ...issue.path.map(String)] });
       }
     }
-    if (asset.sculpt && asset.sculpt.spec.rig !== RIG_OF_KIND[asset.kind]) {
-      ctx.addIssue({ code: 'custom', message: `model img2threejs dùng rig ${asset.sculpt.spec.rig}, asset loại ${asset.kind} cần rig ${RIG_OF_KIND[asset.kind]}`, path: ['sculpt'] });
-    }
-    for (const issue of asset.sculpt ? checkSculptSpec(asset.sculpt.spec) : []) {
-      if (issue.level === 'fail') ctx.addIssue({ code: 'custom', message: issue.message, path: ['sculpt', 'spec'] });
-    }
     if (asset.glb && RIG_OF_KIND[asset.kind] !== 'static' && !(SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind) && !(RIGID_GLB_KINDS as readonly string[]).includes(asset.kind)) {
-      ctx.addIssue({ code: 'custom', message: `upload glb chỉ dùng cho asset tĩnh (rig "static"), ${SKINNED_GLB_KINDS.join(', ')} (giữ animation trong file) hoặc ${RIGID_GLB_KINDS.join(', ')} (bake cứng, giữ chuyển động thân); asset loại ${asset.kind} cần rig ${RIG_OF_KIND[asset.kind]} để hoạt hình`, path: ['glb'] });
-    }
-    if (asset.glb && asset.sculpt) {
-      ctx.addIssue({ code: 'custom', message: 'chỉ chọn một: model img2threejs hoặc glb upload', path: ['glb'] });
+      ctx.addIssue({ code: 'custom', message: `upload glb chỉ dùng cho asset tĩnh (rig "static") hoặc ${SKINNED_GLB_KINDS.join(', ')} (giữ animation trong file); asset loại ${asset.kind} cần rig ${RIG_OF_KIND[asset.kind]} để hoạt hình`, path: ['glb'] });
     }
   });
 
@@ -444,7 +427,9 @@ export const mapSchema = z.object({
   id: idSchema,
   name,
   seed: z.number().int().min(0).max(1_000_000),
-  size: z.number().min(60).max(300).default(140),
+  size: z.number().min(60).max(300).default(70),
+  /** island: a floating island (round playable disc, cliffs, sea below) instead of the square field. */
+  shape: z.enum(['square', 'island']).default('square'),
   heightScale: z.number().min(0).max(20).default(4),
   hilliness: z.number().min(0.2).max(4).default(1),
   river: z.object({
@@ -466,7 +451,7 @@ export const mapSchema = z.object({
   skyTop: hex,
   skyBottom: hex,
   fog: z.number().min(0).max(1).default(0.3),
-  deployDepth: z.number().min(5).max(80).default(28),
+  deployDepth: z.number().min(5).max(80).default(20),
   /** Siege mode: depth of the defenders' zone (0 = deployDepth). */
   defenseDepth: z.number().min(0).max(120).default(0),
   budget: z.number().int().min(100).max(1_000_000).default(3000),
@@ -499,6 +484,8 @@ const boxRewardSchema = z.object({
   /** Cards in the box, shared between `kinds` random units. */
   cards: z.number().int().min(0).max(10_000),
   kinds: z.number().int().min(1).max(20),
+  /** Rive reveal rarity (`tierNum`, 6 = base … 10 = rarest); unset → derived from `chest`. */
+  tierNum: z.preprocess((v) => (v === '' || v === null ? undefined : v), z.number().int().min(6).max(10).optional()),
 });
 
 export const economySchema = z.object({
