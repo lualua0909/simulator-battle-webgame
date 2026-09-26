@@ -28,7 +28,7 @@ export const STRUCTURE_KINDS = ['none', 'wall', 'platform', 'building', 'core'] 
 /** Which side may field a unit in siege mode. */
 export const SIEGE_SIDES = ['any', 'defense', 'attack'] as const;
 /** Looks of the `structure` asset kind (src/game/models/structures.ts). */
-export const STRUCTURE_TYPES = ['wall', 'brick-wall', 'watchtower', 'bow-tower', 'gun-tower', 'tesla', 'barracks', 'keep'] as const;
+export const STRUCTURE_TYPES = ['wall', 'brick-wall', 'bow-tower', 'gun-tower', 'tesla', 'barracks', 'keep'] as const;
 /** Highest star level of an upgraded unit. */
 export const STAR_MAX = 5;
 
@@ -217,7 +217,7 @@ export const humanoidParamsSchema = z.object({
   armor: z.enum(['none', 'vest', 'plate', 'robe', 'loincloth', 'fur']).default('none'),
   armorColor: hex.default('#9aa3ad'),
   head: z
-    .enum(['none', 'cap', 'helmet', 'greathelm', 'horned', 'crown', 'hood', 'wizard', 'headband', 'strawhat', 'ninja'])
+    .enum(['none', 'cap', 'helmet', 'horned', 'hood', 'wizard', 'headband', 'strawhat', 'ninja'])
     .default('none'),
   headColor: hex.default('#8a8f96'),
   hair: z.enum(['none', 'short', 'long', 'mohawk', 'topknot']).default('short'),
@@ -227,7 +227,7 @@ export const humanoidParamsSchema = z.object({
   cape: z.boolean().default(false),
   capeColor: hex.default('#b3262e'),
   weapon: z
-    .enum(['none', 'club', 'bigclub', 'sword', 'greatsword', 'axe', 'spear', 'lance', 'hammer', 'bow', 'staff', 'pitchfork', 'stone', 'musket', 'katana'])
+    .enum(['none', 'club', 'bigclub', 'sword', 'axe', 'spear', 'lance', 'hammer', 'bow', 'staff', 'pitchfork', 'stone', 'musket', 'katana'])
     .default('none'),
   offhand: z.enum(['none', 'shield-round', 'shield-kite', 'buckler']).default('none'),
   woodColor: hex.default('#8a5a2b'),
@@ -261,13 +261,6 @@ export const dragonParamsSchema = z.object({
   wing: hex.default('#7a1c18'),
   horn: hex.default('#f3ead2'),
   eye: hex.default('#ffe34d'),
-});
-
-export const birdParamsSchema = z.object({
-  body: hex.default('#5a3a1e'),
-  wing: hex.default('#3e2714'),
-  head: hex.default('#f4f1e8'),
-  beak: hex.default('#f2b01e'),
 });
 
 export const raptorParamsSchema = z.object({
@@ -325,7 +318,8 @@ export const ASSET_PARAM_SCHEMAS = {
   horse: horseParamsSchema,
   elephant: elephantParamsSchema,
   dragon: dragonParamsSchema,
-  bird: birdParamsSchema,
+  // Retain the persisted kind key; the stingray has no procedural parameters.
+  bird: z.object({}),
   raptor: raptorParamsSchema,
   catapult: catapultParamsSchema,
   structure: structureParamsSchema,
@@ -338,7 +332,6 @@ export type HumanoidParams = z.infer<typeof humanoidParamsSchema>;
 export type HorseParams = z.infer<typeof horseParamsSchema>;
 export type ElephantParams = z.infer<typeof elephantParamsSchema>;
 export type DragonParams = z.infer<typeof dragonParamsSchema>;
-export type BirdParams = z.infer<typeof birdParamsSchema>;
 export type RaptorParams = z.infer<typeof raptorParamsSchema>;
 export type CatapultParams = z.infer<typeof catapultParamsSchema>;
 export type StructureParams = z.infer<typeof structureParamsSchema>;
@@ -352,7 +345,7 @@ export const RIG_OF_KIND = {
   horse: 'quadruped',
   elephant: 'quadruped',
   dragon: 'dragon',
-  bird: 'bird',
+  bird: 'static',
   raptor: 'raptor',
   catapult: 'catapult',
   structure: 'static',
@@ -362,7 +355,7 @@ export const RIG_OF_KIND = {
 } as const satisfies Record<AssetKind, string>;
 
 /** Asset kinds whose uploaded .glb keeps its skeletal animation (rendered skinned, see models/glbSkinned.ts). */
-export const SKINNED_GLB_KINDS = ['raptor', 'humanoid', 'dragon', 'horse', 'elephant'] as const satisfies readonly AssetKind[];
+export const SKINNED_GLB_KINDS = ['raptor', 'humanoid', 'dragon', 'horse', 'elephant', 'bird'] as const satisfies readonly AssetKind[];
 /**
  * Asset kinds whose uploaded .glb has no skeleton: baked rigid to one vertex-coloured
  * mesh but mounted on a quadruped `body` pivot (walk bob/lean still apply) with a

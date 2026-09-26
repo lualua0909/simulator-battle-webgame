@@ -27,11 +27,13 @@ import { bakeModel, type ModelTemplate } from '@/game/models/bake';
 import { createProjectileModel } from '@/game/models/projectiles';
 import { ParticleSystem } from '@/game/render/particles';
 import { createScenery } from '@/game/render/scenery';
-import { createSkirt, createTerrainMesh, createWater, createZoneOverlay } from '@/game/render/terrainMesh';
+import { createWater, createZoneOverlay } from '@/game/render/terrainMesh';
+import { createIsland, createPlateau } from '@/game/render/island';
 import { armyCost } from '@/game/sim/army';
 import { Terrain } from '@/game/sim/terrain';
 import ModelViewer, { type PreviewAnim } from '../ModelViewer';
 import SkinnedModelViewer from '../SkinnedModelViewer';
+import BarracksViewer from '../BarracksViewer';
 import SkillArena from '../SkillArena';
 
 /** Public URL of the file when the draft asset is a skinned kind with an upload, else null. */
@@ -108,6 +110,8 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
   const template = useMemo(() => tryBake(() => createUnitModel(unit, assets)), [unit.modelId, unit.riderModelId, assets]); // eslint-disable-line react-hooks/exhaustive-deps
   const skinUrl = skinnedUrlOf(assets.get(unit.modelId));
   const skinScale = assets.get(unit.modelId)?.scale ?? 1;
+  // Barracks was deleted as procedural code: the unit always previews its fixed GLB.
+  const isBarracks = unit.id === 'nha-linh' || (assets.get(unit.modelId)?.params as Record<string, unknown> | undefined)?.type === 'barracks';
   const weapon = bundle.weapons.find((w) => w.id === unit.weaponId);
   const safe = { ...unit, hp: Number(unit.hp) || 1, cost: Number(unit.cost) || 1, attackSpeed: Number(unit.attackSpeed) || 1, castSpeed: Number(unit.castSpeed) || 1, skillIds: unit.skillIds ?? [] };
   const { dps, ehp } = unitPower(safe, bundle);
@@ -123,7 +127,7 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
       title="Xem trước"
       tools={
         <div className="flex gap-1">
-          {!arena && <AnimButtons anim={anim} setAnim={setAnim} />}
+          {!arena && !isBarracks && <AnimButtons anim={anim} setAnim={setAnim} />}
           <button type="button" className={`btn px-2 py-0.5 text-xs ${arena ? 'btn-gold' : ''}`} onClick={() => setArena((a) => !a)} title="Lính đánh hình nộm bằng đòn cơ bản và kỹ năng (bản nháp chưa lưu)">
             <Swords /> Đấu thử
           </button>
@@ -132,7 +136,9 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
     >
       <div className="h-80 overflow-hidden rounded-lg border-2 border-ink/20">
         {!arena ? (
-          skinUrl ? (
+          isBarracks ? (
+            <BarracksViewer scale={skinScale} />
+          ) : skinUrl ? (
             <SkinnedModelViewer url={skinUrl} scale={skinScale} tint={assets.get(unit.modelId)?.glb?.tint} hide={assets.get(unit.modelId)?.glb?.hide} anim={anim} />
           ) : (
             <ModelViewer template={template} weapon={weapon} anim={anim} />
@@ -174,13 +180,15 @@ export function AssetPreview({ doc }: { doc: Doc }) {
   const env = isEnvKind(String(asset.kind));
   const skinUrl = skinnedUrlOf(asset);
   const skinScale = Number(asset.scale) || 1;
+  // Barracks was deleted as procedural code: the asset always previews its fixed GLB.
+  const isBarracks = String(asset.kind) === 'structure' && ((asset.params as Record<string, unknown> | undefined)?.type === 'barracks' || String(asset.id) === 'm-barracks');
   return (
     <Frame
       title="Xem trước"
       tools={
         <div className="flex items-center gap-2 text-xs">
-          {!env && <AnimButtons anim={anim} setAnim={setAnim} />}
-          {!skinUrl && (
+          {!env && !isBarracks && <AnimButtons anim={anim} setAnim={setAnim} />}
+          {!skinUrl && !isBarracks && (
             <label className="flex items-center gap-1">
               <input type="checkbox" checked={explode} onChange={(e) => setExplode(e.target.checked)} /> Tách rời
             </label>
@@ -189,14 +197,18 @@ export function AssetPreview({ doc }: { doc: Doc }) {
       }
     >
       <div className="h-96 overflow-hidden rounded-lg border-2 border-ink/20">
-        {skinUrl ? (
+        {isBarracks ? (
+          <BarracksViewer scale={skinScale} />
+        ) : skinUrl ? (
           <SkinnedModelViewer url={skinUrl} scale={skinScale} tint={asset.glb?.tint} hide={asset.glb?.hide} anim={anim} />
         ) : (
           <ModelViewer template={template} anim={env ? 'idle' : anim} explode={explode} onPick={setPicked} />
         )}
       </div>
       <p className="text-xs opacity-70">
-        {skinUrl ? (
+        {isBarracks ? (
+          <>model + animation mở cửa từ file /models/nha-linh.glb (code nhà cũ đã xóa)</>
+        ) : skinUrl ? (
           <>model + animation từ file upload {asset.glb ? `(${asset.glb.fileName})` : ''}</>
         ) : (
           <>
@@ -210,7 +222,7 @@ export function AssetPreview({ doc }: { doc: Doc }) {
           </>
         )}
       </p>
-      {!skinUrl && <p className="text-xs opacity-60">Mô hình procedural dựng hoàn toàn bằng code (chuẩn img2threejs, không cần ảnh tham chiếu). Bấm vào mô hình để xem tên bộ phận.</p>}
+      {!skinUrl && !isBarracks && <p className="text-xs opacity-60">Mô hình procedural dựng hoàn toàn bằng code (chuẩn img2threejs, không cần ảnh tham chiếu). Bấm vào mô hình để xem tên bộ phận.</p>}
     </Frame>
   );
 }
@@ -360,7 +372,7 @@ export function ParticlePreview({ doc }: { doc: Doc }) {
         ps.emit(def, 0, 1, 0, { x: 1, y: 0.35, z: 0 });
         next = t + Math.max(0.8, def.lifetime[1] + 0.3);
       }
-      ps.update(dt);
+      ps.update(dt, camera);
       camera.position.set(Math.sin(t * 0.2) * 7, 4, Math.cos(t * 0.2) * 7);
       camera.lookAt(0, 1, 0);
       renderer.render(scene, camera);
@@ -425,7 +437,7 @@ export function MapPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) 
     sc.far = map.size * 3;
     scene.add(sun);
     const water = createWater(terrain);
-    scene.add(createTerrainMesh(terrain), createSkirt(terrain), createScenery(terrain, new Map(bundle.assets.map((a) => [a.id, a]))), createZoneOverlay(terrain, 'blue', '#2f6fe0'), createZoneOverlay(terrain, 'red', '#d8373a'));
+    scene.add(terrain.island ? createIsland(terrain) : createPlateau(terrain), createScenery(terrain, new Map(bundle.assets.map((a) => [a.id, a]))), createZoneOverlay(terrain, 'blue', '#2f6fe0'), createZoneOverlay(terrain, 'red', '#d8373a'));
     if (water) scene.add(water.mesh);
     const camera = new THREE.PerspectiveCamera(45, 1, 1, map.size * 8);
     const resize = () => {

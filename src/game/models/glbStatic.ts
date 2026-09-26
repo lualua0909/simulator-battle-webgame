@@ -11,6 +11,7 @@ import { getGLTFLoader } from './gltfLoader';
 import { SKINNED_GLB_KINDS, RIGID_GLB_KINDS, type AssetDef } from '@/shared/schema';
 import { modelRoot, mesh } from './common';
 import { buildVoiRig } from './voiRig';
+import { BARRACKS_GLB_URL } from './barracksGlb';
 
 interface Baked {
   geometry: THREE.BufferGeometry;
@@ -187,7 +188,7 @@ export function preloadCustomGlbs(assets: ReadonlyArray<Pick<AssetDef, 'glb' | '
     assets
       .filter((a) => !(SKINNED_GLB_KINDS as readonly string[]).includes(a.kind))
       .filter((a) => !(a.kind === 'structure' && ((a.params as Record<string, unknown> | undefined)?.type === 'wall' || (a.params as Record<string, unknown> | undefined)?.type === 'brick-wall')))
-      .map((a) => a.glb?.url)
+      .map((a) => a.kind === 'structure' && (a.params as Record<string, unknown> | undefined)?.type === 'barracks' ? BARRACKS_GLB_URL : a.glb?.url)
       .filter((u): u is string => !!u),
   );
   return Promise.all([...urls].map(ensureLoading)).then(() => undefined);

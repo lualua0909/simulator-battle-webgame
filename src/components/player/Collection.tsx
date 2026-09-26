@@ -9,7 +9,6 @@ import { formatCoins, isUnlocked, nextStar, starScale, type PlayerAction } from 
 import { STAR_MAX, type ConfigBundle, type UnitDef } from '@/shared/schema';
 import { unitPower } from '@/game/bot/generate';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { NamedIcon } from '@/components/ui/NamedIcon';
 import { CoinIcon, Stars } from './icons';
 import { CoinBar } from './PlayerHud';
 import { usePlayer } from './PlayerProvider';
@@ -74,7 +73,7 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
           <div className="order-3 flex max-w-full basis-full flex-nowrap gap-1 overflow-x-auto pb-1 md:order-none md:basis-auto md:flex-1 md:flex-wrap md:overflow-visible md:pb-0">
             {[{ id: 'all', name: t('collection.all'), icon: '', color: '' }, ...factions].map((f) => (
               <button key={f.id} className={`shrink-0 rounded-full border-2 border-[#16181b] px-3 py-0.5 ${tab === f.id ? 'bg-gold' : 'bg-white/85'}`} onClick={() => { setTab(f.id); setSelectedId(null); }}>
-                <NamedIcon name={f.icon} /> {f.id === 'all' ? f.name : factionName(f.id, f.name)}
+                {f.id === 'all' ? f.name : factionName(f.id, f.name)}
               </button>
             ))}
           </div>
@@ -100,7 +99,7 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
             })}
           </div>
           {desktopSelected && (
-            <aside className="panel hidden w-full flex-none p-4 md:block md:w-[24rem] md:shrink-0 md:overflow-y-auto">
+            <aside className="panel glass-popup hidden w-full flex-none p-4 md:block md:w-[24rem] md:shrink-0 md:overflow-y-auto">
               {user ? <UnitDetail key={desktopSelected.id} bundle={bundle} unit={desktopSelected} thumb={thumbs[desktopSelected.id]} /> : <GuestDetail unit={desktopSelected} onSignIn={() => openAuth('signin')} />}
             </aside>
           )}
@@ -111,7 +110,7 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
           <button className="absolute inset-0 h-full w-full bg-black/60" onClick={() => setSelectedId(null)} aria-label="Đóng chi tiết" />
           <div className="pointer-events-none absolute inset-0 flex flex-col justify-end">
             <div
-              className="panel sheet-in pointer-events-auto relative mx-0 flex min-h-0 w-full max-w-full max-h-[85vh] flex-col overflow-hidden rounded-b-none p-4 pt-2"
+              className="panel glass-popup sheet-in pointer-events-auto relative mx-0 flex min-h-0 w-full max-w-full max-h-[85vh] flex-col overflow-hidden rounded-b-none p-4 pt-2"
               style={{ maxHeight: '85dvh' }}
             >
               <div className="relative flex shrink-0 items-center justify-center pb-2">

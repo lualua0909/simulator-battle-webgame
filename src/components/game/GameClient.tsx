@@ -718,6 +718,15 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     setPhase('deploy');
   };
 
+  /** Offline modes: the result's Menu reopens the match setup popup instead of leaving for the home page. */
+  const backToSetup = () => {
+    setResult(null);
+    setPaused(false);
+    setSide('blue');
+    setArmies(EMPTY);
+    setPhase('setup');
+  };
+
   // keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -979,6 +988,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           }
           rematchLabel={mode === 'ranked' ? 'Tìm trận mới' : mode === 'online' ? 'Trận mới' : 'Đấu lại'}
           onEdit={mode === 'ranked' ? undefined : backToDeploy}
+          onMenu={online ? undefined : backToSetup}
         >
           {mode === 'ranked' && bundle && <RankResultPanel bundle={bundle} res={rankResult} />}
         </ResultModal>

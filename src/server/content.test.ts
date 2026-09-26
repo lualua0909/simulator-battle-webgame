@@ -4,6 +4,32 @@ import { COLLECTIONS } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
 import { parseDoc, toFirestore } from './content';
 
+test('barracks replaces stale uploaded URLs with its bundled GLB while preserving scale', () => {
+  const asset = SEED.assets.find((a) => a.id === 'm-barracks')!;
+  const old = { ...asset, scale: 3.75, glb: { ...asset.glb!, url: '/uploads/models/m-barracks-1789451587792.glb' } };
+  const migrated = parseDoc('assets', asset.id, old)!;
+  assert.equal(migrated.glb?.url, '/models/nha-linh.glb');
+  assert.equal(migrated.scale, 3.75);
+  assert.equal(parseDoc('assets', asset.id, { ...old, glb: null })?.glb?.url, '/models/nha-linh.glb');
+});
+
+test('persisted flyer without a GLB upgrades to a visible flying stingray', () => {
+  const asset = SEED.assets.find((a) => a.id === 'm-eagle')!;
+  const unit = SEED.units.find((u) => u.id === 'eagle')!;
+  const oldAsset = { ...asset, name: 'Đại bàng', glb: null, params: { beak: '#f2b01e' } };
+  const migrated = parseDoc('assets', asset.id, oldAsset)!;
+  assert.equal(migrated.name, 'Cá đuối bay');
+  assert.equal(migrated.glb?.url, '/models/ca-duoi-bay.glb');
+  assert.deepEqual(migrated.params, {});
+  const migratedUnit = parseDoc('units', unit.id, { ...unit, name: 'Đại bàng', description: 'Bay, bổ nhào xuống cào.' })!;
+  assert.equal(migratedUnit.name, 'Cá đuối bay');
+  assert.equal(migratedUnit.modelId, migrated.id);
+  assert.equal(migratedUnit.flying, true);
+  assert.equal(migratedUnit.hp, unit.hp);
+  assert.deepEqual(parseDoc('assets', migrated.id, migrated), migrated);
+  assert.equal(oldAsset.glb, null);
+});
+
 /** Firestore rejects an array whose element is itself an array. */
 function nestedArrayPath(value: unknown, path = ''): string | null {
   if (Array.isArray(value)) {

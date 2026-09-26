@@ -546,7 +546,7 @@ function TeamBar({ side, alive, total, flip }: { side: Side; alive: number; tota
   );
 }
 
-export function ResultModal(props: { result: BattleResult; mySide?: Side; siege: boolean; onRematch(): void; onEdit?(): void; rematchLabel?: string; children?: ReactNode }) {
+export function ResultModal(props: { result: BattleResult; mySide?: Side; siege: boolean; onRematch(): void; onEdit?(): void; onMenu?(): void; rematchLabel?: string; children?: ReactNode }) {
   const { result } = props;
   const title = resultTitle(result, props.mySide);
   const color = result.winner !== 'draw' ? SIDE_TEXT[result.winner] : 'text-ink';
@@ -587,9 +587,15 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
               Sửa đội hình
             </button>
           )}
-          <Link href="/" className="btn">
-            Menu
-          </Link>
+          {props.onMenu ? (
+            <button className="btn" onClick={props.onMenu}>
+              Menu
+            </button>
+          ) : (
+            <Link href="/" className="btn">
+              Menu
+            </Link>
+          )}
         </div>
       </div>
     </div>

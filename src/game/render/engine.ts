@@ -18,15 +18,16 @@ import { CameraDirector } from './director';
 import { EffectRenderer, type EffectHost } from './effects';
 import { Fireworks } from './fireworks';
 import { HeightField } from './heightField';
+import { Glow } from './glow';
 import { ParticleSystem } from './particles';
 import { ProjectileRenderer } from './projectiles';
 import { FrameRateGovernor, LOWER_TIER, QUALITY, type QualityTier } from './quality';
 import { loadRapier, RagdollWorld } from './ragdoll';
-import { createIsland } from './island';
+import { createIsland, createPlateau } from './island';
 import { createScenery } from './scenery';
 import { DebrisSystem } from './debris';
 import { WallRenderer } from './walls';
-import { createSkirt, createTerrainMesh, createWater, createZoneOverlay, type Water } from './terrainMesh';
+import { createWater, createZoneOverlay, type Water } from './terrainMesh';
 import { UnitRenderer } from './units';
 import { angleDiff, followsUnit, UnitView, VIEW_MODES, type ViewMode } from './unitView';
 import { XrControls } from './xr';
@@ -133,6 +134,9 @@ export class BattleEngine {
   private readonly debris = new DebrisSystem();
   private readonly projectiles: ProjectileRenderer;
   private readonly particles = new ParticleSystem();
+  /** Selective bloom (WebGL only; the WebGPU backend has none yet). */
+  private readonly glow: Glow | null;
+  private readonly glowSources: THREE.Object3D[];
   private readonly effects: EffectRenderer;
   private readonly effectHost: EffectHost;
   private readonly audio: AudioEngine;
@@ -248,6 +252,8 @@ export class BattleEngine {
       };
     }
     host.appendChild(this.renderer.domElement);
+    this.glow = this.renderer instanceof THREE.WebGLRenderer ? new Glow(this.renderer) : null;
+    if (gpu) this.particles.useAdditiveGlows();
 
     this.particleDefs = new Map(bundle.particles.map((p) => [p.id, p]));
     this.weapons = new Map(bundle.weapons.map((w) => [w.id, w]));
@@ -266,6 +272,7 @@ export class BattleEngine {
     this.walls = new WallRenderer(bundle);
     this.projectiles = new ProjectileRenderer(bundle);
     this.effects = new EffectRenderer(bundle);
+    this.glowSources = [this.effects.group, this.particles.group];
     this.audio = new AudioEngine(bundle);
     this.unitSettings = bundle.settings;
     this.setQuality(coarse ? 'medium' : 'high');
@@ -342,8 +349,7 @@ export class BattleEngine {
     this.terrain = terrain;
     this.heights = new HeightField(terrain);
     this.governor.hold();
-    if (terrain.island) this.mapGroup.add(createIsland(terrain));
-    else this.mapGroup.add(createTerrainMesh(terrain), createSkirt(terrain));
+    this.mapGroup.add(terrain.island ? createIsland(terrain) : createPlateau(terrain));
     this.water = createWater(terrain, this.gpu?.waterMaterial);
     if (this.water) this.mapGroup.add(this.water.mesh);
     this.mapGroup.add(createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a]))));
@@ -358,8 +364,8 @@ export class BattleEngine {
     const bottom = new THREE.Color(map.skyBottom);
     this.daySky.top.copy(top);
     this.daySky.bottom.copy(bottom);
-    // An island is watched from further out (the whole of it in view), so its fog starts later.
-    const fogReach = terrain.island ? 1.8 : 1;
+    // The raised land is watched from further out (the whole of it in view), so its fog starts later.
+    const fogReach = 1.8;
     this.scene.fog = new THREE.Fog(bottom, (40 + terrain.size * (1 - map.fog) * 0.8) * fogReach, (120 + terrain.size * (2.6 - map.fog * 1.4)) * fogReach);
     this.hemi.color.copy(top).lerp(new THREE.Color('#ffffff'), 0.6);
     this.dusk.t = this.dusk.goal = 0;
@@ -741,8 +747,14 @@ export class BattleEngine {
   /** Canvas snapshot (used for screenshots/share). */
   snapshot(): string {
     // No preserveDrawingBuffer: render and read back in the same task.
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
     return this.renderer.domElement.toDataURL('image/png');
+  }
+
+  private draw(): void {
+    this.renderer.render(this.scene, this.camera);
+    // The headset renders each eye itself; the glow pass would draw into the wrong buffer.
+    if (this.glow && QUALITY[this.tier].glow && !this.renderer.xr.isPresenting) this.glow.render(this.glowSources, this.camera);
   }
 
   /** Caps the frame rate (menus and result screens save battery); null renders every display frame. */
@@ -776,6 +788,8 @@ export class BattleEngine {
     this.sun.shadow.autoUpdate = q.shadowEvery <= 1;
     this.sun.shadow.needsUpdate = true;
     this.effects.setFlashLights(q.flashLights);
+    this.particles.density = q.particleDensity;
+    this.glow?.resize();
     const s = this.bundle.settings;
     this.unitSettings = { ...s, ragdollLimit: Math.min(s.ragdollLimit, q.ragdollCap), corpseLimit: Math.min(s.corpseLimit, q.corpseCap) };
     this.governor.hold();
@@ -794,6 +808,7 @@ export class BattleEngine {
     this.debris.dispose();
     this.projectiles.dispose();
     this.particles.dispose();
+    this.glow?.dispose();
     this.effects.dispose();
     this.audio.dispose();
     this.fireworks.dispose();
@@ -1105,6 +1120,7 @@ export class BattleEngine {
     const w = this.host.clientWidth || 800;
     const h = this.host.clientHeight || 600;
     this.renderer.setSize(w, h);
+    this.glow?.resize();
     this.rts.resize(w, h);
   }
 
@@ -1315,7 +1331,7 @@ export class BattleEngine {
     this.effects.update(animDt, this.mode === 'battle' ? sim : null, this.alpha, this.effectHost);
     this.audio.update(animDt, this.mode === 'battle' ? sim : null);
     this.debris.update(simDt);
-    this.particles.update(animDt);
+    this.particles.update(animDt, this.camera);
     this.fireworks.update(dt);
     this.updateDusk(dt);
     this.water?.update(this.time);
@@ -1329,7 +1345,7 @@ export class BattleEngine {
       this.shakeAmount = Math.max(0, this.shakeAmount - dt * 1.6);
     }
     if (!this.sun.shadow.autoUpdate && this.frameNo % QUALITY[this.tier].shadowEvery === 0) this.sun.shadow.needsUpdate = true;
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
     this.statsTimer += dt;
     if (sim && this.statsTimer > 0.25) {
       this.statsTimer = 0;
@@ -1446,6 +1462,10 @@ export class BattleEngine {
         case 'land': {
           const wet = terrain.inWater(e.x, e.z);
           this.emit(wet ? settings.splashParticleId : settings.landParticleId, e.x, e.y + 0.1, e.z);
+          break;
+        }
+        case 'spawn': {
+          this.units.onSpawn(e.parentId);
           break;
         }
         default:

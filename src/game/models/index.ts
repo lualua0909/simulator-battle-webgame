@@ -2,7 +2,6 @@
 import * as THREE from 'three';
 import { parseAssetParams, type AssetDef, type UnitDef } from '@/shared/schema';
 import { bakeModel, mergeTemplate, type ModelTemplate } from './bake';
-import { createBirdModel } from './bird';
 import { createCatapultModel } from './catapult';
 import { createDragonModel } from './dragon';
 import { createElephantModel } from './elephant';
@@ -10,6 +9,7 @@ import { createBushModel, createRockModel, createTreeModel } from './environment
 import { createHorseModel } from './horse';
 import { createHumanoidModel, HIP_Y } from './humanoid';
 import { getCustomGlbGroup } from './glbStatic';
+import { BARRACKS_GLB_URL } from './barracksGlb';
 import { createRaptorModel } from './raptor';
 import { createStructureModel } from './structures';
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
@@ -23,6 +23,21 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
   // see assetSchema). Skinned kinds (SKINNED_GLB_KINDS) skip this baked path: the battle renderer plays the file's
   // skeletal clips instead, and everything else falls back to the procedural model below.
   // Wall blocks (wall/brick-wall) never use glb: they are lightweight Three.js boxes.
+  // Barracks (nhà lính) always resolves to its fixed GLB file — the old procedural
+  // barracks was deleted. Baked here for ghosts/thumbnails/previews; the battle renders
+  // live clones with the door action (see models/barracksGlb.ts, render/units.ts).
+  const barracksLook = asset.kind === 'structure' && (asset.params as Record<string, unknown> | undefined)?.type === 'barracks';
+  if (barracksLook) {
+    const baked = getCustomGlbGroup(BARRACKS_GLB_URL, asset.kind);
+    if (baked) {
+      baked.scale.setScalar(asset.scale);
+      baked.userData.assetId = asset.id;
+      return baked;
+    }
+    const empty = new THREE.Group();
+    empty.userData.assetId = asset.id;
+    return empty;
+  }
   const skinned = (SKINNED_GLB_KINDS as readonly string[]).includes(asset.kind);
   const wallLook = asset.kind === 'structure' && ((asset.params as Record<string, unknown> | undefined)?.type === 'wall' || (asset.params as Record<string, unknown> | undefined)?.type === 'brick-wall');
   const uploaded = !skinned && !wallLook && asset.glb ? getCustomGlbGroup(asset.glb.url, asset.kind) : undefined;
@@ -41,11 +56,24 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
     case 'elephant':
       root = createElephantModel(parseAssetParams('elephant', asset.params), seed);
       break;
-    case 'dragon':
-      root = createDragonModel(parseAssetParams('dragon', asset.params));
+    case 'dragon': {
+      const dp = parseAssetParams('dragon', asset.params);
+      // Rồng lửa (western) is GLB-only: its procedural builder was deleted, so an
+      // uploaded file bakes to nothing here — the battle renders the file's skeletal
+      // clips instead (see skinUrlFor in render/units.ts). Rồng Xanh (type baby)
+      // keeps its procedural fallback below.
+      if (dp.type !== 'baby' && asset.glb) {
+        const empty = new THREE.Group();
+        empty.userData.assetId = asset.id;
+        root = empty;
+        break;
+      }
+      root = createDragonModel(dp);
       break;
+    }
     case 'bird':
-      root = createBirdModel(parseAssetParams('bird', asset.params));
+      // Flying stingray is GLB-only; skeletal clips are rendered by glbSkinned.
+      root = new THREE.Group();
       break;
     case 'raptor':
       root = createRaptorModel(parseAssetParams('raptor', asset.params));

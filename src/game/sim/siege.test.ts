@@ -11,7 +11,9 @@ import { BattleSim, type SimEvent } from './world';
 const ARENA: MapDef = { ...SEED.maps[0], id: 'arena', size: 80, deployDepth: 28, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
 const NOOP: WeaponDef = { ...SEED.weapons.find((w) => w.id === 'club')!, id: 'noop', damage: 0, range: 0.3, cooldown: 60, knockback: 0 };
 const DUMMY: UnitDef = { ...SEED.units.find((u) => u.id === 'clubber')!, id: 'dummy', hp: 5000, speed: 0, weaponId: 'noop' };
-const CONTENT = { ...SEED, units: [...SEED.units, DUMMY], weapons: [...SEED.weapons, NOOP] };
+// Synthetic platform keeps coverage of the generic siege platform mechanic.
+const PLATFORM: UnitDef = { ...SEED.units.find((u) => u.id === 'tuong-thanh')!, id: 'test-platform', structure: 'platform', hp: 1800, height: 6, radius: 1.45 };
+const CONTENT = { ...SEED, units: [...SEED.units, DUMMY, PLATFORM], weapons: [...SEED.weapons, NOOP] };
 
 /** Red defends by default. */
 function siege(armies: Partial<Armies>, opts: { defense?: 'blue' | 'red' | null; seed?: number; content?: typeof CONTENT } = {}) {
@@ -105,7 +107,7 @@ test('barracks spawn one unit per second up to spawnMax alive', () => {
 });
 
 test('defenders stay inside their zone', () => {
-  const a = siege({ blue: [at('dummy', -20, 0)], red: [at('knight', 12, 0), at('knight', 14, 4), core] });
+  const a = siege({ blue: [at('dummy', -20, 0)], red: [at('hoplite', 12, 0), at('hoplite', 14, 4), core] });
   const zone = a.terrain.zoneOf('red');
   let min = Infinity;
   a.run(15, () => {
@@ -132,7 +134,7 @@ test('siege ends when the keep falls; timeout goes to the defenders; open battle
 });
 
 test('watchtower adds range to the units on it', () => {
-  const a = siege({ blue: [at('dummy', -20, 0)], red: [{ unitId: 'thap-canh', ...snapToCell(9, 1) }, { unitId: 'archer', ...snapToCell(9, 1) }, core] });
+  const a = siege({ blue: [at('dummy', -20, 0)], red: [{ unitId: 'test-platform', ...snapToCell(9, 1) }, { unitId: 'archer', ...snapToCell(9, 1) }, core] });
   a.sim.step();
   const archer = a.sim.units.find((u) => u.def.id === 'archer')!;
   assert.equal(archer.onWall?.kind, 'platform');
@@ -152,7 +154,7 @@ test('siege army validation', () => {
   assert.ok(check('blue', [at('ninja', -10, 0), at('nha-linh', -20, 0)]).ok);
   assert.match((check('red', [...cell('tuong-thanh', 20, 1), { unitId: 'nha-chinh', x: 20.5, z: 1 }]) as { error: string }).error, /đè lên tường/);
   const tower = snapToCell(15, 1);
-  assert.match((check('red', [{ unitId: 'thap-canh', ...tower }, ...['archer', 'archer', 'archer'].map((id) => ({ unitId: id, ...tower })), core]) as { error: string }).error, /tháp canh/);
+  assert.match((check('red', [{ unitId: 'test-platform', ...tower }, ...['archer', 'archer', 'archer'].map((id) => ({ unitId: id, ...tower })), core]) as { error: string }).error, /tháp canh/);
   // Open battles take no structures.
   const open = new Terrain(ARENA, [], null);
   assert.match((validateArmy(CONTENT, open, 'red', [core], 100000) as { error: string }).error, /không dùng được/);
@@ -160,8 +162,8 @@ test('siege army validation', () => {
 
 test('sieges with every structure stay deterministic', () => {
   const run = () => {
-    const blue = [at('ninja', -8, 0), at('ninja', -8, 3), at('fire-catapult', -20, 0), at('catapult', -20, 6), at('knight', -6, -4), at('nha-linh', -25, -10), at('archer', -10, 8)];
-    const red = [...wallLine(10, -12, 12), at('thap-cung', 16, 8), at('thap-sung', 16, -8), at('tru-dien', 18, 0), { unitId: 'thap-canh', ...snapToCell(12, 15) }, { unitId: 'musketeer', ...snapToCell(12, 15) }, { unitId: 'archer', ...snapToCell(10, 2) }, at('nha-linh', 26, 12), core];
+    const blue = [at('ninja', -8, 0), at('ninja', -8, 3), at('fire-catapult', -20, 0), at('catapult', -20, 6), at('hoplite', -6, -4), at('nha-linh', -25, -10), at('archer', -10, 8)];
+    const red = [...wallLine(10, -12, 12), at('thap-cung', 16, 8), at('thap-sung', 16, -8), at('tru-dien', 18, 0), { unitId: 'test-platform', ...snapToCell(12, 15) }, { unitId: 'musketeer', ...snapToCell(12, 15) }, { unitId: 'archer', ...snapToCell(10, 2) }, at('nha-linh', 26, 12), core];
     const a = siege({ blue, red }, { seed: 3 });
     const sums: number[] = [];
     a.run(40, () => a.sim.tick % 30 === 0 && sums.push(a.sim.checksum()));
@@ -197,15 +199,15 @@ test('ninja dash leaps onto an archer on the wall', () => {
 test('a deep river is crossed only at the ford', () => {
   const map: MapDef = { ...ARENA, id: 'ford', size: 120, river: { enabled: true, width: 10, meander: 0, ford: 12 } };
   const terrain = new Terrain(map, [], null);
-  const sim = new BattleSim(CONTENT, map, terrain, fullArmies({ blue: [at('knight', -30, 30)], red: [at('dummy', 30, 30)] }), 5);
-  const knight = sim.units[0];
+  const sim = new BattleSim(CONTENT, map, terrain, fullArmies({ blue: [at('hoplite', -30, 30)], red: [at('dummy', 30, 30)] }), 5);
+  const hoplite = sim.units[0];
   let deep = false;
   for (let i = 0; i < 30 * 40; i++) {
     sim.step();
-    deep ||= terrain.deepWater(knight.x, knight.z);
+    deep ||= terrain.deepWater(hoplite.x, hoplite.z);
   }
   assert.ok(!deep, 'walked into deep water');
-  assert.ok(knight.x > terrain.riverX(knight.z), `still on the near bank at ${knight.x.toFixed(1)},${knight.z.toFixed(1)}`);
+  assert.ok(hoplite.x > terrain.riverX(hoplite.z), `still on the near bank at ${hoplite.x.toFixed(1)},${hoplite.z.toFixed(1)}`);
 });
 
 test('a close-range defender placed on a wall jumps down to fight', () => {

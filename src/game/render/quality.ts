@@ -1,6 +1,6 @@
 // Rendering quality tiers. Phones start one tier down; any device drops a tier (never climbs
-// back within the session) when its frame rate stays low, shedding pixels, shadows, flash
-// lights and ragdoll/corpse budgets in that order.
+// back within the session) when its frame rate stays low, shedding glow, pixels, shadows,
+// flash lights, particles and ragdoll/corpse budgets in that order.
 export type QualityTier = 'high' | 'medium' | 'low';
 
 export interface QualityPreset {
@@ -12,15 +12,19 @@ export interface QualityPreset {
   shadowEvery: number;
   /** Point lights for strike/gunfire flashes: every lit pixel pays for each one, even when dark. */
   flashLights: number;
+  /** Bloom around bolts, fire and blasts (WebGL only). */
+  glow: boolean;
+  /** Share of each particle burst emitted. */
+  particleDensity: number;
   /** Caps on the CMS ragdoll and corpse budgets. */
   ragdollCap: number;
   corpseCap: number;
 }
 
 export const QUALITY: Record<QualityTier, QualityPreset> = {
-  high: { pixelRatio: 1.75, shadows: true, shadowMapSize: 2048, shadowEvery: 1, flashLights: 4, ragdollCap: Infinity, corpseCap: Infinity },
-  medium: { pixelRatio: 1.25, shadows: true, shadowMapSize: 1024, shadowEvery: 2, flashLights: 1, ragdollCap: 30, corpseCap: 300 },
-  low: { pixelRatio: 1, shadows: false, shadowMapSize: 1024, shadowEvery: 1, flashLights: 0, ragdollCap: 12, corpseCap: 150 },
+  high: { pixelRatio: 1.75, shadows: true, shadowMapSize: 2048, shadowEvery: 1, flashLights: 4, glow: true, particleDensity: 1, ragdollCap: Infinity, corpseCap: Infinity },
+  medium: { pixelRatio: 1.25, shadows: true, shadowMapSize: 1024, shadowEvery: 2, flashLights: 1, glow: false, particleDensity: 0.75, ragdollCap: 30, corpseCap: 300 },
+  low: { pixelRatio: 1, shadows: false, shadowMapSize: 1024, shadowEvery: 1, flashLights: 0, glow: false, particleDensity: 0.5, ragdollCap: 12, corpseCap: 150 },
 };
 
 export const LOWER_TIER: Record<QualityTier, QualityTier | null> = { high: 'medium', medium: 'low', low: null };

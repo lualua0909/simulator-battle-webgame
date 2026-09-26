@@ -1,4 +1,6 @@
-// Low-poly siege structures: wall blocks, watchtower, bow/gun/tesla towers, barracks and keep.
+// Low-poly siege structures: wall blocks, bow/gun/tesla towers and keep.
+// (Barracks/nhà lính was deleted: it always resolves to its fixed GLB file
+// models/nha-linh.glb — see models/barracksGlb.ts and models/index.ts.)
 // Frame: forward +Z faces the enemy, y = 0 on the ground. Towers keep their weapon on a
 // `turret` pivot (rig 'tower') that the animator yaws toward the target.
 import * as THREE from 'three';
@@ -13,8 +15,6 @@ export function createStructureModel(p: StructureParams, seed = 1): THREE.Group 
     case 'wall':
     case 'brick-wall':
       return wallModel(p, seed);
-    case 'watchtower':
-      return watchtowerModel(p);
     case 'bow-tower':
       return bowTowerModel(p, seed);
     case 'gun-tower':
@@ -22,7 +22,9 @@ export function createStructureModel(p: StructureParams, seed = 1): THREE.Group 
     case 'tesla':
       return teslaModel(p, seed);
     case 'barracks':
-      return barracksModel(p, seed);
+      // Deleted: barracks always resolves to its fixed GLB (models/index.ts intercepts
+      // before reaching here). Throw instead of silently rendering the old house.
+      throw new Error('barracks uses /models/nha-linh.glb (procedural model deleted)');
     case 'keep':
       return keepModel(p, seed);
   }
@@ -210,49 +212,6 @@ function flag(name: string, p: StructureParams, pos: Vec3, height: number): THRE
   return pole;
 }
 
-// ---------------------------------------------------------------- watchtower
-
-function watchtowerModel(p: StructureParams): THREE.Group {
-  const root = modelRoot('watchtower', 'static');
-  const top = 6;
-  const dark = shade(p.wood, 0.72);
-  for (const sx of [1, -1]) {
-    for (const sz of [1, -1]) {
-      root.add(mesh(`leg-${sx}${sz}`, beam([0.95 * sx, 0, 0.95 * sz], [0.75 * sx, top - 0.2, 0.75 * sz], 0.12, 0.1, 5), p.wood));
-      root.add(detail(stone(`foot-${sx}${sz}`, box(0.45, 0.35, 0.45), p, 4 + sx * 2 + sz, [0.95 * sx, 0.17, 0.95 * sz])));
-    }
-  }
-  for (const y of [1.6, 3.6]) {
-    for (const [a, b] of [
-      [[0.9, y, 0.9], [-0.85, y + 1.5, 0.85]],
-      [[-0.9, y, -0.9], [0.85, y + 1.5, -0.85]],
-      [[0.9, y, -0.9], [0.85, y + 1.5, 0.85]],
-      [[-0.9, y, 0.9], [-0.85, y + 1.5, -0.85]],
-    ] as Array<[Vec3, Vec3]>) {
-      root.add(detail(mesh(`brace-${y}-${a[0]}${a[2]}`, beam(a, b, 0.05, 0.05, 4), dark)));
-    }
-  }
-  root.add(mesh('deck', box(2.1, 0.22, 2.1), p.wood, [0, top - 0.11, 0]));
-  for (const i of [-1, 0, 1]) root.add(detail(mesh(`plank-${i}`, box(0.62, 0.03, 2.05), shade(p.wood, 1.1), [i * 0.68, top + 0.01, 0])));
-  for (const [x, z, w, d] of [
-    [0, 1, 2.1, 0.08],
-    [0, -1, 2.1, 0.08],
-    [1, 0, 0.08, 2.1],
-    [-1, 0, 0.08, 2.1],
-  ] as const) {
-    root.add(detail(mesh(`rail-${x}${z}`, box(w, 0.08, d), dark, [x, top + 0.55, z])));
-  }
-  for (const sx of [1, -1]) {
-    for (const sz of [1, -1]) {
-      root.add(mesh(`post-${sx}${sz}`, box(0.12, 2.5, 0.12), dark, [sx, top + 1.25, sz]));
-    }
-  }
-  root.add(mesh('roof', cone(1.75, 1.3, 4), p.roof, [0, top + 3.1, 0], [0, Math.PI / 4, 0]));
-  for (let k = 0; k < 7; k++) root.add(detail(mesh(`ladder-${k}`, box(0.7, 0.06, 0.06), dark, [0, 0.5 + k * 0.8, 1.02])));
-  root.add(flag('flag', p, [0, top + 3.7, 0], 1.3));
-  return root;
-}
-
 // ---------------------------------------------------------------- towers
 
 function roundTowerBase(root: THREE.Group, p: StructureParams, seed: number, height: number, r: number): void {
@@ -332,65 +291,6 @@ function teslaModel(p: StructureParams, seed: number): THREE.Group {
 }
 
 // ---------------------------------------------------------------- buildings
-
-/** Open post-and-beam shed with a gable roof (Quaternius "Barracks" reference). */
-function barracksModel(p: StructureParams, seed: number): THREE.Group {
-  const root = modelRoot('barracks', 'static');
-  const dark = shade(p.wood, 0.7);
-  const silver = '#c9d2da';
-
-  const cx = 1.3;
-  const cz = 1.05;
-  const eave = 1.55;
-  const apex = 2.4;
-  const corners: Vec3[] = [
-    [cx, 0, cz],
-    [-cx, 0, cz],
-    [cx, 0, -cz],
-    [-cx, 0, -cz],
-  ];
-  corners.forEach(([x, , z], i) => {
-    root.add(stone(`plinth-${i}`, box(0.34, 0.3, 0.34), p, seed + i, [x, 0.15, z]));
-    root.add(mesh(`post-band-${i}`, box(0.24, 0.45, 0.24), p.accent, [x, 0.525, z]));
-    root.add(mesh(`post-${i}`, box(0.22, eave - 0.75, 0.22), p.wood, [x, 0.75 + (eave - 0.75) / 2, z]));
-  });
-
-  for (const z of [cz, -cz]) root.add(mesh(`plate-x-${z}`, box(2 * cx - 0.16, 0.14, 0.14), dark, [0, eave, z]));
-  for (const x of [cx, -cx]) root.add(mesh(`plate-z-${x}`, box(0.14, 0.14, 2 * cz - 0.16), dark, [x, eave, 0]));
-  for (const z of [cz, -cz]) for (const x of [-cx * 0.5, 0, cx * 0.5]) root.add(detail(mesh(`stud-x-${x}-${z}`, box(0.09, eave - 0.3, 0.09), p.wood, [x, 0.3 + (eave - 0.3) / 2, z])));
-  for (const x of [cx, -cx]) for (const z of [-cz * 0.35, cz * 0.35]) root.add(detail(mesh(`stud-z-${x}-${z}`, box(0.09, eave - 0.3, 0.09), p.wood, [x, 0.3 + (eave - 0.3) / 2, z])));
-
-  const rw = cx + 0.35;
-  const rise = apex - eave;
-  const angle = Math.atan2(rise, rw);
-  const slopeLen = Math.hypot(rw, rise);
-  const roofLen = 2 * cz + 0.6;
-  for (const s of [1, -1]) {
-    root.add(
-      mesh(
-        `roof-${s}`,
-        faceColors(new THREE.BoxGeometry(slopeLen, 0.12, roofLen, 6, 1, 1), p.roof, shade(p.roof, 0.82), seed * 5 + s + 20),
-        p.roof,
-        [(s * rw) / 2, (apex + eave) / 2, 0],
-        [0, 0, -s * angle],
-      ),
-    );
-  }
-  root.add(mesh('ridge', box(0.16, 0.16, roofLen), dark, [0, apex, 0]));
-
-  for (const z of [cz, -cz]) {
-    root.add(detail(mesh(`king-post-${z}`, box(0.1, apex - eave, 0.1), dark, [0, (eave + apex) / 2, z])));
-    for (const x of [cx, -cx]) root.add(detail(mesh(`rafter-brace-${x}-${z}`, beam([x, eave, z], [0, apex, z], 0.05, 0.05, 4), dark)));
-  }
-
-  const swordZ = cz + 0.04;
-  root.add(detail(mesh('sword-a', box(0.09, 0.9, 0.04), silver, [0, eave - 0.35, swordZ], [0, 0, 0.7])));
-  root.add(detail(mesh('sword-b', box(0.09, 0.9, 0.04), silver, [0, eave - 0.35, swordZ], [0, 0, -0.7])));
-  root.add(detail(mesh('sword-hilt', ball(0.08, 0), p.accent, [0, eave - 0.35, swordZ])));
-
-  root.add(mesh('crate', box(0.5, 0.45, 0.5), shade(p.wood, 1.15), [0.35, 0.225, -cz + 0.35]));
-  return root;
-}
 
 function keepModel(p: StructureParams, seed: number): THREE.Group {
   const root = modelRoot('keep', 'static');

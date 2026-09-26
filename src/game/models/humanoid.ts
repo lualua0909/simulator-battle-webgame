@@ -138,8 +138,7 @@ export function createHumanoidModel(p: HumanoidParams): THREE.Group {
 function buildHead(head: THREE.Group, p: HumanoidParams): void {
   const cy = 0.19;
   head.add(mesh('head', ball(HEAD_R, 1), p.skin, [0, cy, 0]));
-  // A closed great helm hides the face; the visor slit stands in for the eyes.
-  for (const s of p.head === 'greathelm' ? [] : [1, -1]) {
+  for (const s of [1, -1]) {
     head.add(detail(mesh(`eye-${s > 0 ? 'L' : 'R'}`, ball(0.034, 0), '#141414', [0.075 * s, cy + 0.02, HEAD_R - 0.024])));
     if (p.brows !== 'none') {
       const tilt = (p.brows === 'angry' ? 0.42 : -0.38) * s;
@@ -148,7 +147,7 @@ function buildHead(head: THREE.Group, p: HumanoidParams): void {
   }
 
   // hair (skipped under full helmets)
-  const fullHelm = p.head === 'greathelm' || p.head === 'hood' || p.head === 'ninja';
+  const fullHelm = p.head === 'hood' || p.head === 'ninja';
   if (!fullHelm && p.hair !== 'none') {
     head.add(mesh('hair-cap', dome(HEAD_R + 0.012, 9, 3), p.hairColor, [0, cy + 0.02, -0.012], [-0.38, 0, 0]));
     if (p.hair === 'long') head.add(mesh('hair-long', ell(0.18, 0.24, 0.08), p.hairColor, [0, cy - 0.1, -0.13]));
@@ -178,20 +177,6 @@ function buildHead(head: THREE.Group, p: HumanoidParams): void {
       if (p.head === 'horned') {
         for (const s of [1, -1]) head.add(mesh(`horn-${s}`, cone(0.045, 0.24, 5), '#efe6cf', [0.2 * s, cy + 0.14, 0], [0, 0, -0.9 * s]));
       }
-      break;
-    case 'greathelm':
-      head.add(metal('greathelm', cyl(HEAD_R + 0.025, HEAD_R + 0.03, 0.36, 8), hc, [0, cy + 0.02, 0]));
-      head.add(metal('greathelm-top', dome(HEAD_R + 0.025, 8, 2), hc, [0, cy + 0.2, 0]));
-      head.add(detail(mesh('visor-slit', box(0.26, 0.03, 0.03), '#101010', [0, cy + 0.04, HEAD_R + 0.02])));
-      head.add(detail(metal('visor-ridge', box(0.03, 0.26, 0.03), shade(hc, 0.85), [0, cy - 0.02, HEAD_R + 0.025])));
-      break;
-    case 'crown':
-      head.add(metal('crown-band', new THREE.CylinderGeometry(0.16, 0.15, 0.08, 10, 1, true), hc, [0, cy + 0.2, 0]));
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2;
-        head.add(detail(metal(`crown-point-${i}`, cone(0.03, 0.08, 4), hc, [Math.sin(a) * 0.155, cy + 0.28, Math.cos(a) * 0.155])));
-      }
-      head.add(detail(mesh('crown-gem', ball(0.03, 0), '#d8283a', [0, cy + 0.2, 0.165])));
       break;
     case 'hood': {
       const hood = new THREE.SphereGeometry(HEAD_R + 0.035, 10, 6, (5 * Math.PI) / 6, (4 * Math.PI) / 3);

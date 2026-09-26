@@ -88,6 +88,54 @@ test('flying-only clips map to every locomotion state', () => {
   assert.equal(pickClipName(DRAGON_CLIPS, 'attack'), 'DragonArmature|Dragon_Attack');
   assert.equal(pickClipName(DRAGON_CLIPS, 'death'), 'DragonArmature|Dragon_Death');
   assert.equal(pickClipName(DRAGON_CLIPS, 'jump'), 'DragonArmature|Dragon_Flying');
+  assert.equal(pickClipName(DRAGON_CLIPS, 'fly'), 'DragonArmature|Dragon_Flying');
+});
+
+const STINGRAY_CLIPS = ['Swim', 'Attack_Bite', 'Attack_FinSlap', 'Hit', 'Death'];
+
+test('ca-duoi-bay clips: locomotion is Swim, never walk/run', () => {
+  assert.equal(pickClipName(STINGRAY_CLIPS, 'fly'), 'Swim');
+  assert.equal(pickClipName(STINGRAY_CLIPS, 'idle'), 'Swim');
+  assert.equal(pickClipName(STINGRAY_CLIPS, 'walk'), 'Swim');
+  assert.equal(pickClipName(STINGRAY_CLIPS, 'run'), 'Swim');
+  assert.equal(pickClipName(STINGRAY_CLIPS, 'jump'), 'Swim');
+  assert.equal(pickClipName(STINGRAY_CLIPS, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(STINGRAY_CLIPS, 'sweep'), 'Attack_FinSlap');
+  assert.equal(pickClipName(STINGRAY_CLIPS, 'death'), 'Death');
+});
+
+test('ground packs have no fly clip (fly falls back to idle in battle)', () => {
+  assert.equal(pickClipName(NINJA_CLIPS, 'fly'), null);
+});
+
+test('committed ca-duoi-bay.glb parses with a full clip set for its flyer', async () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'ca-duoi-bay.glb');
+  assert.ok(existsSync(file), 'public/models/ca-duoi-bay.glb is committed');
+  // Read the actual animation metadata without needing a Draco or image decoder.
+  const buf = readFileSync(file);
+  assert.equal(buf.toString('ascii', 0, 4), 'glTF');
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.deepEqual([...names].sort(), [...STINGRAY_CLIPS].sort());
+  for (const state of ['fly', 'attack', 'death'] as const) {
+    assert.ok(pickClipName(names, state), `ca-duoi-bay.glb: no clip for ${state} in ${names.join(', ')}`);
+  }
+  assert.equal(pickClipName(names, 'fly'), 'Swim');
+});
+
+test('seed m-eagle asset references /models/ca-duoi-bay.glb and validates', () => {
+  const asset = SEED.assets.find((a) => a.id === 'm-eagle')!;
+  assert.ok(asset, 'seed has m-eagle');
+  assert.equal(asset.kind, 'bird');
+  assert.equal(asset.glb?.url, '/models/ca-duoi-bay.glb');
+  assert.deepEqual(assetSchema.parse(asset), asset);
+  const unit = SEED.units.find((u) => u.id === 'eagle')!;
+  assert.equal(unit.name, 'Cá đuối bay');
+  assert.equal(unit.flying, true);
+  assert.equal(unit.modelId, asset.id);
+  // No procedural bird appears while the GLB loads or if its loading fails.
+  assert.equal(createAssetModel(asset).children.length, 0);
+  assert.equal(createAssetModel({ ...asset, glb: null }).children.length, 0);
 });
 
 test('committed rong-xanh.glb parses with a full clip set', async () => {
@@ -111,6 +159,51 @@ test('seed m-baby-dragon asset references /models/rong-xanh.glb with a green tin
   assert.equal(asset.glb?.url, '/models/rong-xanh.glb');
   assert.deepEqual(asset.glb?.tint?.['Main'], '#8cc540');
   assert.deepEqual(assetSchema.parse(asset), asset);
+});
+
+// rong-lua.glb (Rồng lửa): Idle = Đứng yên, Fly = Bay, Attack_Bite = Cắn,
+// Attack_BiteShake = Cắn lắc, Hit = Trúng đòn, Death = Chết. No Run/Jump/Walk:
+// locomotion falls back to Fly so the flyer never glides in the idle pose.
+const RONG_LUA_CLIPS = ['Idle', 'Fly', 'Attack_Bite', 'Attack_BiteShake', 'Hit', 'Death'];
+
+test('rong-lua clips map to battle states (locomotion falls back to Fly)', () => {
+  assert.equal(pickClipName(RONG_LUA_CLIPS, 'idle'), 'Idle');
+  assert.equal(pickClipName(RONG_LUA_CLIPS, 'fly'), 'Fly');
+  assert.equal(pickClipName(RONG_LUA_CLIPS, 'walk'), 'Fly');
+  assert.equal(pickClipName(RONG_LUA_CLIPS, 'run'), 'Fly');
+  assert.equal(pickClipName(RONG_LUA_CLIPS, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(RONG_LUA_CLIPS, 'death'), 'Death');
+  assert.equal(pickClipName(RONG_LUA_CLIPS, 'jump'), 'Fly');
+});
+
+test('committed rong-lua.glb ships the six fire-dragon clips', async () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'rong-lua.glb');
+  assert.ok(existsSync(file), 'public/models/rong-lua.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.deepEqual([...names].sort(), [...RONG_LUA_CLIPS].sort());
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(names, 'fly'), 'Fly');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+});
+
+test('seed m-dragon asset references /models/rong-lua.glb and validates', () => {
+  const asset = SEED.assets.find((a) => a.id === 'm-dragon')!;
+  assert.ok(asset, 'seed has m-dragon');
+  assert.equal(asset.kind, 'dragon');
+  assert.equal(asset.glb?.url, '/models/rong-lua.glb');
+  assert.equal(asset.scale, 1.5);
+  assert.deepEqual(assetSchema.parse(asset), asset);
+  const unit = SEED.units.find((u) => u.id === 'dragon')!;
+  assert.equal(unit.modelId, 'm-dragon');
+});
+
+test('fire dragon bakes to nothing procedural (GLB-only, no western fallback)', () => {
+  const asset = SEED.assets.find((a) => a.id === 'm-dragon')!;
+  const template = bakeModel(createAssetModel(asset));
+  assert.equal(template.parts.filter((p) => p.geometry).length, 0);
 });
 
 test('repaintPixels shifts near-from pixels toward to and leaves the rest', () => {

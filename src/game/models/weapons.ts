@@ -33,9 +33,8 @@ export function createWeaponModel(kind: WeaponKind, c: WeaponColors): THREE.Grou
         g.add(detail(metal(`bigclub-spike-${i}`, cone(0.035, 0.12, 4), c.metal, [Math.cos(a) * 0.15, 0.8 + (i % 2) * 0.12, Math.sin(a) * 0.15], [Math.sin(a) * 1.4, 0, -Math.cos(a) * 1.4])));
       }
       break;
-    case 'sword':
-    case 'greatsword': {
-      const k = kind === 'greatsword' ? 1.65 : 1;
+    case 'sword': {
+      const k = 1;
       g.add(mesh('sword-grip', cyl(0.024, 0.024, 0.17 * k), dark, [0, 0.02 * k, 0]));
       g.add(metal('sword-pommel', ball(0.035 * k, 0), c.metal, [0, -0.08 * k, 0]));
       g.add(metal('sword-guard', box(0.22 * k, 0.035, 0.05), c.metal, [0, 0.11 * k, 0]));

@@ -45,7 +45,7 @@ test('every bot builds a legal army on every map', () => {
 
 test('battle is deterministic and finishes', () => {
   const run = () => {
-    const { terrain, armies } = botArmies('song-xanh', 7);
+    const { terrain, armies } = botArmies('deo-song', 7);
     const sim = new BattleSim({ ...SEED, settings: { ...SEED.settings, battleTimeLimit: 240 } }, terrain.map, terrain, armies, 12345);
     const sums: number[] = [];
     while (!sim.result && sim.tick < 30 * 300) {

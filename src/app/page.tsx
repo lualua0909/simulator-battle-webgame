@@ -190,10 +190,12 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="zigzag bg-[#ffb300]" style={{ ['--zz' as string]: '#fff' }} aria-hidden />
+      <div className="zigzag bg-[#ffb300]" style={{ ['--zz' as string]: '#3b25b8' }} aria-hidden />
 
-      {/* ===== HOW TO ===== */}
-      <section id="cach-choi" className="bg-white py-12">
+      {/* ===== HOW TO + CTA: chung một nền gradient liền mạch ===== */}
+      <div className="relative overflow-hidden bg-[#3b25b8]">
+      <div className="hero-dots absolute inset-0 opacity-40" aria-hidden />
+      <section id="cach-choi" className="relative py-12">
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
             <h2 className="text-center text-3xl sm:text-4xl">
@@ -204,7 +206,7 @@ export default function Home() {
             {STEPS.map((s, i) => (
               <Reveal key={s.n} variant={i === 1 ? 'zoom' : i === 0 ? 'left' : 'right'} delay={i * 110} className="h-full">
               <div className="relative h-full rounded-3xl border-[3px] border-[#2d3232] bg-[#f6eedb] p-5 pt-8 text-center shadow-[0_6px_0_0_#2d3232]">
-                <span className="absolute -top-5 left-1/2 inline-flex h-10 w-16 -translate-x-1/2 items-center justify-center rounded-full border-[3px] border-[#2d3232] bg-[#5b2ee5] text-lg text-white">
+                <span className="absolute -top-5 left-1/2 inline-flex h-10 w-16 -translate-x-1/2 items-center justify-center rounded-full border-[3px] border-[#2d3232] bg-[#ffc233] text-lg text-[#2d3232]">
                   {s.n}
                 </span>
                 <div className="text-5xl">
@@ -219,9 +221,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== CTA + FOOTER ===== */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-[#5b2ee5] to-[#241a6e] py-12 text-center">
-        <div className="hero-dots absolute inset-0 opacity-40" aria-hidden />
+      {/* ===== CTA ===== */}
+      <section className="relative py-12 text-center">
         <Reveal variant="zoom" className="relative mx-auto max-w-2xl px-4">
           <h2 className="text-outline text-3xl sm:text-5xl">{t('home.ctaTitle')}</h2>
           <p className="mt-2 rounded-xl bg-black/25 px-3 py-1 text-lg text-white">{t('home.ctaDesc')}</p>
@@ -232,6 +233,7 @@ export default function Home() {
           </div>
         </Reveal>
       </section>
+      </div>
       <footer className="border-t-[3px] border-[#2d3232] bg-[#14102e] py-5 text-center text-white/80">
         <p><Swords /> {t('home.footer')}</p>
       </footer>

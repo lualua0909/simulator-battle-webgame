@@ -1,8 +1,10 @@
 // CPU particle system drawn with a handful of InstancedMeshes (shape × blend mode).
 // Additive particles fade by lerping to their end colour (black = invisible); normal
-// particles fade by shrinking.
+// particles fade by shrinking. Additive spheres (fire, blasts, magic) are drawn as soft
+// camera-facing glows instead of hard balls.
 import * as THREE from 'three';
 import type { ParticleDef } from '@/shared/schema';
+import { GLOW_LAYER } from './glow';
 import { commitInstances } from './instancing';
 
 const SHAPES = ['cube', 'tetra', 'sphere'] as const;
@@ -11,6 +13,59 @@ function shapeGeometry(shape: (typeof SHAPES)[number]): THREE.BufferGeometry {
   if (shape === 'cube') return new THREE.BoxGeometry(1, 1, 1);
   if (shape === 'tetra') return new THREE.TetrahedronGeometry(0.7);
   return new THREE.IcosahedronGeometry(0.55, 0);
+}
+
+/** Bucket of additive spheres: drawn as soft billboards. */
+const SOFT_BUCKET = 5;
+/** A soft glow reads smaller than a ball of the same size: its quad is this much wider. */
+const SOFT_SCALE = 1.6;
+
+/**
+ * Soft glows blend premultiplied: bright colours partly cover what is behind them (fire stays
+ * orange over bright grass instead of washing out to lime), and colours fading to black turn
+ * transparent rather than sooty. A WebGL shader patch; see `useAdditiveGlows` for WebGPU.
+ */
+function softMaterial(map: THREE.Texture): THREE.MeshBasicMaterial {
+  const m = new THREE.MeshBasicMaterial({
+    map,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+  });
+  m.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      `float glowCover = clamp(max(outgoingLight.r, max(outgoingLight.g, outgoingLight.b)), 0.0, 1.0) * 0.85;
+      outgoingLight *= diffuseColor.a;
+      diffuseColor.a *= glowCover;
+      #include <opaque_fragment>`,
+    );
+  };
+  return m;
+}
+
+/** Radial falloff sprite (white; alpha carries the shape) shared by every soft particle. */
+function softTexture(): THREE.DataTexture {
+  const n = 64;
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const r = Math.hypot((x + 0.5) / n - 0.5, (y + 0.5) / n - 0.5) * 2;
+      const k = Math.max(0, 1 - r);
+      const i = (y * n + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+      // Bright core, steep tail: dozens of overlapping sprites must not add up to a visible quad edge.
+      data[i + 3] = Math.round(255 * (k ** 3 * 0.55 + k ** 8 * 0.3));
+    }
+  }
+  const tex = new THREE.DataTexture(data, n, n);
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 export class ParticleSystem {
@@ -25,6 +80,8 @@ export class ParticleSystem {
   private readonly life: Float32Array; // age, life, size0, size1, spin, gravity, drag
   private readonly col: Float32Array; // r0 g0 b0 r1 g1 b1
   private readonly bucket: Uint8Array;
+  /** 1 = a soft glow fading to black: it cools like fire (yellow → orange → red) on the way. */
+  private readonly heat: Uint8Array;
   private readonly tmpM = new THREE.Matrix4();
   private readonly tmpQ = new THREE.Quaternion();
   private readonly tmpE = new THREE.Euler();
@@ -32,6 +89,10 @@ export class ParticleSystem {
   private readonly tmpS = new THREE.Vector3();
   private readonly tmpC = new THREE.Color();
   private readonly tmpC2 = new THREE.Color();
+  private readonly camQ = new THREE.Quaternion();
+  private readonly softTex = softTexture();
+  /** Share of each burst actually emitted (quality tier); fractions round randomly. */
+  density = 1;
 
   constructor(capacity = 6000) {
     this.cap = capacity;
@@ -41,27 +102,45 @@ export class ParticleSystem {
     this.life = new Float32Array(capacity * 7);
     this.col = new Float32Array(capacity * 6);
     this.bucket = new Uint8Array(capacity);
+    this.heat = new Uint8Array(capacity);
     this.group.name = 'particles';
     for (const additive of [false, true]) {
       for (const shape of SHAPES) {
-        const material = additive
-          ? new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })
-          : new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9 });
-        const mesh = new THREE.InstancedMesh(shapeGeometry(shape), material, capacity);
+        const soft = additive && shape === 'sphere';
+        const material = soft
+          ? softMaterial(this.softTex)
+          : additive
+            ? new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })
+            : new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9 });
+        const mesh = new THREE.InstancedMesh(soft ? new THREE.PlaneGeometry(1, 1) : shapeGeometry(shape), material, capacity);
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
         mesh.count = 0;
         mesh.frustumCulled = false;
         mesh.castShadow = !additive;
+        if (additive) mesh.layers.enable(GLOW_LAYER);
         this.meshes.push(mesh);
         this.group.add(mesh);
       }
     }
   }
 
+  /** WebGPU skips the soft glows' shader patch: blend them additively instead. */
+  useAdditiveGlows(): void {
+    const m = this.meshes[SOFT_BUCKET].material as THREE.MeshBasicMaterial;
+    m.blending = THREE.AdditiveBlending;
+    m.onBeforeCompile = () => {};
+    m.needsUpdate = true;
+  }
+
   emit(def: ParticleDef, x: number, y: number, z: number, dir?: { x: number; y: number; z: number }, count = def.count, sizeMul = 1): void {
     const bucket = (def.additive ? 3 : 0) + SHAPES.indexOf(def.shape);
     this.tmpC.set(def.colorStart);
     this.tmpC2.set(def.colorEnd);
+    const heat = bucket === SOFT_BUCKET && Math.max(this.tmpC2.r, this.tmpC2.g, this.tmpC2.b) < 0.02 ? 1 : 0;
+    if (this.density < 1) {
+      const want = count * this.density;
+      count = Math.floor(want) + (Math.random() < want % 1 ? 1 : 0);
+    }
     for (let n = 0; n < count && this.alive < this.cap; n++) {
       const i = this.alive++;
       const P = i * 3;
@@ -95,6 +174,7 @@ export class ParticleSystem {
       col[C + 4] = this.tmpC2.g;
       col[C + 5] = this.tmpC2.b;
       this.bucket[i] = bucket;
+      this.heat[i] = heat;
     }
   }
 
@@ -120,8 +200,11 @@ export class ParticleSystem {
 
   private readonly counts: number[] = [];
 
-  update(dt: number): void {
+  /** `camera` turns the soft particles to face it (none: they keep facing +z). */
+  update(dt: number, camera?: THREE.Camera): void {
     const counts = this.counts;
+    if (camera) camera.getWorldQuaternion(this.camQ);
+    else this.camQ.identity();
     for (let b = 0; b < this.meshes.length; b++) counts[b] = 0;
     let i = 0;
     while (i < this.alive) {
@@ -147,9 +230,16 @@ export class ParticleSystem {
       const b = this.bucket[i];
       const mesh = this.meshes[b];
       const slot = counts[b]++;
-      this.tmpE.set(this.r[P], this.r[P + 1], this.r[P + 2]);
-      this.tmpQ.setFromEuler(this.tmpE);
-      this.tmpS.setScalar(Math.max(0.0001, size));
+      if (b === SOFT_BUCKET) {
+        // Face the camera, rolled by the particle's spin.
+        const half = this.r[P] * 0.5;
+        this.tmpQ.set(0, 0, Math.sin(half), Math.cos(half)).premultiply(this.camQ);
+        this.tmpS.setScalar(Math.max(0.0001, size * SOFT_SCALE));
+      } else {
+        this.tmpE.set(this.r[P], this.r[P + 1], this.r[P + 2]);
+        this.tmpQ.setFromEuler(this.tmpE);
+        this.tmpS.setScalar(Math.max(0.0001, size));
+      }
       this.tmpV.set(this.p[P], this.p[P + 1], this.p[P + 2]);
       this.tmpM.compose(this.tmpV, this.tmpQ, this.tmpS);
       mesh.setMatrixAt(slot, this.tmpM);
@@ -158,6 +248,12 @@ export class ParticleSystem {
       arr[slot * 3] = this.col[C] + (this.col[C + 3] - this.col[C]) * t;
       arr[slot * 3 + 1] = this.col[C + 1] + (this.col[C + 4] - this.col[C + 1]) * t;
       arr[slot * 3 + 2] = this.col[C + 2] + (this.col[C + 5] - this.col[C + 2]) * t;
+      if (this.heat[i]) {
+        // Green and blue die out first, as in a flame's tip.
+        const cool = 1 - t;
+        arr[slot * 3 + 1] *= cool;
+        arr[slot * 3 + 2] *= cool * cool;
+      }
       i++;
     }
     this.meshes.forEach((m, b) => commitInstances(m, counts[b]));
@@ -172,6 +268,7 @@ export class ParticleSystem {
     this.life.copyWithin(i * 7, last * 7, last * 7 + 7);
     this.col.copyWithin(i * 6, last * 6, last * 6 + 6);
     this.bucket[i] = this.bucket[last];
+    this.heat[i] = this.heat[last];
   }
 
   clear(): void {
@@ -185,6 +282,7 @@ export class ParticleSystem {
       (m.material as THREE.Material).dispose();
       m.dispose();
     }
+    this.softTex.dispose();
   }
 }
 

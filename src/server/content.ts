@@ -54,6 +54,40 @@ export function toFirestore(collection: CollectionName, doc: AnyDoc): DocumentDa
 /** Validated document with defaults applied, or null (logged) when it is invalid, e.g. after a hand edit in the Console. */
 export function parseDoc<K extends CollectionName>(collection: K, id: string, data: DocumentData): CollectionDocs[K] | null {
   const raw: DocumentData = { ...data, id };
+  // Existing CMS documents outlive seed changes. Upgrade the retired flyer on
+  // read so its GLB-only renderer never receives the old null model reference.
+  if (collection === 'units' && id === 'eagle') {
+    raw.name = 'Cá đuối bay';
+    raw.description = 'Bay lượn, quật vây cắn xé.';
+  }
+  // Tu sĩ dựng tay đã nghỉ: nâng save cũ lên Thiên thần bay thấp dùng GLB,
+  // để renderer skinned không bao giờ nhận model procedural cũ.
+  if (collection === 'units' && id === 'healer') {
+    raw.name = 'Thiên thần';
+    raw.description = 'Bay thấp, hồi máu đồng đội.';
+    raw.flying = true;
+    raw.altitude = 2;
+  }
+  if (collection === 'assets' && id === 'm-healer') {
+    raw.name = 'Thiên thần';
+    raw.kind = 'humanoid';
+    raw.params = {};
+    raw.glb ??= SEED.assets.find((asset) => asset.id === id)!.glb;
+  }
+  if (collection === 'assets' && id === 'm-eagle') {
+    raw.name = 'Cá đuối bay';
+    raw.kind = 'bird';
+    raw.params = {};
+    raw.glb ??= SEED.assets.find((asset) => asset.id === id)!.glb;
+  }
+  if (collection === 'weapons' && id === 'talons') raw.name = 'Quật vây';
+  // Người khổng lồ halved (2026-09): upgrade saves still on the old default size.
+  if (collection === 'assets' && id === 'm-giant' && raw.scale === 4.6) raw.scale = 2.3;
+  if (collection === 'units' && id === 'giant' && raw.height === 9.2) raw.height = 4.6;
+  if (collection === 'assets' && raw.kind === 'structure' && raw.params?.type === 'barracks') {
+    // Barracks is a fixed bundled model; old uploaded URLs may no longer exist.
+    raw.glb = SEED.assets.find((asset) => asset.id === 'm-barracks')!.glb;
+  }
   const parsed = COLLECTION_SCHEMAS[collection].safeParse(raw);
   if (!parsed.success) {
     console.error(`Nội dung ${collection}/${id} không hợp lệ, bỏ qua:`, parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));

@@ -27,7 +27,7 @@ export default function UnitCard({ unit, thumb, faction, progress, locked, count
   const ready = progress && progress.need !== null && progress.have >= progress.need;
   const Tag = onClick ? 'button' : 'div';
   return (
-    <Tag type={onClick ? 'button' : undefined} onClick={onClick} aria-pressed={onClick ? !!selected : undefined} className={`unit-card ${progress ? 'unit-card-with-progress' : ''} ${ready ? 'unit-card-ready' : ''} ${selected ? 'unit-card-selected' : ''} ${className ?? ''}`} style={{ width, maxWidth: '100%' }}>
+    <Tag type={onClick ? 'button' : undefined} onClick={onClick} aria-pressed={onClick ? !!selected : undefined} className={`unit-card ${progress ? 'unit-card-with-progress' : ''} ${selected ? 'unit-card-selected' : ''} ${className ?? ''}`} style={{ width, maxWidth: '100%' }}>
       {progress && (
         <div className={`cr-progress ${ready ? 'cr-progress-ready' : ''}`}>
           <div className="cr-progress-fill" style={{ width: `${progress.need === null ? 100 : Math.min(100, (progress.have / Math.max(1, progress.need)) * 100)}%` }} />

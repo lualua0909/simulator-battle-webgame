@@ -866,11 +866,21 @@ button.cr-card {
   text-shadow: 0 2px 0 #272132;
 }
 .home-page .mode-cta { color: #ffe087; }
+.home-page #cach-choi {
+  background: transparent;
+  color: #fff9ed;
+}
 .home-page #cach-choi .rounded-3xl {
   border-radius: 12px;
-  border-color: #292130;
-  background: linear-gradient(#503c39, #392c30);
+  border-color: #2d3232;
+  background: linear-gradient(#fffdf4, #f6eedb);
+  color: #2d3232;
+  text-shadow: none;
   box-shadow: var(--arcade-shadow);
+}
+.home-page #cach-choi .rounded-3xl :is(h1,h2,h3) {
+  -webkit-text-stroke: 0;
+  text-shadow: none;
 }
 @media (hover:hover) {
   .game-ui .btn:hover { filter:brightness(1.08); }
@@ -1057,11 +1067,4 @@ button.cr-card {
   pointer-events: none;
 }
 
-/* Upgrade-ready card: gentle sway */
-@keyframes unit-card-sway {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-1.5deg); }
-  75% { transform: rotate(1.5deg); }
-}
-.unit-card-ready { animation: unit-card-sway 2.4s ease-in-out infinite; transform-origin: 50% 90%; }
-@media (prefers-reduced-motion: reduce) { .unit-card-ready { animation: none; } }
+

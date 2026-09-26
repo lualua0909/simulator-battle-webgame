@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { getGLTFLoader } from './gltfLoader';
 
-export type SkinState = 'idle' | 'walk' | 'run' | 'attack' | 'leap' | 'death' | 'jump' | 'stomp' | 'sweep' | 'toss' | 'palm';
+export type SkinState = 'idle' | 'walk' | 'run' | 'fly' | 'attack' | 'leap' | 'death' | 'jump' | 'stomp' | 'sweep' | 'toss' | 'palm';
 
 /** Rest height (m) every skinned file is normalised to at scale 1. */
 export const NORMALIZED_HEIGHT = 2;
@@ -97,21 +97,24 @@ const loader = getGLTFLoader();
 
 /** Clip keywords per battle state; matches Quaternius-style names like "Armature|Velociraptor_Run". */
 const KEYWORDS: Record<SkinState, string[]> = {
-  idle: ['idle', 'hover', 'fly'],
-  walk: ['walk', 'fly'],
+  idle: ['idle', 'hover', 'fly', 'swim'],
+  walk: ['walk', 'fly', 'swim'],
   // No 'run' clip in some packs (e.g. voi-mamut.glb ships only Walk): fall back to
   // the walk cycle so a fast unit never glides in the idle pose.
-  run: ['run', 'walk', 'fly'],
+  run: ['run', 'walk', 'fly', 'swim'],
+  // Flying units (bird/dragon kinds, e.g. Cá đuối bay): locomotion is always the
+  // flight clip (Swim/Flying/Hover), never a walk/run cycle.
+  fly: ['fly', 'swim', 'hover', 'glide'],
   // 'hammer' before 'attack': giant-golem.glb ships Attack_Leap ahead of Attack_Hammer.
   attack: ['spell', 'cast', 'staff_attack', 'hammer', 'attack', 'shoot', 'bite', 'strike', 'punch', 'slash', 'kick', 'hit'],
   // Dash/leap skill (giant-golem.glb Attack_Leap); packs without one reuse the attack clip.
   leap: ['attack_leap', 'leap', 'spell', 'cast', 'staff_attack', 'attack', 'bite', 'strike', 'slash'],
   death: ['death', 'die', 'dead'],
-  jump: ['jump', 'leap', 'fly'],
+  jump: ['jump', 'leap', 'fly', 'swim'],
   // Skill clips picked by castStyle (slam / swing / throw), e.g. the elephants' stomp and
   // trunk skills; files without one fall back to the attack clip.
   stomp: ['attack_stomp', 'stomp'],
-  sweep: ['attack_trunksweep', 'trunksweep', 'sweep'],
+  sweep: ['attack_finslap', 'finslap', 'fin', 'attack_trunksweep', 'trunksweep', 'sweep'],
   // linh-melee.glb has no throw clip: its Attack_Slash doubles as the stone throw.
   toss: ['attack_trunktoss', 'toss', 'attack_trunksweep', 'trunksweep', 'sweep', 'attack_slash', 'slash'],
   // Palm strike (linh-melee.glb Attack_Palm, the chưởng skill).

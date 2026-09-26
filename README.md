@@ -7,7 +7,7 @@ Game mô phỏng đại chiến kiểu *Totally Accurate Battle Simulator*: xế
 - **CMS** tại `/admin`: quản lý lính, kỹ năng & vũ khí, đạn, particle, asset 3D, bản đồ, bot, cài đặt + bảng khắc chế giáp. Lưu trên Firestore, có preview trực tiếp và đấu thử với hình nộm.
 - **Kỹ năng hoành tráng**: sét chuỗi phóng từ tay, thiên lôi và bão sấm giáng từ trời, lốc xoáy / lốc lửa hút bổng quân địch, thiên thạch, phun lửa, dậm đất, súng hỏa mai, mưa tên, ném tảng đá, hồi máu diện rộng. Admin gán kỹ năng cho từng lính và chỉnh tốc độ đánh, tốc độ chạy, tốc độ ra kỹ năng.
 - **Xưởng mô hình** tại `/models` (chỉ root/admin; user thường và khách bị chuyển về trang đăng nhập CMS): xem mọi lính/kỹ năng/asset, sửa ngay tại đó thông số, kỹ năng (gán + chỉ số), giá lính, tải model (TypeScript/GLB/OBJ/STL/PLY/USDZ).
-- **Mô hình 3D procedural** theo chuẩn img2threejs, dựng hoàn toàn bằng code: người (nhiều kiểu giáp/mũ/vũ khí), ngựa, voi/ma mút, rồng, đại bàng, máy bắn đá, cây (thông/sồi/bạch dương/khô/cọ/xương rồng), đá, bụi, sông, địa hình, 6 kiểu rương hộp quà.
+- **Mô hình 3D procedural** theo chuẩn img2threejs, dựng hoàn toàn bằng code: người (nhiều kiểu giáp/mũ/vũ khí), ngựa, voi/ma mút, rồng, cá đuối bay, máy bắn đá, cây (thông/sồi/bạch dương/khô/cọ/xương rồng), đá, bụi, sông, địa hình, 6 kiểu rương hộp quà.
 - **Coin, thẻ bài, hộp quà** (Phase 2): ví coin trên Firestore (1.000 VNĐ = 1.000 coin), hộp quà hằng ngày + hộp x giờ (rương 3D nhún nhảy, mở có ánh sáng), bộ sưu tập thẻ kiểu Clash Royale, mở khóa lính, mua thẻ, nâng lính 1–5 sao. Kế hoạch nạp tiền thật: [docs/MONETIZATION.md](docs/MONETIZATION.md).
 
 ## Chạy

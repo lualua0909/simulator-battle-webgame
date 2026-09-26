@@ -115,9 +115,6 @@ export class Poser {
         case 'dragon':
           this.dragon(seg, input);
           break;
-        case 'bird':
-          this.bird(seg, input);
-          break;
         case 'catapult':
           this.catapult(seg, input);
           break;
@@ -468,24 +465,6 @@ export class Poser {
     this.r(seg, 'neck2', 0.1 + 0.25 * breathing);
     this.r(seg, 'head', 0.15 + 0.35 * breathing, Math.sin(t * 0.9) * 0.1, 0);
     this.r(seg, 'jaw', 0.08 + 0.55 * breathing + Math.sin(t * 20) * 0.05 * breathing);
-  }
-
-  // ------------------------------------------------------------------ bird
-
-  private bird(seg: SegmentTemplate, a: AnimInput): void {
-    const t = a.time + a.seed * 10;
-    const dive = a.attack >= 0 ? 1 : 0;
-    const rate = dive ? 9 : 6;
-    const beat = Math.sin(t * rate);
-    this.r(seg, 'wingL', 0, 0, beat * 0.75 * (1 - dive * 0.5) + 0.15 - dive * 0.3);
-    this.r(seg, 'wingR', 0, 0, -beat * 0.75 * (1 - dive * 0.5) - 0.15 + dive * 0.3);
-    this.r(seg, 'wingTipL', 0, 0, Math.sin(t * rate - 0.6) * 0.5);
-    this.r(seg, 'wingTipR', 0, 0, -Math.sin(t * rate - 0.6) * 0.5);
-    this.o(seg, 'body', 0, -beat * 0.06, 0);
-    this.r(seg, 'body', 0.1 + dive * 0.45 + a.leanX * 0.3, 0, a.leanZ * 0.5);
-    this.r(seg, 'head', -dive * 0.3, Math.sin(t * 0.9) * 0.3, 0);
-    this.r(seg, 'tail', Math.sin(t * 2) * 0.1);
-    this.r(seg, 'legs', dive ? -0.9 : 0.6);
   }
 
   // ------------------------------------------------------------------ catapult

@@ -6,6 +6,7 @@ import type { AssetDef, ConfigBundle, Settings, WeaponDef } from '@/shared/schem
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
 import { createAssetModel, getUnitTemplate } from '../models';
 import { cloneSkinned, mountSeatFor, releaseSkinned, setSkinState, stepSkin, walkSpeedFor, type SkinnedInstance, type SkinState, type SkinTint } from '../models/glbSkinned';
+import { BARRACKS_GLB_URL, cloneBarracks, playBarracksDoor, releaseBarracks, stepBarracks, type BarracksInstance } from '../models/barracksGlb';
 import type { ModelTemplate } from '../models/bake';
 import type { Side } from '../sim/terrain';
 import { SIM_DT, type BattleSim, type SimEvent, type SimUnit } from '../sim/world';
@@ -89,8 +90,17 @@ interface UnitVis {
   skinScale: number;
   skinTint: SkinTint;
   skinHide: string[];
+  /** Spawner building with an uploaded GLB (nhà lính): live clone so Door_OpenClose plays on spawn. */
+  usesDoor: boolean;
+  door: BarracksInstance | null;
+  doorUrl: string | null;
+  doorScale: number;
+  /** Spawn arrived before the clone existed: play the door action once it clones. */
+  doorQueued: boolean;
   /** Fallen distance of a dead flyer gliding to the ground (corpses must not hover). */
   fall: number;
+  /** Speed of that fall (m/s). */
+  fallV: number;
   /** Seconds the attack clip keeps showing after a swing starts (covers the strike). */
   atkT: number;
   /** Last attack was a dash skill: skeletal files play their leap clip. */
@@ -157,6 +167,7 @@ export class UnitRenderer {
   /** Fresh visuals for a new sim. Instanced meshes are kept and reused (deployment rebuilds on every placement). */
   build(sim: BattleSim): void {
     this.detachSkins();
+    this.detachDoors();
     this.vis = [];
     this.corpses = [];
     this.ensure(sim);
@@ -167,6 +178,16 @@ export class UnitRenderer {
     const a = this.assets.get(modelId);
     if (!a?.glb || !(SKINNED_GLB_KINDS as readonly string[]).includes(a.kind)) return null;
     return { url: a.glb.url, scale: a.scale, tint: a.glb.tint ?? {}, hide: a.glb.hide ?? [] };
+  }
+
+  /** Barracks (nhà lính) spawner building: always the fixed GLB file, rendered as a live
+   * clone so its door action plays. Not read from the CMS database — the old procedural
+   * barracks was deleted. */
+  private doorUrlFor(def: SimUnit['def']): { url: string; scale: number } | null {
+    if (!def.spawnUnitId) return null;
+    const a = this.assets.get(def.modelId);
+    if (!a || a.kind !== 'structure') return null;
+    return { url: BARRACKS_GLB_URL, scale: a.scale };
   }
 
   /** Visuals for units added since the last call (all of them after build, barracks spawns later). */
@@ -193,6 +214,8 @@ export class UnitRenderer {
       const type = this.types.get(u.def.id);
       const skin = this.skinUrlFor(u.def.modelId);
       const usesSkin = !!skin && !wall;
+      const door = !wall && !usesSkin ? this.doorUrlFor(u.def) : null;
+      const usesDoor = !!door;
       const v: UnitVis = {
         type: type!,
         seed: ((u.id * 2654435761) >>> 0) / 4294967296,
@@ -206,7 +229,7 @@ export class UnitRenderer {
         vLeanZ: 0,
         yaw: Math.atan2(u.fx, u.fz),
         tumble: 0,
-        world: usesSkin || !type ? [] : type.template.parts.map(() => new THREE.Matrix4()),
+        world: usesSkin || usesDoor || !type ? [] : type.template.parts.map(() => new THREE.Matrix4()),
         ragdoll: null,
         corpse: false,
         sink: 0,
@@ -221,7 +244,13 @@ export class UnitRenderer {
         skinScale: skin?.scale ?? 1,
         skinTint: skin?.tint ?? {},
         skinHide: skin?.hide ?? [],
+        usesDoor,
+        door: null,
+        doorUrl: door?.url ?? null,
+        doorScale: door?.scale ?? 1,
+        doorQueued: false,
         fall: 0,
+        fallV: 0,
         atkT: 0,
         atkLeap: false,
         atkClip: 'attack',
@@ -232,7 +261,7 @@ export class UnitRenderer {
         stale: false,
       };
       this.vis.push(v);
-      if (!wall && !usesSkin) this.poseAlive(u, v, sim, 1, 0);
+      if (!wall && !usesSkin && !usesDoor) this.poseAlive(u, v, sim, 1, 0);
     }
   }
 
@@ -241,7 +270,8 @@ export class UnitRenderer {
     const style = old?.style ?? attackStyleFor(template, this.weapons.get(def.weaponId));
     if (old) for (const m of old.meshes) if (m) this.group.remove(m);
     // Skinned units never touch the instanced path: keep null slots so update() writes nothing.
-    const skinned = !!this.skinUrlFor(def.modelId);
+    // Animated barracks (door clones) skip it the same way.
+    const skinned = !!this.skinUrlFor(def.modelId) || !!this.doorUrlFor(def);
     const meshes = template.parts.map((p, k) => {
       if (!p.geometry || skinned) return null;
       const m = new THREE.InstancedMesh(p.geometry, template.smooth ? smoothMaterial : material, capacity);
@@ -288,10 +318,20 @@ export class UnitRenderer {
           releaseSkinned(v.skin);
           v.skin = null;
         }
+        if (v.door) {
+          this.group.remove(v.door.group);
+          releaseBarracks(v.door);
+          v.door = null;
+        }
         continue;
       }
       if ((hidden && u.side === hidden) || (i === this.hideId && u.alive)) {
         if (v.skin) v.skin.group.visible = false;
+        if (v.door) v.door.group.visible = false;
+        continue;
+      }
+      if (v.usesDoor) {
+        this.updateDoor(u, v, alpha, dt, view);
         continue;
       }
       if (v.usesSkin) {
@@ -480,6 +520,8 @@ export class UnitRenderer {
     if (!u.alive) state = 'death';
     else if (u.dashWeapon) state = 'leap';
     else if (attacking || v.atkT > 0) state = v.atkLeap ? 'leap' : v.atkClip;
+    // Flying units stay on the wing: hover and travel both play the flight clip (Swim/Flying), never walk/run.
+    else if (u.flying) state = 'fly';
     else if ((u.airborne && !u.dashWeapon) || u.climb !== null) state = 'jump';
     else if (v.speed > Math.max(1.5, v.type.refSpeed * 0.75)) state = 'run';
     else if (v.speed > 0.4) state = 'walk';
@@ -492,18 +534,70 @@ export class UnitRenderer {
     // Off screen: keep its place (emit points follow it) but skip the skeletal animation.
     skin.group.visible = !view || (u.alive ? this.standingInView(view, u, x, y, z) : view.intersectsSphere(this.sphere.set(this.tmpP.set(x, y, z), Math.max(v.height, v.radius) + 1)));
     if (skin.group.visible) stepSkin(skin, dt);
-    // Dead flyers glide down instead of hovering: settle on the ground, then corpses sink as usual.
-    if (!u.alive && skin.settled && dt > 0) {
-      const restY = y - v.sink - v.fall;
-      if (restY > 0.35) v.fall = Math.min(v.fall + dt * 2.2, y - v.sink - 0.35);
+    // Dead flyers drop to the ground from the moment they die (on or off screen) and lie there
+    // like every other corpse; the sim freezes a dead unit's y at its flight altitude.
+    if (!u.alive && dt > 0) {
+      const drop = y - (this.sim ? this.sim.terrain.height(x, z) : 0);
+      if (v.fall < drop) {
+        v.fallV += dt * 18;
+        v.fall = Math.min(drop, v.fall + v.fallV * dt);
+      }
     }
     skin.group.position.set(x, y - v.sink - v.fall, z);
     skin.group.rotation.y = v.yaw;
   }
 
+  /** Animated barracks: live GLB clone; the door action plays on every spawn (see onSpawn). */
+  private updateDoor(u: SimUnit, v: UnitVis, alpha: number, dt: number, view: THREE.Frustum | null): void {
+    if (!v.door) {
+      if (!v.doorUrl) return;
+      const inst = cloneBarracks(v.doorUrl);
+      if (!inst) return; // still loading; the building pops in once the file arrives
+      inst.group.scale.setScalar(v.doorScale);
+      this.group.add(inst.group);
+      v.door = inst;
+      if (v.doorQueued) {
+        v.doorQueued = false;
+        playBarracksDoor(inst);
+      }
+    }
+    const door = v.door;
+    const x = u.px + (u.x - u.px) * alpha;
+    const y = u.py + (u.y - u.py) * alpha;
+    const z = u.pz + (u.z - u.pz) * alpha;
+    door.group.visible = !view || this.standingInView(view, u, x, y, z);
+    if (door.group.visible) stepBarracks(door, dt);
+    if (!u.alive && v.collapse >= 0 && v.collapse <= COLLAPSE_TIME) {
+      // Sink, tilt and shudder like the instanced collapseStep, applied to the clone.
+      v.collapse += dt;
+      const k = Math.min(1, v.collapse / COLLAPSE_TIME);
+      const fall = k * k;
+      const h = u.def.height;
+      const shake = (1 - k) * 0.12;
+      const tilt = fall * 0.14 * (v.seed > 0.5 ? 1 : -1);
+      door.group.position.set(
+        x + (Math.random() * 2 - 1) * shake,
+        y - fall * h * 0.72,
+        z + (Math.random() * 2 - 1) * shake,
+      );
+      door.group.rotation.set(tilt * 0.6, v.yaw, tilt);
+      return;
+    }
+    door.group.position.set(x, y, z);
+    door.group.rotation.set(0, v.yaw, 0);
+  }
+
+  /** A barracks produced a unit: play its door open/close action. */
+  onSpawn(parentId: number): void {
+    const v = this.vis[parentId];
+    if (!v || !v.usesDoor) return;
+    if (v.door) playBarracksDoor(v.door);
+    else v.doorQueued = true;
+  }
+
   onHit(e: HitEvent): void {
     const v = this.vis[e.targetId];
-    if (!v || v.usesSkin) return;
+    if (!v || v.usesSkin || v.usesDoor) return;
     const fX = Math.sin(v.yaw);
     const fZ = Math.cos(v.yaw);
     const fwd = e.dx * fX + e.dz * fZ;
@@ -538,7 +632,7 @@ export class UnitRenderer {
     if (v.stale) this.poseAlive(u, v, sim, 1, 0);
     if (u.structure) {
       v.collapse = 0;
-      v.rest = v.world.map((w) => w.clone());
+      if (!v.usesDoor) v.rest = v.world.map((w) => w.clone());
       return;
     }
     if (v.usesSkin) {
@@ -615,7 +709,7 @@ export class UnitRenderer {
   /** World position of a named socket on a unit (e.g. dragon "mouth"). */
   socketPosition(unitId: number, name: string, out: THREE.Vector3): boolean {
     const v = this.vis[unitId];
-    if (!v || v.usesSkin) return false;
+    if (!v || v.usesSkin || v.usesDoor) return false;
     const s = v.type.template.sockets[name];
     if (!s) return false;
     if (v.stale) this.refresh(unitId, v);
@@ -633,6 +727,16 @@ export class UnitRenderer {
     }
   }
 
+  private detachDoors(): void {
+    for (const v of this.vis) {
+      if (v.door) {
+        this.group.remove(v.door.group);
+        releaseBarracks(v.door);
+        v.door = null;
+      }
+    }
+  }
+
   clear(): void {
     for (const t of this.types.values()) {
       for (const m of t.meshes) {
@@ -642,6 +746,7 @@ export class UnitRenderer {
       }
     }
     this.detachSkins();
+    this.detachDoors();
     this.types.clear();
     this.vis = [];
     this.corpses = [];

@@ -229,9 +229,8 @@ export class RtsCamera {
 
   setTerrain(terrain: Terrain): void {
     this.terrain = terrain;
-    // Zoomed all the way out the map just fills the frame — no further.
-    // An island may be zoomed out further, to see it floating whole.
-    this.maxDistance = Math.max(70, terrain.size * (terrain.island ? 1.8 : 1.05));
+    // Zoomed all the way out the land is seen floating whole, cliffs and sea around it.
+    this.maxDistance = Math.max(70, terrain.size * 1.8);
     this.goal.target.set(0, 0, 0);
     this.setView(Math.PI, 0.8, terrain.size * 0.55);
   }

@@ -60,7 +60,7 @@ export class Terrain {
   readonly island: boolean;
   /** Mean coast radius (island only). */
   readonly islandRadius: number;
-  /** Ground height past the coast (island only): the sea at the foot of the cliffs. */
+  /** Ground height past the map's edge / the island's coast: the sea at the foot of the cliffs. */
   readonly islandFloor = -9;
 
   private readonly seed: number;
@@ -204,20 +204,13 @@ export class Terrain {
       const s = this.map.rise > 0 ? x : -x;
       h += (this.map.rise < 0 ? -this.map.rise : this.map.rise) * smooth01((s + this.size * 0.02) / (this.size * 0.2));
     }
-    if (this.island) return h;
-    const ax = x < 0 ? -x : x;
-    const az = z < 0 ? -z : z;
-    const e = (ax > az ? ax : az) / this.half;
-    // Gentle rim of hills framing the battlefield.
-    if (e > 0.8) {
-      const t = (e - 0.8) / 0.2;
-      h += t * t * 7;
-    }
     return h;
   }
 
   height(x: number, z: number): number {
-    if (!this.onLand(x, z)) return this.islandFloor;
+    // Both shapes are raised land: past the edge (square) or the coast (island) the ground drops to the sea.
+    const lim = this.half + 1e-6;
+    if ((x < 0 ? -x : x) > lim || (z < 0 ? -z : z) > lim || !this.onLand(x, z)) return this.islandFloor;
     let h = this.baseHeight(x, z);
     if (this.riverEnabled) {
       const d = this.riverDistance(x, z);
@@ -237,9 +230,9 @@ export class Terrain {
     return h;
   }
 
-  /** Upper bound of height(): noise peak plus the rim hills (the river only lowers). */
+  /** Upper bound of height(): noise peak plus the plateau rise (the river only lowers). */
   get maxHeight(): number {
-    return this.heightScale + 7 + (this.map.rise < 0 ? -this.map.rise : this.map.rise);
+    return this.heightScale + (this.map.rise < 0 ? -this.map.rise : this.map.rise);
   }
 
   /** The deployment zone of an active side; throws for a side not in this match. */

@@ -5,7 +5,7 @@
 // The .riv file IS the whole UI — React renders nothing but the canvas: the
 // already-rolled server reward is fed into boxPrize1..6 (coins as the currency
 // slot, unit cards with the game's own thumbnails), then openModal plays the
-// reveal. Chest tap (boxClick) or Escape closes.
+// reveal. Chest tap (boxClick), the end of the sequence (boxOut) or Escape closes.
 //
 // Verified at runtime: tierNum selects the chest (6 = LB 0 … 10), numOfPrize
 // sets the visible slot count, openModal starts the sequence, and a chest tap
@@ -54,6 +54,8 @@ function riveEventName(data: unknown): string {
 }
 
 const MAX_SLOTS = 6;
+const THUMB_WAIT_MS = 4000;
+const BOX_OUT_CLOSE_MS = 700;
 
 export default function RiveBoxReveal({ bundle, thumbs, tier, reward, label, onClose }: Props) {
   const { locale, unitName } = useLanguage();
@@ -75,7 +77,15 @@ export default function RiveBoxReveal({ bundle, thumbs, tier, reward, label, onC
   closeRef.current = onClose;
   const openedRef = useRef(false);
 
-  // Reward data → file, then open. Idempotent: safe to re-run.
+  // Portraits render async (seconds on a first visit) and usually land after the reward: hold the
+  // chest closed until every card has its art, but never longer than THUMB_WAIT_MS.
+  const [thumbWaitOver, setThumbWaitOver] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setThumbWaitOver(true), THUMB_WAIT_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Reward data → file, then open. Idempotent: re-runs as thumbnails arrive (images bind live).
   useEffect(() => {
     if (!vmi) return;
     let cancelled = false;
@@ -94,6 +104,7 @@ export default function RiveBoxReveal({ bundle, thumbs, tier, reward, label, onC
         // Non-currency slot: unit art + name + count.
         setVmBoolean(slot, 'currencyPrize', false);
         const content = childVm(slot, 'prizeContent');
+        setVmBoolean(content, 'currencySwitch', false);
         setVmString(slot, 'titleText', unit ? unitName(unit.id, unit.name) : cards[i].unitId);
         setVmString(content, 'contentText', `x${cards[i].count}`);
         setVmNumber(content, 'amount', cards[i].count);
@@ -105,7 +116,8 @@ export default function RiveBoxReveal({ bundle, thumbs, tier, reward, label, onC
         }
       }
       if (cancelled) return;
-      if (!openedRef.current) {
+      const artReady = cards.every((c) => !units.has(c.unitId) || thumbs[c.unitId]);
+      if (!openedRef.current && (artReady || thumbWaitOver)) {
         openedRef.current = true;
         fireVmTrigger(vmi, 'openModal');
       }
@@ -114,16 +126,22 @@ export default function RiveBoxReveal({ bundle, thumbs, tier, reward, label, onC
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vmi, tier, reward]);
+  }, [vmi, tier, reward, thumbs, thumbWaitOver]);
 
-  // Chest tap / CTA tap from the file → close.
+  // Chest tap / CTA tap / end of sequence from the file → close.
   useEffect(() => {
     if (!vmi) return;
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
     const cleanups = [
       onVmTrigger(vmi, 'boxClick', () => closeRef.current()),
+      // The sequence ends with boxOut and leaves an empty canvas: close once the chest has left.
+      onVmTrigger(vmi, 'boxOut', () => {
+        closeTimer = setTimeout(() => closeRef.current(), BOX_OUT_CLOSE_MS);
+      }),
       onVmTrigger(childVm(vmi, 'cta'), 'ctaClick', () => closeRef.current()),
     ];
     return () => {
+      clearTimeout(closeTimer);
       cleanups.forEach((fn) => fn());
     };
   }, [vmi]);

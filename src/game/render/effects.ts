@@ -8,6 +8,7 @@ import { createTornadoModel } from '../models/effects';
 import { createProjectileModel } from '../models/projectiles';
 import type { Terrain } from '../sim/terrain';
 import type { BattleSim, SimEvent } from '../sim/world';
+import { GLOW_LAYER } from './glow';
 import { commitInstances } from './instancing';
 import type { ParticleSystem } from './particles';
 
@@ -152,6 +153,8 @@ export class EffectRenderer {
       mesh.renderOrder = 3;
       this.group.add(mesh);
     }
+    // Only the coloured halo feeds the bloom: a white core would bloom white and lose the skill's hue.
+    this.glow.layers.enable(GLOW_LAYER);
     this.boltColors = [this.core.instanceColor!.array as Float32Array, this.glow.instanceColor!.array as Float32Array];
     for (let i = 0; i < 4; i++) {
       const light = new THREE.PointLight('#ffffff', 0, 34, 1.6);
@@ -510,6 +513,7 @@ export class EffectRenderer {
     const mesh = new THREE.Mesh(geo, material);
     mesh.frustumCulled = false;
     mesh.renderOrder = scorch ? 1 : 2;
+    if (!scorch) mesh.layers.enable(GLOW_LAYER);
     this.group.add(mesh);
     const ring: Ring = { mesh, kind, x: 0, z: 0, radius: 1, age: 0, life: 1, color: new THREE.Color(), edge: new Float32Array(RING_SEG + 1), active: false, built: false };
     this.rings.push(ring);

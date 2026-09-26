@@ -23,7 +23,7 @@ const USERS: Record<string, AppUser> = { 'cookie-alice': user('alice'), 'cookie-
 const ranked: RankSettleInput[] = [];
 const WALLETS: Record<string, PlayerState> = {
   alice: { ...emptyPlayer(), stars: { clubber: 3, archer: 2 } },
-  carol: { ...emptyPlayer(), unlocked: ['knight'] },
+  carol: { ...emptyPlayer(), unlocked: ['raptor'] },
   dave: { ...emptyPlayer(), xp: 100 },
 };
 /** XP the fake awardXp was asked to add. */
@@ -232,8 +232,8 @@ test('a unit missing from the player collection cannot be readied', async () => 
   const room = await create(carol);
   assert.ok(room.ok);
   await join(bob, room.code);
-  assert.deepEqual(await ready(bob, 'red', 'knight'), { ok: false, error: 'Chưa mở khóa lính Hiệp sĩ' });
-  assert.deepEqual(await ready(carol, 'blue', 'knight'), { ok: true });
+  assert.deepEqual(await ready(bob, 'red', 'raptor'), { ok: false, error: 'Chưa mở khóa lính Khủng long Raptor' });
+  assert.deepEqual(await ready(carol, 'blue', 'raptor'), { ok: true });
   close(bob, carol);
 });
 
@@ -313,7 +313,7 @@ test('a 3rd and 4th player can join an open room and battle starts once everyone
   const started = Promise.all([alice, bob, carol, dave].map((c) => once(c, 'battle:start')));
   assert.deepEqual(await ready(alice, 'blue', undefined, sides), { ok: true });
   assert.deepEqual(await ready(bob, 'red', undefined, sides), { ok: true });
-  assert.deepEqual(await ready(carol, 'green', 'knight', sides), { ok: true });
+  assert.deepEqual(await ready(carol, 'green', 'raptor', sides), { ok: true });
   assert.deepEqual(await ready(dave, 'yellow', undefined, sides), { ok: true });
   const [start] = (await started) as BattleStart[];
   assert.deepEqual(new Set(start.activeSides), new Set(sides));
@@ -400,7 +400,7 @@ test('an elimination tick lands ahead of the fastest simulation, not just the ve
   const started = Promise.all([once(alice, 'battle:start'), once(bob, 'battle:start'), once(carol, 'battle:start')]);
   assert.deepEqual(await ready(alice, 'blue', undefined, sides), { ok: true });
   assert.deepEqual(await ready(bob, 'red', undefined, sides), { ok: true });
-  assert.deepEqual(await ready(carol, 'green', 'knight', sides), { ok: true });
+  assert.deepEqual(await ready(carol, 'green', 'raptor', sides), { ok: true });
   await started;
   // Everyone verified tick 30; alice skipped the intro and sped up, already reporting tick 300.
   for (const c of [alice, bob, carol]) c.emit('battle:checksum', { tick: 30, hash: 1 });
@@ -426,7 +426,7 @@ test('3-4 player free-for-all: one surrendering does not end the match for the r
   const started = Promise.all([once(alice, 'battle:start'), once(bob, 'battle:start'), once(carol, 'battle:start')]);
   assert.deepEqual(await ready(alice, 'blue', undefined, sides), { ok: true });
   assert.deepEqual(await ready(bob, 'red', undefined, sides), { ok: true });
-  assert.deepEqual(await ready(carol, 'green', 'knight', sides), { ok: true });
+  assert.deepEqual(await ready(carol, 'green', 'raptor', sides), { ok: true });
   await started;
   const eliminated = Promise.all([once(alice, 'battle:eliminate'), once(bob, 'battle:eliminate'), once(carol, 'battle:eliminate')]);
   // No battle:result should fire yet — 2 of 3 sides are still standing.
