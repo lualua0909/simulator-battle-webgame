@@ -11,6 +11,8 @@ import {
   CHEST_VARIANTS,
   DAMAGE_TYPES,
   ENV_ASSET_KINDS,
+  EQUIP_ASSET_KINDS,
+  EQUIP_SLOTS,
   FORMATIONS,
   PARTICLE_DIRECTIONS,
   PARTICLE_SHAPES,
@@ -118,6 +120,7 @@ export const ENUM_LABELS: Record<string, string> = {
   elephant: 'Voi',
   dragon: 'Rồng',
   bird: 'Cá đuối bay',
+  equipment: 'Trang bị (vũ khí/khiên)',
   raptor: 'Khủng long',
   catapult: 'Máy bắn đá',
   tree: 'Cây',
@@ -147,8 +150,9 @@ const PARAM_LABELS: Record<string, string> = {
   brows: 'Lông mày',
   cape: 'Áo choàng',
   capeColor: 'Màu áo choàng',
-  weapon: 'Vũ khí cầm tay',
-  offhand: 'Tay trái',
+  weapon: 'Vũ khí liền thân (cũ — dùng khi lính không gắn trang bị)',
+  offhand: 'Khiên liền thân (cũ)',
+  item: 'Kiểu trang bị (quyết định dáng cầm và đòn đánh)',
   woodColor: 'Màu gỗ',
   metalColor: 'Màu kim loại',
   orbColor: 'Màu ngọc trượng',
@@ -226,6 +230,17 @@ export function assetParamDefaults(kind: AssetKind): Record<string, string | num
   return ASSET_PARAM_SCHEMAS[kind].parse({}) as Record<string, string | number | boolean>;
 }
 
+const EQUIP_SLOT_LABELS: Record<(typeof EQUIP_SLOTS)[number], string> = { handR: 'Tay phải', handL: 'Tay trái', back: 'Sau lưng', hipL: 'Hông trái', hipR: 'Hông phải' };
+const EQUIP_SLOT_FIELDS: Field[] = EQUIP_SLOTS.map((slot, i) => ({
+  type: 'ref',
+  key: `equipment.${slot}`,
+  label: EQUIP_SLOT_LABELS[slot],
+  collection: 'assets',
+  kinds: EQUIP_ASSET_KINDS,
+  nullable: true,
+  ...(i === 0 && { help: 'vũ khí ở tay quyết định dáng đánh (cung nên cầm tay trái); để trống cả 5 ô = dùng vũ khí liền thân cũ của mô hình' }),
+}));
+
 const first = (list: Array<{ id: string }>) => list[0]?.id ?? '';
 const idField: Field = { type: 'text', key: 'id', label: 'ID', help: 'chữ thường, số, gạch ngang — không đổi được sau khi tạo', readOnlyOnEdit: true };
 const nameField: Field = { type: 'text', key: 'name', label: 'Tên hiển thị' };
@@ -282,6 +297,8 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
       { type: 'refs', key: 'skillIds', label: 'Kỹ năng (tối đa 6, tự tung theo thứ tự chọn khi hồi xong và đủ mục tiêu)', collection: 'weapons' },
       { type: 'ref', key: 'modelId', label: 'Mô hình', collection: 'assets', kinds: UNIT_ASSET_KINDS },
       { type: 'ref', key: 'riderModelId', label: 'Người cưỡi', collection: 'assets', kinds: ['humanoid'], nullable: true },
+      { type: 'section', label: 'Trang bị (gắn lên người / người cưỡi)' },
+      ...EQUIP_SLOT_FIELDS,
       { type: 'section', label: 'Bay' },
       { type: 'bool', key: 'flying', label: 'Biết bay' },
       { type: 'slider', key: 'altitude', label: 'Độ cao bay (m)', min: 0, max: 40, step: 0.5 },
@@ -312,6 +329,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
       castSpeed: 1,
       modelId: first(b.assets.filter((a) => a.kind === 'humanoid')),
       riderModelId: null,
+      equipment: { handR: null, handL: null, back: null, hipL: null, hipR: null },
       flying: false,
       altitude: 0,
       blockChance: 0,

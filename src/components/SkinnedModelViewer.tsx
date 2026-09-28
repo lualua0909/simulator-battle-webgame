@@ -6,7 +6,8 @@
 // admin previews and thumbnails come from the same source the battle renders.
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { cloneSkinned, setSkinState, stepSkin, type SkinnedInstance, type SkinState, type SkinTint } from '@/game/models/glbSkinned';
+import { equipmentKey, type EquipItem } from '@/game/models/equipment';
+import { cloneSkinned, equipSkinned, setSkinState, stepSkin, type SkinnedInstance, type SkinState, type SkinTint } from '@/game/models/glbSkinned';
 import type { PreviewAnim } from './ModelViewer';
 
 interface Props {
@@ -14,24 +15,29 @@ interface Props {
   scale?: number;
   tint?: SkinTint;
   hide?: string[];
+  /** Equipment on the character's bones (unitEquipment); changes swap it on the live clone. */
+  equipment?: EquipItem[];
   anim?: PreviewAnim;
   /** Fixed camera yaw in degrees; undefined = slow auto-rotate. */
   yaw?: number;
   className?: string;
 }
 
+const NONE: EquipItem[] = [];
+
 const toSkinState = (anim: PreviewAnim): SkinState => (anim === 'attack' ? 'attack' : anim === 'walk' ? 'walk' : 'idle');
 
-export default function SkinnedModelViewer({ url, scale = 1, tint, hide, anim = 'idle', yaw, className }: Props) {
+export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipment = NONE, anim = 'idle', yaw, className }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const state = useRef({ url, scale, tint, hide, anim, yaw });
-  state.current = { url, scale, tint, hide, anim, yaw };
+  const state = useRef({ url, scale, tint, hide, equipment, anim, yaw });
+  state.current = { url, scale, tint, hide, equipment, anim, yaw };
 
   useEffect(() => {
     const el = host.current;
     if (!el) return;
     let dead = false;
     let inst: SkinnedInstance | null = null;
+    let equipped = '';
     let raf = 0;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -125,8 +131,9 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, anim = 
       const s = state.current;
       if (!inst) {
         // Attach as soon as the file has loaded (the effect re-runs per URL).
-        const next = cloneSkinned(s.url, s.tint, s.hide);
+        const next = cloneSkinned(s.url, s.tint, s.hide, s.equipment);
         if (next) {
+          equipped = equipmentKey(s.equipment);
           next.group.scale.setScalar(s.scale);
           scene.add(next.group);
           framing = frame(next.group);
@@ -138,6 +145,12 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, anim = 
         if (inst.group.scale.x !== s.scale) {
           inst.group.scale.setScalar(s.scale);
           framing = frame(inst.group);
+        }
+        // Weapon swap: re-grip on the running clone, no reload.
+        const key = equipmentKey(s.equipment);
+        if (key !== equipped) {
+          equipSkinned(inst, s.equipment);
+          equipped = key;
         }
         setSkinState(inst, toSkinState(s.anim));
         stepSkin(inst, dt);

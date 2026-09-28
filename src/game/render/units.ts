@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { AssetDef, ConfigBundle, Settings, WeaponDef } from '@/shared/schema';
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
 import { createAssetModel, getUnitTemplate } from '../models';
+import { equipmentKey, unitEquipment, type EquipItem } from '../models/equipment';
 import { cloneSkinned, mountSeatFor, releaseSkinned, setSkinState, stepSkin, walkSpeedFor, type SkinnedInstance, type SkinState, type SkinTint } from '../models/glbSkinned';
 import { BARRACKS_GLB_URL, cloneBarracks, playBarracksDoor, releaseBarracks, stepBarracks, type BarracksInstance } from '../models/barracksGlb';
 import type { ModelTemplate } from '../models/bake';
@@ -90,6 +91,8 @@ interface UnitVis {
   skinScale: number;
   skinTint: SkinTint;
   skinHide: string[];
+  /** Equipment mounted on the clone's bones (the unit's loadout when the model carries it). */
+  skinEquipment: EquipItem[];
   /** Spawner building with an uploaded GLB (nhà lính): live clone so Door_OpenClose plays on spawn. */
   usesDoor: boolean;
   door: BarracksInstance | null;
@@ -244,6 +247,7 @@ export class UnitRenderer {
         skinScale: skin?.scale ?? 1,
         skinTint: skin?.tint ?? {},
         skinHide: skin?.hide ?? [],
+        skinEquipment: skin ? unitEquipment(u.def, this.assets).model : [],
         usesDoor,
         door: null,
         doorUrl: door?.url ?? null,
@@ -479,15 +483,17 @@ export class UnitRenderer {
   private updateSkinned(u: SimUnit, v: UnitVis, alpha: number, dt: number, view: THREE.Frustum | null): void {
     if (!v.skin) {
       if (!v.skinUrl) return;
-      const inst = cloneSkinned(v.skinUrl, v.skinTint, v.skinHide);
+      const inst = cloneSkinned(v.skinUrl, v.skinTint, v.skinHide, v.skinEquipment);
       if (!inst) return; // still loading; the unit pops in once the file arrives
       inst.group.scale.setScalar(v.skinScale);
       this.group.add(inst.group);
       v.skin = inst;
       const riderAsset = u.def.riderModelId ? this.assets.get(u.def.riderModelId) : undefined;
       if (riderAsset) {
-        let template = this.riders.get(riderAsset.id);
-        if (!template) this.riders.set(riderAsset.id, (template = createAssetModel(riderAsset)));
+        const gear = unitEquipment(u.def, this.assets).rider;
+        const key = `${riderAsset.id}|${equipmentKey(gear)}`;
+        let template = this.riders.get(key);
+        if (!template) this.riders.set(key, (template = createAssetModel(riderAsset, undefined, gear)));
         const rider = template.clone();
         // Counter the mount's own scale so the rider keeps its own asset scale.
         rider.scale.multiplyScalar(1 / Math.max(0.0001, v.skinScale));
@@ -709,6 +715,14 @@ export class UnitRenderer {
   /** World position of a named socket on a unit (e.g. dragon "mouth"). */
   socketPosition(unitId: number, name: string, out: THREE.Vector3): boolean {
     const v = this.vis[unitId];
+    if (v?.skin) {
+      // Skinned clones: equipment grips and weapon tips mounted on the bones (models/glbEquipment.ts).
+      const o = v.skin.sockets.get(name);
+      if (!o) return false;
+      o.updateWorldMatrix(true, false);
+      out.setFromMatrixPosition(o.matrixWorld);
+      return true;
+    }
     if (!v || v.usesSkin || v.usesDoor) return false;
     const s = v.type.template.sockets[name];
     if (!s) return false;

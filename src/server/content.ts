@@ -248,13 +248,15 @@ async function writable(): Promise<Store> {
 export async function listDocs<K extends CollectionName>(collection: K): Promise<CollectionDocs[K][]> {
   const s = await loaded();
   const docs = (s ? [...s.docs[collection].values()] : SEED[collection]) as CollectionDocs[K][];
-  return [...docs].sort((a, b) => (a.id < b.id ? -1 : 1));
+  // The global store survives hot reloads, including changes to read migrations.
+  return docs.map((doc) => parseDoc(collection, doc.id, doc)).filter((doc): doc is CollectionDocs[K] => doc !== null)
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
 export async function getDoc<K extends CollectionName>(collection: K, id: string): Promise<CollectionDocs[K] | null> {
   const s = await loaded();
   const doc = s ? s.docs[collection].get(id) : (SEED[collection] as AnyDoc[]).find((d) => d.id === id);
-  return (doc as CollectionDocs[K] | undefined) ?? null;
+  return doc ? parseDoc(collection, id, doc) : null;
 }
 
 export async function putDoc<K extends CollectionName>(collection: K, doc: CollectionDocs[K]): Promise<void> {
@@ -285,6 +287,15 @@ export async function putSettings(settings: Settings): Promise<void> {
 export async function getContent(): Promise<ContentBundle> {
   const content = { settings: await getSettings() } as ContentBundle;
   for (const c of COLLECTIONS) (content as unknown as Record<string, unknown>)[c] = await listDocs(c);
+  // A retired/missing flyer asset must not leave existing player cards with the
+  // magenta missing-asset mesh. Keep customized assets when they are present.
+  const flyer = content.units.find((unit) => unit.id === 'eagle');
+  if (flyer && !content.assets.some((asset) => asset.id === flyer.modelId)) {
+    flyer.modelId = 'm-eagle';
+    if (!content.assets.some((asset) => asset.id === flyer.modelId)) {
+      content.assets.push(structuredClone(SEED.assets.find((asset) => asset.id === 'm-eagle')!));
+    }
+  }
   return content;
 }
 

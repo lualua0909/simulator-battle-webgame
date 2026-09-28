@@ -4,7 +4,8 @@
 import * as THREE from 'three';
 import { SKINNED_GLB_KINDS, type AssetDef, type ConfigBundle, type UnitDef, type WeaponDef } from '@/shared/schema';
 import { getUnitTemplate } from '../models';
-import { cloneSkinned, type SkinTint } from '../models/glbSkinned';
+import { unitEquipment, type EquipItem } from '../models/equipment';
+import { cloneSkinned, preloadSkinnedGlbs, type SkinTint } from '../models/glbSkinned';
 import { attackStyleFor, Poser } from './animate';
 
 const cache = new Map<string, Promise<Record<string, string>>>();
@@ -12,7 +13,14 @@ const cache = new Map<string, Promise<Record<string, string>>>();
 export function unitThumbnails(bundle: ConfigBundle): Promise<Record<string, string>> {
   let p = cache.get(bundle.version);
   if (!p) {
-    p = render(bundle);
+    p = render(bundle).then((portraits) => {
+      // Do not freeze a transient loading failure for the rest of this session.
+      if (Object.keys(portraits).length < bundle.units.length) cache.delete(bundle.version);
+      return portraits;
+    }).catch((error: unknown) => {
+      cache.delete(bundle.version);
+      throw error;
+    });
     cache.set(bundle.version, p);
   }
   return p;
@@ -23,8 +31,8 @@ function skinnedUrlOf(asset: { kind: string; glb: { url: string } | null } | und
 }
 
 /** Renders one skinned unit mid-idle into the shared context; false before its file loads. */
-async function renderSkinned(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, url: string, scale: number, tint?: SkinTint, hide?: string[]): Promise<boolean> {
-  const inst = cloneSkinned(url, tint ?? {}, hide ?? []);
+async function renderSkinned(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, url: string, scale: number, tint?: SkinTint, hide?: string[], equipment: EquipItem[] = []): Promise<boolean> {
+  const inst = cloneSkinned(url, tint ?? {}, hide ?? [], equipment);
   if (!inst) return false;
   try {
     inst.group.scale.setScalar(scale);
@@ -59,6 +67,10 @@ async function render(bundle: ConfigBundle): Promise<Record<string, string>> {
     return !hit;
   });
   if (missing.length === 0) return out;
+  await preloadSkinnedGlbs(missing.map((unit) => {
+    const asset = assets.get(unit.modelId);
+    return skinnedUrlOf(asset) ? asset!.glb : null;
+  }));
   const fresh = new Map<string, string>();
   const size = 224;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -76,12 +88,15 @@ async function render(bundle: ConfigBundle): Promise<Record<string, string>> {
   for (const unit of missing) {
     const skinAsset = assets.get(unit.modelId);
     const skinUrl = skinnedUrlOf(skinAsset);
-    if (skinUrl && (await renderSkinned(renderer, scene, camera, skinUrl, skinAsset?.scale ?? 1, skinAsset?.glb?.tint, skinAsset?.glb?.hide))) {
+    if (skinUrl && (await renderSkinned(renderer, scene, camera, skinUrl, skinAsset?.scale ?? 1, skinAsset?.glb?.tint, skinAsset?.glb?.hide, unitEquipment(unit, assets).model))) {
       out[unit.id] = renderer.domElement.toDataURL('image/png');
       fresh.set(keys.get(unit.id)!, out[unit.id]);
       await new Promise((r) => setTimeout(r, 0));
       continue;
     }
+    // Missing assets and unloaded GLBs are not valid portraits. In particular,
+    // never encode the magenta missing-asset mesh into a player's card.
+    if (skinUrl || !skinAsset) continue;
     const template = getUnitTemplate(unit, assets);
     const poses = template.parts.map(() => new THREE.Matrix4());
     new Poser(template, attackStyleFor(template, weapons.get(unit.weaponId))).compute(

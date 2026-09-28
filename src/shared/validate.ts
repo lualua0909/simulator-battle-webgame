@@ -1,5 +1,7 @@
 // Cross-document reference integrity for CMS content.
 import {
+  EQUIP_ASSET_KINDS,
+  EQUIP_SLOTS,
   UNIT_ASSET_KINDS,
   type AssetKind,
   type CollectionName,
@@ -24,6 +26,7 @@ const RULES: RefRule[] = [
   { from: 'units', field: 'skillIds', to: 'weapons' },
   { from: 'units', field: 'modelId', to: 'assets', kinds: UNIT_ASSET_KINDS, requiredWhen: () => true },
   { from: 'units', field: 'riderModelId', to: 'assets', kinds: ['humanoid'] },
+  ...EQUIP_SLOTS.map((slot): RefRule => ({ from: 'units', field: `equipment.${slot}`, to: 'assets', kinds: EQUIP_ASSET_KINDS })),
   { from: 'units', field: 'spawnUnitId', to: 'units' },
   { from: 'weapons', field: 'projectileId', to: 'projectiles', requiredWhen: (d) => d.attack === 'projectile' },
   { from: 'weapons', field: 'hitParticleId', to: 'particles' },

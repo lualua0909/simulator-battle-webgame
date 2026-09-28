@@ -8,6 +8,8 @@
 // NORMALIZED_HEIGHT, meaning asset.scale behaves the same as for procedural models.
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+import { swungWeapon, type EquipItem } from './equipment';
+import { mountOnBones, solveGrips, type GripSet } from './glbEquipment';
 import { getGLTFLoader } from './gltfLoader';
 
 export type SkinState = 'idle' | 'walk' | 'run' | 'fly' | 'attack' | 'leap' | 'death' | 'jump' | 'stomp' | 'sweep' | 'toss' | 'palm';
@@ -399,10 +401,23 @@ export interface SkinnedInstance {
   current: SkinState | null;
   /** Death clip finished: freeze on its last frame. */
   settled: boolean;
+  /** Named attachment points of the mounted equipment (`hand.R`, `back`, …, `staff.tip`, `muzzle`). */
+  sockets: Map<string, THREE.Object3D>;
+  /** The file's grips (solved at rest) and the equipment grips currently on the bones. */
+  grips: GripSet;
+  mounts: THREE.Object3D[];
+  /** Clip actions without equipment, and the file's slash clip (swung weapons). */
+  base: Map<SkinState, THREE.AnimationAction>;
+  slash: THREE.AnimationAction | null;
 }
 
-/** A live clone of a loaded file (shares geometry/materials/clips), or null before load. */
-export function cloneSkinned(url: string, tint: SkinTint = {}, hide: readonly string[] = []): SkinnedInstance | null {
+const gripCache = new WeakMap<Baked, GripSet>();
+
+/**
+ * A live clone of a loaded file (shares geometry/materials/clips), or null before load.
+ * `equipment`: items mounted on the clone's bones (see equipSkinned).
+ */
+export function cloneSkinned(url: string, tint: SkinTint = {}, hide: readonly string[] = [], equipment: readonly EquipItem[] = []): SkinnedInstance | null {
   const baked = cache.get(cacheKey(url, tint, hide));
   if (!baked) {
     void ensureLoading(url, tint, hide);
@@ -416,6 +431,8 @@ export function cloneSkinned(url: string, tint: SkinTint = {}, hide: readonly st
     const m = o as THREE.SkinnedMesh;
     if (m.isSkinnedMesh) m.skeleton.update();
   });
+  let grips = gripCache.get(baked);
+  if (!grips) gripCache.set(baked, (grips = solveGrips(group)));
   const mixer = new THREE.AnimationMixer(group);
   const actions = new Map<SkinState, THREE.AnimationAction>();
   const names = baked.clips.map((c) => c.name);
@@ -434,7 +451,34 @@ export function cloneSkinned(url: string, tint: SkinTint = {}, hide: readonly st
     const fallback = mixer.clipAction(baked.clips[0]);
     for (const state of Object.keys(KEYWORDS) as SkinState[]) actions.set(state, fallback);
   }
-  return { group, mixer, actions, current: null, settled: false };
+  // linh-melee.glb Attack_Slash: what a swung weapon strikes with instead of the punch.
+  const slashClip = baked.clips.find((c) => /(^|[^a-z])slash/i.test(c.name));
+  const inst: SkinnedInstance = { group, mixer, actions, current: null, settled: false, sockets: new Map(), grips, mounts: [], base: new Map(actions), slash: slashClip ? mixer.clipAction(slashClip) : null };
+  equipSkinned(inst, equipment);
+  return inst;
+}
+
+/**
+ * Swaps the clone's equipment in place (any time, mid-animation): old items leave the bones,
+ * `equipment` is gripped on, and the attack clips follow the new main weapon.
+ */
+export function equipSkinned(inst: SkinnedInstance, equipment: readonly EquipItem[]): void {
+  for (const m of inst.mounts) m.removeFromParent();
+  const { mounts, sockets } = mountOnBones(inst.group, inst.grips, equipment);
+  inst.mounts = mounts;
+  inst.sockets = sockets;
+  const baseAttack = inst.base.get('attack');
+  const strike = swungWeapon(equipment) && inst.slash ? inst.slash : baseAttack;
+  const was = inst.current ? inst.actions.get(inst.current) : undefined;
+  for (const state of ['attack', ...ATTACK_LIKE] as SkinState[]) {
+    const a = inst.base.get(state);
+    if (a && strike && (state === 'attack' || a === baseAttack)) inst.actions.set(state, strike);
+  }
+  // Mid-attack with a different clip now: restart the state on the next setSkinState.
+  if (!inst.settled && inst.current && was && inst.actions.get(inst.current) !== was) {
+    was.fadeOut(0.18);
+    inst.current = null;
+  }
 }
 
 /** Frees what one clone owns: its skeleton's bone texture on the GPU and its animation state (geometry and materials belong to the shared cache). */

@@ -25,7 +25,7 @@ import {
   socket,
   type Vec3,
 } from './common';
-import { createOffhandModel, createWeaponModel } from './weapons';
+import { slotEuler } from './equipment';
 
 export const HUMANOID_HEIGHT = 1.8;
 const H = HUMANOID_HEIGHT;
@@ -44,9 +44,10 @@ const HAND_ROT: Vec3 = [Math.PI / 2, 0, 0];
 export function createHumanoidModel(p: HumanoidParams): THREE.Group {
   const b = p.bulk;
   const root = modelRoot('humanoid', 'humanoid');
-  root.userData.weapon = p.weapon;
-  root.userData.offhand = p.offhand;
-  root.userData.weaponHand = p.weapon === 'bow' ? 'L' : 'R';
+  // Weapons are equipment assets hung on the sockets below (models/equipment.ts mountEquipment).
+  root.userData.weapon = 'none';
+  root.userData.offhand = 'none';
+  root.userData.weaponHand = 'R';
 
   const bareChest = p.armor === 'loincloth';
   const torsoColor = p.armor === 'robe' ? p.armorColor : bareChest ? p.skin : p.shirt;
@@ -67,12 +68,14 @@ export function createHumanoidModel(p: HumanoidParams): THREE.Group {
     shin.add(mesh(`boot-${side}`, ell(0.09, 0.065, 0.14), p.boots, [0, -0.2, 0.04]));
     thigh.add(shin);
     hips.add(thigh);
+    hips.add(socket(`hip.${side}`, [0.26 * b * s, 0.02, 0.03], slotEuler(`hip${side}`)));
   }
 
   // ---- torso
   const torso = part('torso', [0, 0.05, 0]);
   hips.add(torso);
   torso.add(mesh('torso', ell(0.3 * b, 0.42, 0.25 * b), torsoColor, [0, 0.38, 0]));
+  torso.add(socket('back', [0, 0.36, -0.26 * b - (p.cape ? 0.03 : 0)], slotEuler('back')));
 
   switch (p.armor) {
     case 'vest':
@@ -111,19 +114,9 @@ export function createHumanoidModel(p: HumanoidParams): THREE.Group {
     const fore = part(`forearm${side}`, [0, -(UPPER_ARM + 0.015), 0]);
     fore.add(mesh(`forearm-${side}`, limb(0.068, FOREARM - 0.03), plate ? p.armorColor : p.armor === 'robe' ? sleeve : p.skin));
     fore.add(mesh(`hand-${side}`, ball(0.08, 1), plate ? shade(p.armorColor, 0.85) : p.skin, [0, -0.22, 0]));
-    const handPos: Vec3 = [0, -0.23, 0];
-    fore.add(socket(`hand.${side}`, handPos, HAND_ROT));
+    fore.add(socket(`hand.${side}`, [0, -0.23, 0], HAND_ROT));
     arm.add(fore);
     torso.add(arm);
-
-    const colors = { wood: p.woodColor, metal: p.metalColor, orb: p.orbColor, shield: p.shieldColor };
-    const held = side === root.userData.weaponHand ? createWeaponModel(p.weapon, colors) : side === 'L' ? createOffhandModel(p.offhand, colors) : null;
-    if (held) {
-      const grip = part(side === root.userData.weaponHand ? 'weapon' : 'offhand', handPos);
-      grip.rotation.set(...HAND_ROT);
-      held.children.slice().forEach((c) => grip.add(c));
-      fore.add(grip);
-    }
   }
 
   // ---- head

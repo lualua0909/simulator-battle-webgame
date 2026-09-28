@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { COLLECTIONS } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
-import { parseDoc, toFirestore } from './content';
+import { getBundle, getDoc, parseDoc, toFirestore } from './content';
 
 test('barracks replaces stale uploaded URLs with its bundled GLB while preserving scale', () => {
   const asset = SEED.assets.find((a) => a.id === 'm-barracks')!;
@@ -81,4 +81,33 @@ test('units saved with the old starCoins default read at the new scale (/100)', 
   delete base.id;
   const old = parseDoc('units', 'old-coins', { ...base, starCoins: [1000, 2000, 4000, 8000, 16000] });
   assert.deepEqual(old?.starCoins, [10, 20, 40, 80, 160]);
+});
+
+
+test('hot-reloaded content migrates cached eagle records and restores a missing model', async () => {
+  const globalStore = globalThis as unknown as { __battleContent?: unknown };
+  const previous = globalStore.__battleContent;
+  const unit = SEED.units.find((u) => u.id === 'eagle')!;
+  const asset = SEED.assets.find((a) => a.id === 'm-eagle')!;
+  const docs = Object.fromEntries(COLLECTIONS.map((c) => [c, new Map<string, unknown>()]));
+  docs.units.set(unit.id, { ...unit, name: 'Giant Eagle', hp: 1000 });
+  docs.assets.set(asset.id, { ...asset, name: 'Giant Eagle', glb: null });
+  globalStore.__battleContent = { docs, settings: SEED.settings, loaded: true, failures: 0, ready: Promise.resolve() };
+  try {
+    assert.equal((await getDoc('units', unit.id))?.name, 'Cá đuối bay');
+    assert.equal((await getDoc('assets', asset.id))?.glb?.url, '/models/ca-duoi-bay.glb');
+    const migrated = await getBundle();
+    assert.equal(migrated.units[0].name, 'Cá đuối bay');
+    assert.equal(migrated.assets[0].glb?.url, '/models/ca-duoi-bay.glb');
+    docs.assets.clear();
+    const repaired = await getBundle();
+    assert.equal(repaired.units[0].hp, 1000);
+    assert.equal(repaired.assets.find((a) => a.id === repaired.units[0].modelId)?.glb?.url, '/models/ca-duoi-bay.glb');
+    assert.deepEqual(repaired.assets, migrated.assets);
+    assert.equal(repaired.version, (await getBundle()).version);
+    docs.units.clear();
+    assert.equal((await getBundle()).assets.length, 0, 'do not restore assets for an absent unit');
+  } finally {
+    globalStore.__battleContent = previous;
+  }
 });

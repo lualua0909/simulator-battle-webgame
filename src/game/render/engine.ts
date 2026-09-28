@@ -7,6 +7,7 @@ import type { ConfigBundle, MapDef, ParticleDef, ProjectileDef, Settings, Weapon
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
 import { AudioEngine } from '../audio/AudioEngine';
 import { getUnitTemplate } from '../models';
+import { unitEquipment } from '../models/equipment';
 import { cloneSkinned, releaseSkinned, type SkinnedInstance } from '../models/glbSkinned';
 import type { Armies } from '../sim/army';
 import { Terrain, WALL_CELL, type Side } from '../sim/terrain';
@@ -684,7 +685,7 @@ export class BattleEngine {
     // A skinned unit ghosts from its uploaded file — the same source the battle renders.
     const skinAsset = this.bundle.assets.find((a) => a.id === def.modelId);
     const skinUrl = skinAsset?.glb && (SKINNED_GLB_KINDS as readonly string[]).includes(skinAsset.kind) ? skinAsset.glb.url : null;
-    const skin = skinUrl ? cloneSkinned(skinUrl, skinAsset?.glb?.tint, skinAsset?.glb?.hide) : null;
+    const skin = skinUrl ? cloneSkinned(skinUrl, skinAsset?.glb?.tint, skinAsset?.glb?.hide, unitEquipment(def, new Map(this.bundle.assets.map((a) => [a.id, a]))).model) : null;
     if (skin) {
       skin.group.scale.setScalar(skinAsset!.scale);
       skin.group.traverse((o) => {

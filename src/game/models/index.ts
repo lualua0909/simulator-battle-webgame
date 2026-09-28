@@ -5,18 +5,24 @@ import { bakeModel, mergeTemplate, type ModelTemplate } from './bake';
 import { createCatapultModel } from './catapult';
 import { createDragonModel } from './dragon';
 import { createElephantModel } from './elephant';
+import { createEquipmentModel, equipmentKey, itemOf, legacyEquipment, mountEquipment, unitEquipment, type EquipItem } from './equipment';
 import { createBushModel, createRockModel, createTreeModel } from './environment';
 import { createHorseModel } from './horse';
 import { createHumanoidModel, HIP_Y } from './humanoid';
 import { getCustomGlbGroup } from './glbStatic';
 import { BARRACKS_GLB_URL } from './barracksGlb';
+import { modelRoot } from './common';
 import { createRaptorModel } from './raptor';
 import { createStructureModel } from './structures';
 import { SKINNED_GLB_KINDS } from '@/shared/schema';
 
 export type { ModelTemplate } from './bake';
 
-export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.Group {
+/**
+ * `equipment`: items a humanoid carries (models/equipment.ts); omitted = its legacy built-in
+ * weapon, so a bare character asset still previews as before.
+ */
+export function createAssetModel(asset: AssetDef, seedOverride?: number, equipment?: readonly EquipItem[]): THREE.Group {
   const seed = seedOverride ?? asset.seed;
   let root: THREE.Group;
   // An admin-uploaded glb/gltf replaces the procedural preset (static-rig kinds only;
@@ -49,7 +55,15 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
   switch (asset.kind) {
     case 'humanoid':
       root = createHumanoidModel(parseAssetParams('humanoid', asset.params));
+      mountEquipment(root, equipment ?? legacyEquipment(asset));
       break;
+    case 'equipment': {
+      // Standalone preview, upright in its item frame (the asset scale lands on the root below).
+      root = modelRoot('equipment', 'static');
+      const model = createEquipmentModel({ ...itemOf(asset, 'handR'), scale: 1, glbUrl: null });
+      if (model) root.add(model);
+      break;
+    }
     case 'horse':
       root = createHorseModel(parseAssetParams('horse', asset.params));
       break;
@@ -99,10 +113,11 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number): THREE.
   return root;
 }
 
-/** Mount + optional rider seated on the mount's `saddle` socket. */
-export function createUnitModel(unit: Pick<UnitDef, 'modelId' | 'riderModelId'>, assets: ReadonlyMap<string, AssetDef>): THREE.Group {
+/** Mount + optional rider seated on the mount's `saddle` socket, carrying the unit's equipment. */
+export function createUnitModel(unit: Pick<UnitDef, 'modelId' | 'riderModelId'> & { equipment?: UnitDef['equipment'] }, assets: ReadonlyMap<string, AssetDef>): THREE.Group {
   const base = assets.get(unit.modelId);
-  const root = base ? createAssetModel(base) : fallbackModel();
+  const gear = unitEquipment(unit, assets);
+  const root = base ? createAssetModel(base, undefined, gear.model) : fallbackModel();
   const riderAsset = unit.riderModelId ? assets.get(unit.riderModelId) : undefined;
   if (riderAsset) {
     let saddle: THREE.Object3D | undefined;
@@ -110,7 +125,7 @@ export function createUnitModel(unit: Pick<UnitDef, 'modelId' | 'riderModelId'>,
       if (o.userData.socket === 'saddle') saddle = o;
     });
     if (saddle) {
-      const rider = createAssetModel(riderAsset);
+      const rider = createAssetModel(riderAsset, undefined, gear.rider);
       rider.userData.prefix = 'rider.';
       // Socket marks where the rider's hips sit; undo the mount's scale for the rider.
       const mountScale = base?.scale ?? 1;
@@ -136,7 +151,8 @@ function fallbackModel(): THREE.Group {
 const unitCache = new Map<string, ModelTemplate>();
 
 export function getUnitTemplate(unit: UnitDef, assets: ReadonlyMap<string, AssetDef>): ModelTemplate {
-  const key = `${unit.id}|${JSON.stringify(assets.get(unit.modelId))}|${JSON.stringify(unit.riderModelId ? assets.get(unit.riderModelId) : null)}`;
+  const gear = unitEquipment(unit, assets);
+  const key = `${unit.id}|${JSON.stringify(assets.get(unit.modelId))}|${JSON.stringify(unit.riderModelId ? assets.get(unit.riderModelId) : null)}|${equipmentKey(gear.model)}|${equipmentKey(gear.rider)}`;
   let t = unitCache.get(key);
   if (!t) {
     t = bakeModel(createUnitModel(unit, assets));

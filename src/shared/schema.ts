@@ -11,7 +11,18 @@ export const CAST_STYLES = ['auto', 'swing', 'thrust', 'bow', 'throw', 'cast', '
 export const STRIKE_VFX = ['lightning', 'meteor'] as const;
 export const UNIT_ASSET_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'raptor', 'catapult', 'structure'] as const;
 export const ENV_ASSET_KINDS = ['tree', 'rock', 'bush'] as const;
-export const ASSET_KINDS = [...UNIT_ASSET_KINDS, ...ENV_ASSET_KINDS] as const;
+/** Standalone items (weapons, shields) a unit equips on its character's slots (see models/equipment.ts). */
+export const EQUIP_ASSET_KINDS = ['equipment'] as const;
+export const ASSET_KINDS = [...UNIT_ASSET_KINDS, ...ENV_ASSET_KINDS, ...EQUIP_ASSET_KINDS] as const;
+/** Hand-held weapon looks (models/weapons.ts). */
+export const HELD_WEAPONS = ['club', 'bigclub', 'sword', 'axe', 'spear', 'lance', 'hammer', 'bow', 'staff', 'pitchfork', 'stone', 'musket', 'katana'] as const;
+/** Shield looks (models/weapons.ts). */
+export const HELD_SHIELDS = ['shield-round', 'shield-kite', 'buckler'] as const;
+/**
+ * Where a unit carries an equipment item on its character: `handR`/`handL` (held; drives the
+ * attack animation), `back` (slung across the back), `hipL`/`hipR` (sheathed at the belt).
+ */
+export const EQUIP_SLOTS = ['handR', 'handL', 'back', 'hipL', 'hipR'] as const;
 export const PROJECTILE_MODELS = ['arrow', 'spear', 'stone', 'boulder', 'fireball', 'orb', 'bullet', 'meteor', 'shuriken'] as const;
 export const PARTICLE_SHAPES = ['cube', 'tetra', 'sphere'] as const;
 export const PARTICLE_DIRECTIONS = ['up', 'sphere', 'hemisphere', 'forward'] as const;
@@ -38,6 +49,7 @@ export type Role = (typeof ROLES)[number];
 export type AssetKind = (typeof ASSET_KINDS)[number];
 export type UnitAssetKind = (typeof UNIT_ASSET_KINDS)[number];
 export type StructureKind = (typeof STRUCTURE_KINDS)[number];
+export type EquipSlot = (typeof EQUIP_SLOTS)[number];
 
 export const idSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/, 'id chỉ gồm chữ thường, số, dấu gạch ngang');
 const refOrNull = idSchema.nullable().default(null);
@@ -79,6 +91,13 @@ export const unitSchema = z.object({
   castSpeed: z.number().min(0.1).max(10).default(1),
   modelId: idSchema,
   riderModelId: refOrNull,
+  /**
+   * Equipment assets carried on the character (the rider when the model is a mount), by slot.
+   * All empty = the character's own legacy look (procedural humanoid `params.weapon`/`offhand`).
+   */
+  equipment: z
+    .object({ handR: refOrNull, handL: refOrNull, back: refOrNull, hipL: refOrNull, hipR: refOrNull } satisfies Record<EquipSlot, typeof refOrNull>)
+    .default(() => ({ handR: null, handL: null, back: null, hipL: null, hipR: null })),
   flying: z.boolean().default(false),
   altitude: z.number().min(0).max(40).default(0),
   blockChance: z.number().min(0).max(0.95).default(0),
@@ -226,10 +245,18 @@ export const humanoidParamsSchema = z.object({
   brows: z.enum(['none', 'angry', 'worried']).default('angry'),
   cape: z.boolean().default(false),
   capeColor: hex.default('#b3262e'),
-  weapon: z
-    .enum(['none', 'club', 'bigclub', 'sword', 'axe', 'spear', 'lance', 'hammer', 'bow', 'staff', 'pitchfork', 'stone', 'musket', 'katana'])
-    .default('none'),
-  offhand: z.enum(['none', 'shield-round', 'shield-kite', 'buckler']).default('none'),
+  // Legacy built-in weapon: only used while a unit leaves its `equipment` slots empty.
+  weapon: z.enum(['none', ...HELD_WEAPONS]).default('none'),
+  offhand: z.enum(['none', ...HELD_SHIELDS]).default('none'),
+  woodColor: hex.default('#8a5a2b'),
+  metalColor: hex.default('#c9ced6'),
+  orbColor: hex.default('#7cf2ff'),
+  shieldColor: hex.default('#b3262e'),
+});
+
+export const equipmentParamsSchema = z.object({
+  /** Look and grip class: the held weapon decides the attack animation. */
+  item: z.enum([...HELD_WEAPONS, ...HELD_SHIELDS]).default('sword'),
   woodColor: hex.default('#8a5a2b'),
   metalColor: hex.default('#c9ced6'),
   orbColor: hex.default('#7cf2ff'),
@@ -326,6 +353,7 @@ export const ASSET_PARAM_SCHEMAS = {
   tree: treeParamsSchema,
   rock: rockParamsSchema,
   bush: bushParamsSchema,
+  equipment: equipmentParamsSchema,
 } satisfies Record<AssetKind, z.ZodType>;
 
 export type HumanoidParams = z.infer<typeof humanoidParamsSchema>;
@@ -338,6 +366,7 @@ export type StructureParams = z.infer<typeof structureParamsSchema>;
 export type TreeParams = z.infer<typeof treeParamsSchema>;
 export type RockParams = z.infer<typeof rockParamsSchema>;
 export type BushParams = z.infer<typeof bushParamsSchema>;
+export type EquipmentParams = z.infer<typeof equipmentParamsSchema>;
 
 /** Animation rig each asset kind uses. */
 export const RIG_OF_KIND = {
@@ -352,6 +381,7 @@ export const RIG_OF_KIND = {
   tree: 'static',
   rock: 'static',
   bush: 'static',
+  equipment: 'static',
 } as const satisfies Record<AssetKind, string>;
 
 /** Asset kinds whose uploaded .glb keeps its skeletal animation (rendered skinned, see models/glbSkinned.ts). */

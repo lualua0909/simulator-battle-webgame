@@ -23,6 +23,7 @@ import { ENUM_LABELS, isEnvKind } from '@/shared/fields';
 import { abilityCaster } from '@/game/arena';
 import { abilityDps, generateBotArmy, unitPower } from '@/game/bot/generate';
 import { createAssetModel, createUnitModel } from '@/game/models';
+import { equipmentKey, unitEquipment } from '@/game/models/equipment';
 import { bakeModel, type ModelTemplate } from '@/game/models/bake';
 import { createProjectileModel } from '@/game/models/projectiles';
 import { ParticleSystem } from '@/game/render/particles';
@@ -107,7 +108,8 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
   // Skills fire soon after the round starts, so a long first cooldown does not hide them.
   const quickSkills = useMemo(() => skills.map((w) => ({ ...w, initialCooldown: Math.min(w.initialCooldown, 0.8) })), [JSON.stringify(skills)]); // eslint-disable-line react-hooks/exhaustive-deps
   const assets = useMemo(() => new Map(bundle.assets.map((a) => [a.id, a])), [bundle]);
-  const template = useMemo(() => tryBake(() => createUnitModel(unit, assets)), [unit.modelId, unit.riderModelId, assets]); // eslint-disable-line react-hooks/exhaustive-deps
+  const gear = unitEquipment(unit, assets);
+  const template = useMemo(() => tryBake(() => createUnitModel(unit, assets)), [unit.modelId, unit.riderModelId, equipmentKey(gear.model), equipmentKey(gear.rider), assets]); // eslint-disable-line react-hooks/exhaustive-deps
   const skinUrl = skinnedUrlOf(assets.get(unit.modelId));
   const skinScale = assets.get(unit.modelId)?.scale ?? 1;
   // Barracks was deleted as procedural code: the unit always previews its fixed GLB.
@@ -139,7 +141,7 @@ export function UnitPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle })
           isBarracks ? (
             <BarracksViewer scale={skinScale} />
           ) : skinUrl ? (
-            <SkinnedModelViewer url={skinUrl} scale={skinScale} tint={assets.get(unit.modelId)?.glb?.tint} hide={assets.get(unit.modelId)?.glb?.hide} anim={anim} />
+            <SkinnedModelViewer url={skinUrl} scale={skinScale} tint={assets.get(unit.modelId)?.glb?.tint} hide={assets.get(unit.modelId)?.glb?.hide} equipment={gear.model} anim={anim} />
           ) : (
             <ModelViewer template={template} weapon={weapon} anim={anim} />
           )

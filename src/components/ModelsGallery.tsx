@@ -14,6 +14,7 @@ import { canAccessCms } from '@/shared/users';
 import { abilityCaster } from '@/game/arena';
 import { bakeModel, type ModelTemplate } from '@/game/models/bake';
 import { createAssetModel, createUnitModel } from '@/game/models';
+import { unitEquipment } from '@/game/models/equipment';
 import { useConfig } from '@/game/useConfig';
 import { useAuth } from './auth/AuthProvider';
 import AbilityForm from './models/AbilityForm';
@@ -103,7 +104,8 @@ export default function ModelsGallery(props: Props) {
   const weapon = unit ? weapons.find((w) => w.id === unit.weaponId) : undefined;
   const asset = assetDef ? assets.get(assetDef.id) : undefined;
 
-  const modelKey = JSON.stringify([asset ?? null, deferredUnit && !asset ? [assets.get(deferredUnit.modelId), deferredUnit.riderModelId ? assets.get(deferredUnit.riderModelId) : null] : null]);
+  const gear = deferredUnit && !asset ? unitEquipment(deferredUnit, assets) : null;
+  const modelKey = JSON.stringify([asset ?? null, deferredUnit && !asset ? [assets.get(deferredUnit.modelId), deferredUnit.riderModelId ? assets.get(deferredUnit.riderModelId) : null, gear] : null]);
   const template = useMemo(() => {
     if (asset) return tryBake(() => createAssetModel(asset));
     if (deferredUnit && !skill) return tryBake(() => createUnitModel(deferredUnit, assets));
@@ -151,7 +153,7 @@ export default function ModelsGallery(props: Props) {
   ) : arena && unit && !asset ? (
     fighter ? <SkillArena bundle={bundle} caster={fighter} abilities={abilities} /> : <p className="p-4 text-sm">Dữ liệu lính chưa hợp lệ</p>
   ) : skinnedUrl ? (
-    <SkinnedModelViewer url={skinnedUrl} scale={skinAsset?.scale ?? 1} tint={skinAsset?.glb?.tint} hide={skinAsset?.glb?.hide} anim={anim} yaw={props.yaw} />
+    <SkinnedModelViewer url={skinnedUrl} scale={skinAsset?.scale ?? 1} tint={skinAsset?.glb?.tint} hide={skinAsset?.glb?.hide} equipment={gear?.model} anim={anim} yaw={props.yaw} />
   ) : (
     <ModelViewer template={template} weapon={weapon} anim={anim} yaw={props.yaw} explode={explode} onPick={setPicked} />
   );
