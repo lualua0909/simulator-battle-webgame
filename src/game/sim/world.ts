@@ -897,7 +897,13 @@ export class BattleSim {
       if (u.grid || u.climb) continue;
       for (const v of near) {
         if (v.id <= u.id || !v.alive || v.grid || v.climb) continue;
-        if (u.flying !== v.flying || u.airborne || v.airborne) continue;
+        if (u.airborne || v.airborne) continue;
+        // A flyer diving below a ground unit's top must not sink into its body.
+        const mixed = u.flying !== v.flying;
+        if (mixed) {
+          const g = u.flying ? v : u;
+          if ((u.flying ? u : v).y >= g.y + g.def.height) continue;
+        }
         // On a wall and below it do not push each other.
         if (u.onWall !== v.onWall && (u.y - v.y > 1.2 || v.y - u.y > 1.2)) continue;
         let dx = v.x - u.x;
@@ -916,13 +922,14 @@ export class BattleSim {
         const overlap = min - d;
         const total = u.mass + v.mass;
         // Buildings never move.
-        const pu = u.structure ? 0 : v.structure ? overlap * 0.8 : overlap * (v.mass / total) * 0.8;
-        const pv = v.structure ? 0 : u.structure ? overlap * 0.8 : overlap * (u.mass / total) * 0.8;
+        // Mixed pair: only the flyer gives way, the ground unit is never shoved from above.
+        const pu = u.structure || (mixed && !u.flying) ? 0 : v.structure || mixed ? overlap * 0.8 : overlap * (v.mass / total) * 0.8;
+        const pv = v.structure || (mixed && !v.flying) ? 0 : u.structure || mixed ? overlap * 0.8 : overlap * (u.mass / total) * 0.8;
         u.x -= nx * pu;
         u.z -= nz * pu;
         v.x += nx * pv;
         v.z += nz * pv;
-        if (u.side !== v.side) {
+        if (u.side !== v.side && !mixed) {
           this.trample(u, v, nx, nz);
           this.trample(v, u, -nx, -nz);
         }

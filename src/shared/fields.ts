@@ -580,7 +580,7 @@ export const COLLECTION_SPECS: Record<CollectionName, CollectionSpec> = {
       nameField,
       { type: 'number', key: 'seed', label: 'Seed địa hình', min: 0, step: 1 },
       { type: 'slider', key: 'size', label: 'Kích thước (m)', min: 60, max: 300, step: 5 },
-      { type: 'select', key: 'shape', label: 'Hình dạng', options: ['square', 'island'], help: 'island = đảo bay: vùng chơi hình tròn, vách đá, biển bên dưới' },
+      { type: 'select', key: 'shape', label: 'Hình dạng', options: ['square', 'island', 'diorama'], help: 'island = đảo bay: vùng chơi hình tròn, vách đá, biển bên dưới; diorama = sa bàn ô lục giác (KayKit)' },
       { type: 'slider', key: 'heightScale', label: 'Độ cao đồi (m)', min: 0, max: 20, step: 0.1 },
       { type: 'slider', key: 'hilliness', label: 'Độ lượn sóng', min: 0.2, max: 4, step: 0.05 },
       { type: 'slider', key: 'deployDepth', label: 'Chiều sâu vùng triển khai (m)', min: 5, max: 80, step: 1 },

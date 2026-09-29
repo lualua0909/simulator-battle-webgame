@@ -5,6 +5,7 @@
 // model never appears (blank workshop preview, missing battle unit).
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 let shared: GLTFLoader | null = null;
 
@@ -17,6 +18,8 @@ export function getGLTFLoader(): GLTFLoader {
     draco.setDecoderPath('/draco/');
     shared = new GLTFLoader();
     shared.setDRACOLoader(draco);
+    // EXT_meshopt_compression packs (kaykit-hex.glb); the decoder is a small inline wasm.
+    shared.setMeshoptDecoder(MeshoptDecoder);
   }
   return shared;
 }

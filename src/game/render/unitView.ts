@@ -2,24 +2,34 @@
 //   first   through the soldier's eyes (its own model is hidden)
 //   second  in front of it, looking back at it as it charges at you
 //   third   over its shoulder, looking where it goes
+//   moba    behind its right shoulder, looking down at a slant: its right flank and back both in view
 // The followed position and heading are smoothed so the soldier's wobble and ragdoll never shake the view;
 // when it dies the view hands over to the nearest living comrade.
 import * as THREE from 'three';
 import type { Side, Terrain } from '../sim/terrain';
 import type { BattleSim, SimUnit } from '../sim/world';
 
-// `side` is not a unit view: it films the whole battle from the flank, enemy on the left and the own army on the right.
-export type ViewMode = 'overview' | 'side' | 'third' | 'first' | 'second';
-export const VIEW_MODES: readonly ViewMode[] = ['overview', 'side', 'third', 'first', 'second'];
+export type ViewMode = 'overview' | 'moba' | 'third' | 'first' | 'second';
+export const VIEW_MODES: readonly ViewMode[] = ['overview', 'moba', 'third', 'first', 'second'];
 
-/** The camera rides along with one soldier (first / second / third person). */
+/** MOBA camera: distance from the soldier, pitch above the ground, and how far round from straight behind toward its right. */
+const MOBA_DISTANCE = 14;
+const MOBA_PITCH = 0.62;
+const MOBA_SWING = 0.7;
+
+/** The camera rides along with one soldier (first / second / third person, MOBA). */
 export function followsUnit(mode: ViewMode): boolean {
-  return mode === 'third' || mode === 'first' || mode === 'second';
+  return mode === 'third' || mode === 'first' || mode === 'second' || mode === 'moba';
 }
 
 /** Smallest signed difference a − b between two angles. */
 export function angleDiff(a: number, b: number): number {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+}
+
+/** Ground height under a point (its own height without terrain). */
+function groundY(a: THREE.Vector3, terrain: Terrain | null): number {
+  return terrain ? terrain.height(a.x, a.z) : a.y;
 }
 
 /** Soldiers the view can follow: alive, not a wall or a building. */
@@ -103,7 +113,14 @@ export class UnitView {
     const fz = Math.cos(heading);
     const a = this.anchor;
     if (this.mode === 'first') out.set(a.x + fx * r * 0.6, a.y + h * 0.92, a.z + fz * r * 0.6);
-    else if (this.mode === 'second') {
+    else if (this.mode === 'moba') {
+      // Behind and to the right (right of heading = (−fz, fx)); measured from the ground so a flyer does not lift it.
+      const d = MOBA_DISTANCE + h * 2;
+      const flat = Math.cos(MOBA_PITCH) * d;
+      const bx = -fx * Math.cos(MOBA_SWING) - fz * Math.sin(MOBA_SWING);
+      const bz = -fz * Math.cos(MOBA_SWING) + fx * Math.sin(MOBA_SWING);
+      out.set(a.x + bx * flat, groundY(a, terrain) + Math.sin(MOBA_PITCH) * d, a.z + bz * flat);
+    } else if (this.mode === 'second') {
       const d = 2.5 + h * 1.2 + r;
       out.set(a.x + fx * d, a.y + h * 0.8 + 0.3, a.z + fz * d);
     } else {
@@ -115,13 +132,15 @@ export class UnitView {
   }
 
   /** What the eye looks at (desktop; in VR the head aims itself). */
-  look(u: SimUnit, heading: number, out: THREE.Vector3): THREE.Vector3 {
+  look(u: SimUnit, heading: number, terrain: Terrain | null, out: THREE.Vector3): THREE.Vector3 {
     const h = u.def.height;
     const fx = Math.sin(heading);
     const fz = Math.cos(heading);
     const a = this.anchor;
     if (this.mode === 'first') return out.set(a.x + fx * 12, a.y + h * 0.75, a.z + fz * 12);
     if (this.mode === 'second') return out.set(a.x, a.y + h * 0.6, a.z);
+    // A little ahead of the soldier at waist height, so it sits below the middle with room to see where it goes.
+    if (this.mode === 'moba') return out.set(a.x + fx * 3, groundY(a, terrain) + h * 0.5, a.z + fz * 3);
     return out.set(a.x + fx * 6, a.y + h * 0.6, a.z + fz * 6);
   }
 

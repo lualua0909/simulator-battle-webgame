@@ -527,7 +527,7 @@ export function BattleHud(props: {
 
 const VIEW_BUTTONS: { mode: ViewMode; label: string; title: string }[] = [
   { mode: 'overview', label: 'Toàn cảnh', title: 'Toàn cảnh (V)' },
-  { mode: 'side', label: 'Nhìn ngang', title: 'Nhìn ngang: địch bên trái, quân ta bên phải (V)' },
+  { mode: 'moba', label: 'MOBA', title: 'Góc nhìn MOBA: sau lưng chếch bên phải lính, nhìn xéo thấy cả hông và lưng (V)' },
   { mode: 'third', label: 'Sau lưng', title: 'Góc nhìn thứ 3: đứng sau lưng lính (V)' },
   { mode: 'first', label: 'Mắt lính', title: 'Góc nhìn thứ 1: nhìn bằng mắt lính (V)' },
   { mode: 'second', label: 'Trước mặt', title: 'Góc nhìn thứ 2: đứng trước mặt lính, nhìn nó lao tới (V)' },

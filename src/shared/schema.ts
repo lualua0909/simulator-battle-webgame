@@ -451,8 +451,8 @@ export const mapSchema = z.object({
   name,
   seed: z.number().int().min(0).max(1_000_000),
   size: z.number().min(60).max(300).default(70),
-  /** island: a floating island (round playable disc, cliffs, sea below) instead of the square field. */
-  shape: z.enum(['square', 'island']).default('square'),
+  /** island: a floating island (round playable disc, cliffs, sea below) instead of the square field. diorama: square field of KayKit hex tiles on terraces. */
+  shape: z.enum(['square', 'island', 'diorama']).default('square'),
   heightScale: z.number().min(0).max(20).default(4),
   hilliness: z.number().min(0.2).max(4).default(1),
   river: z.object({

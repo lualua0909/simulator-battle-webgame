@@ -90,62 +90,21 @@ function createCliffs(terrain: Terrain, edge: readonly EdgePoint[], taper: numbe
 }
 
 /**
- * The sea slab (glassy sides, sandy bed, floating rock base) of radius `seaR`, rocks in the water past
- * `landReach(angle)` (the land's extent that way), and clouds around and below.
+ * A mist sheet below the land (radius well past `seaR`) and clouds around and below.
  */
-function addSea(group: THREE.Group, terrain: Terrain, seaR: number, landReach: (a: number) => number): void {
+function addSea(group: THREE.Group, terrain: Terrain, seaR: number): void {
   const map = terrain.map;
   const waterY = terrain.islandFloor + 0.4;
-  const seaDepth = 4.5;
-  const water = new THREE.Color(map.waterColor);
-  const sea = new THREE.Mesh(
-    new THREE.CircleGeometry(seaR, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: water, transparent: true, opacity: 0.82, roughness: 0.15, metalness: 0.05, depthWrite: false }),
+  // A sheet of mist (the sky's horizon colour, unlit) instead of a blue sea: the land's edge fades into fog.
+  const mist = new THREE.Mesh(
+    new THREE.CircleGeometry(seaR * 6, 64).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: map.skyBottom }),
   );
-  sea.position.y = waterY;
-  sea.receiveShadow = true;
-  sea.renderOrder = 2;
-  sea.name = 'island-sea';
-  const side = new THREE.Mesh(
-    new THREE.CylinderGeometry(seaR, seaR, seaDepth, 64, 1, true),
-    new THREE.MeshStandardMaterial({ color: water.clone().offsetHSL(0, -0.05, 0.08), transparent: true, opacity: 0.6, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false }),
-  );
-  side.position.y = waterY - seaDepth / 2;
-  side.renderOrder = 2;
-  side.name = 'island-sea-side';
-  const bedY = waterY - seaDepth;
-  const bed = new THREE.Mesh(new THREE.CylinderGeometry(seaR, seaR * 0.97, 1.6, 40), new THREE.MeshStandardMaterial({ color: map.sandColor, roughness: 1, flatShading: true }));
-  bed.position.y = bedY - 0.8;
-  bed.name = 'island-bed';
-  const baseH = seaR * 0.4;
-  const baseGeo = new THREE.CylinderGeometry(seaR * 0.97, seaR * 0.2, baseH, 16, 3);
-  const bp = baseGeo.getAttribute('position') as THREE.BufferAttribute;
-  for (let i = 0; i < bp.count; i++) {
-    // Rough up the underside (the rim stays round so it meets the sea bed).
-    if (bp.getY(i) > baseH / 2 - 0.01) continue;
-    const n = hash2(Math.round(bp.getX(i) * 10), Math.round(bp.getZ(i) * 10), map.seed + 3) - 0.5;
-    bp.setXYZ(i, bp.getX(i) * (1 + n * 0.25), bp.getY(i) + n * 2, bp.getZ(i) * (1 + n * 0.25));
-  }
-  baseGeo.computeVertexNormals();
-  const base = new THREE.Mesh(baseGeo, new THREE.MeshStandardMaterial({ color: new THREE.Color(map.dirtColor).lerp(new THREE.Color('#c7a4a0'), 0.5), roughness: 1, flatShading: true }));
-  base.position.y = bedY - 1.6 - baseH / 2;
-  base.name = 'island-base';
-  group.add(sea, side, bed, base);
-
-  // ---- rocks sticking out of the water
+  mist.position.y = waterY;
+  mist.name = 'island-mist';
+  group.add(mist);
+  const bedY = waterY - 4.5;
   const rng = new Rng(map.seed * 131 + 7);
-  const rockMat = new THREE.MeshStandardMaterial({ color: ROCK, roughness: 1, flatShading: true });
-  for (let i = 0; i < 9; i++) {
-    const a = rng.next() * Math.PI * 2;
-    const r = rng.range(landReach(a) + 3, seaR - 2);
-    const s = rng.range(0.5, 1.5);
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), rockMat);
-    rock.scale.set(s * rng.range(1, 1.6), s * rng.range(0.6, 1.1), s);
-    rock.rotation.set(rng.next(), rng.next() * 6, rng.next());
-    rock.position.set(Math.cos(a) * r, waterY - 0.2, Math.sin(a) * r);
-    rock.castShadow = true;
-    group.add(rock);
-  }
 
   // ---- clouds floating around and below the land
   const cloudMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, emissive: '#ffffff', emissiveIntensity: 0.25 });
@@ -205,7 +164,7 @@ export function createIsland(terrain: Terrain): THREE.Group {
 
   const coast = inner;
   group.add(createCliffs(terrain, dirs.map((d, j) => ({ p: coast[j], nx: d.x, nz: d.z })), terrain.islandRadius * 0.05));
-  addSea(group, terrain, terrain.islandRadius * 1.45, (a) => dirs[Math.floor((a / (Math.PI * 2)) * SEGMENTS) % SEGMENTS].coast);
+  addSea(group, terrain, terrain.islandRadius * 1.45);
   return group;
 }
 
@@ -234,6 +193,6 @@ export function createPlateau(terrain: Terrain): THREE.Group {
   }
   group.add(createCliffs(terrain, edge, half * 0.05));
   // Rocks start past the square's edge that way; the sea's rim clears its corners.
-  addSea(group, terrain, half * Math.SQRT2 * 1.3, (a) => half / Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a))));
+  addSea(group, terrain, half * Math.SQRT2 * 1.3);
   return group;
 }

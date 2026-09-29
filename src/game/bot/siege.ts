@@ -41,7 +41,7 @@ export function generateSiegeDefense(opts: SiegeDefenseOptions): Placement[] {
   const depth = zone.x1 - zone.x0;
   const width = zone.z1 - zone.z0;
   // Enclosure half size in cells, fitted to the zone.
-  const half = clamp(Math.floor((Math.min(depth, width) - 8) / (2 * WALL_CELL)), 2, Math.max(2, siege.botCastleHalf));
+  const half = clamp(Math.floor((Math.min(depth, width) - 8) / (2 * WALL_CELL)), 3, Math.max(3, siege.botCastleHalf));
   const backX = side === 'blue' ? zone.x0 : zone.x1;
   const cx = wallIndex(backX + front * (half * WALL_CELL + 4));
   const cz = wallIndex(clamp(rng.range(-width * 0.15, width * 0.15), zone.z0 + half * WALL_CELL + 2, zone.z1 - half * WALL_CELL - 2));

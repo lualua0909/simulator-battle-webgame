@@ -107,8 +107,8 @@ export const WEAPON_EN: Record<string, string> = {
 };
 
 export const MAP_EN: Record<string, string> = {
-  'dong-co': 'Meadow',
   'mini-map': 'Mini map',
+  'sa-ban-luc-giac': 'Hex Diorama',
   'rung-thong': 'Pine Forest',
   'thanh-tren-doi': 'Hill Castle',
   'deo-song': 'River Pass',

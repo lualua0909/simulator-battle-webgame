@@ -94,8 +94,6 @@ export class RtsCamera {
   onInput: ((e: CameraInput) => boolean) | null = null;
   /** Pitch the auto-director asks for (null = the pitch that follows the zoom distance). */
   autoPitch: number | null = null;
-  /** Yaw the camera is held at (null = free): Q/E, drag and twist no longer turn it. */
-  lockYaw: number | null = null;
   private panWithLeft = false;
   private tilt = 0;
   private readonly goal = { yaw: this.yaw, distance: this.distance, target: new THREE.Vector3() };
@@ -385,7 +383,6 @@ export class RtsCamera {
       if (k.has('e')) this.goal.yaw -= dt * 1.4;
     }
     this.goal.yaw += this.spin * dt;
-    if (this.lockYaw !== null) this.goal.yaw = this.yaw + angleDiff(this.lockYaw, this.yaw);
     this.clampTargets();
     if (this.terrain) this.goal.target.y = this.terrain.height(this.goal.target.x, this.goal.target.z);
     // Rotation settles fast (direct feel); zoom/moves glide a little longer.

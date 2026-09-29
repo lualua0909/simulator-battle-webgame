@@ -20,9 +20,6 @@ const ZOOM_BIAS_MAX = 1.55;
 /** Góc quay battle: đủ cao để mép dưới màn hình luôn chạm đất trong map/skirt, không chĩa lên trời lộ ngoài map. */
 const PITCH_NEAR = 0.5;
 const PITCH_FAR = 0.68;
-/** Side view: as flat as the battle floor allows (see RtsCamera.goalPitch), so the two lines meet across the screen. */
-const FLAT_NEAR = 0.45;
-const FLAT_FAR = 0.52;
 /** Seconds the camera takes to settle on a new aim point — the longer the trip, the gentler it is. */
 const AIM_SMOOTH = 1.5;
 const AIM_SMOOTH_FAR = 3.2;
@@ -91,8 +88,6 @@ interface Cell {
 export class CameraDirector {
   /** The side the camera belongs to: its troops are the ones followed. */
   side: Side = 'blue';
-  /** Side view: film low from the flank instead of from behind the own army. */
-  flat = false;
   private active = false;
   /** Smoothed aim point and zoom. */
   private readonly aimX = new Spring(0);
@@ -187,7 +182,7 @@ export class CameraDirector {
     const distance = this.zoom.step(framing, settle, dt) * this.zoomBias;
     this.rts.setDistance(distance);
     const t = THREE.MathUtils.clamp((distance - MARCH_MIN) / 30, 0, 1);
-    this.rts.autoPitch = this.flat ? THREE.MathUtils.lerp(FLAT_NEAR, FLAT_FAR, t) : THREE.MathUtils.lerp(PITCH_NEAR, PITCH_FAR, t);
+    this.rts.autoPitch = THREE.MathUtils.lerp(PITCH_NEAR, PITCH_FAR, t);
   }
 
   // ------------------------------------------------------------------ internals

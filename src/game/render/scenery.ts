@@ -5,12 +5,15 @@ import { getSceneryGeometry } from '../models';
 import { Rng } from '../sim/rng';
 import type { Terrain } from '../sim/terrain';
 
+/** Trees never read smaller than this (m); a soldier stands ~1.8 m. */
+const MIN_TREE_HEIGHT = 4;
+
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
 
 export function createScenery(terrain: Terrain, assets: ReadonlyMap<string, AssetDef>): THREE.Group {
   const group = new THREE.Group();
   group.name = 'scenery';
-  const buckets = new Map<string, THREE.Matrix4[]>();
+  const buckets = new Map<string, Terrain['obstacles']>();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
@@ -18,16 +21,28 @@ export function createScenery(terrain: Terrain, assets: ReadonlyMap<string, Asse
     const key = `${o.assetId}|${o.variant}`;
     let list = buckets.get(key);
     if (!list) buckets.set(key, (list = []));
-    q.setFromAxisAngle(up, o.yaw * Math.PI * 2);
-    m.compose(new THREE.Vector3(o.x, o.y - 0.05, o.z), q, new THREE.Vector3(o.scale, o.scale, o.scale));
-    list.push(m.clone());
+    list.push(o);
   }
   for (const [key, list] of buckets) {
     const [assetId, variant] = key.split('|');
     const asset = assets.get(assetId);
     if (!asset) continue;
-    const inst = new THREE.InstancedMesh(getSceneryGeometry(asset, Number(variant)), material, list.length);
-    list.forEach((mat, i) => inst.setMatrixAt(i, mat));
+    const geometry = getSceneryGeometry(asset, Number(variant));
+    // Trees: fit the model to its configured height (whatever the source mesh size), keeping the per-instance jitter.
+    let fit = 1;
+    if (asset.kind === 'tree') {
+      if (!geometry.boundingBox) geometry.computeBoundingBox();
+      const h = geometry.boundingBox!.max.y - geometry.boundingBox!.min.y;
+      const target = Math.max(MIN_TREE_HEIGHT, (asset.params as { height?: number }).height ?? 6);
+      if (h > 0) fit = target / (h * (asset.scale || 1));
+    }
+    const inst = new THREE.InstancedMesh(geometry, material, list.length);
+    list.forEach((o, i) => {
+      const s = o.scale * fit;
+      q.setFromAxisAngle(up, o.yaw * Math.PI * 2);
+      m.compose(new THREE.Vector3(o.x, o.y - 0.05, o.z), q, new THREE.Vector3(s, s, s));
+      inst.setMatrixAt(i, m);
+    });
     inst.castShadow = asset.kind !== 'bush';
     inst.receiveShadow = true;
     inst.computeBoundingSphere();
@@ -50,7 +65,7 @@ function createGrass(terrain: Terrain): THREE.InstancedMesh {
   }
   blade.setAttribute('position', new THREE.Float32BufferAttribute(tri, 3));
   blade.computeVertexNormals();
-  const count = Math.min(9000, Math.round((terrain.size * terrain.size) / 3.2));
+  const count = Math.min(12000, Math.round((terrain.size * terrain.size) / 1.2));
   // Unlit: thin two-sided blades otherwise read as black specks from above.
   const inst = new THREE.InstancedMesh(blade, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), count);
   const rng = new Rng(terrain.map.seed + 991);

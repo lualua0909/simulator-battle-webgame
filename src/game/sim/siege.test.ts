@@ -8,7 +8,7 @@ import { armies as fullArmies, snapToCell, validateArmy, type Armies, type Place
 import { Terrain } from './terrain';
 import { BattleSim, type SimEvent } from './world';
 
-const ARENA: MapDef = { ...SEED.maps[0], id: 'arena', size: 80, deployDepth: 28, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
+const ARENA: MapDef = { ...SEED.maps[0], id: 'arena', size: 60, deployDepth: 21, heightScale: 0, river: { enabled: false, width: 8, meander: 0, ford: 0 }, trees: { perHectare: 0, kinds: [] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] } };
 const NOOP: WeaponDef = { ...SEED.weapons.find((w) => w.id === 'club')!, id: 'noop', damage: 0, range: 0.3, cooldown: 60, knockback: 0 };
 const DUMMY: UnitDef = { ...SEED.units.find((u) => u.id === 'clubber')!, id: 'dummy', hp: 5000, speed: 0, weaponId: 'noop' };
 // Synthetic platform keeps coverage of the generic siege platform mechanic.
@@ -38,7 +38,7 @@ const wallLine = (x: number, z0: number, z1: number, tiers = 3): Placement[] => 
   for (let z = z0; z <= z1; z += 2) out.push(...cell('tuong-thanh', x, z, tiers));
   return out;
 };
-const core = at('nha-chinh', 28, 0);
+const core = at('nha-chinh', 23, 12);
 
 test('wall blocks on one cell stack into one wall unit; defenders stand on top', () => {
   const { sim } = siege({ blue: [at('dummy', -20, 0)], red: [...cell('tuong-thanh', 9, 1, 3), { unitId: 'archer', ...snapToCell(9, 1) }, core] });

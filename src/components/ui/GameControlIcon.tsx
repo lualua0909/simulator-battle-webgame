@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 
-export type GameControl = 'overview' | 'side' | 'third' | 'first' | 'second' | 'next' | 'vr' | 'sound' | 'muted' | 'play' | 'pause' | 'stop' | 'help';
+export type GameControl = 'overview' | 'moba' | 'third' | 'first' | 'second' | 'next' | 'vr' | 'sound' | 'muted' | 'play' | 'pause' | 'stop' | 'help';
 
 /** Solid arcade symbols: white faces, dark outlines, readable at button size. */
 export default function GameControlIcon({ name }: { name: GameControl }) {
   const shapes: Record<GameControl, ReactNode> = {
     overview: <><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z" /><path d="M9 3v15M15 6v15" fill="none" /></>,
-    side: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16M3 9h18" fill="none" /></>,
+    moba: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16M3 9h18" fill="none" /></>,
     third: <><circle cx="12" cy="7" r="4" /><path d="M4 21v-3a8 8 0 0 1 16 0v3Z" /></>,
     first: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3.5" fill="#292130" stroke="none" /></>,
     second: <><circle cx="12" cy="4" r="2.5" /><path d="m9 8-6-2-1 3 7 3-3 9 3 1 3-7 3 7 3-1-3-9 7-3-1-3-6 2Z" /></>,

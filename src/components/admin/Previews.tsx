@@ -30,6 +30,7 @@ import { ParticleSystem } from '@/game/render/particles';
 import { createScenery } from '@/game/render/scenery';
 import { createWater, createZoneOverlay } from '@/game/render/terrainMesh';
 import { createIsland, createPlateau } from '@/game/render/island';
+import { createDiorama } from '@/game/render/diorama';
 import { armyCost } from '@/game/sim/army';
 import { Terrain } from '@/game/sim/terrain';
 import ModelViewer, { type PreviewAnim } from '../ModelViewer';
@@ -438,8 +439,10 @@ export function MapPreview({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) 
     sc.right = sc.top = map.size / 2 + 5;
     sc.far = map.size * 3;
     scene.add(sun);
-    const water = createWater(terrain);
-    scene.add(terrain.island ? createIsland(terrain) : createPlateau(terrain), createScenery(terrain, new Map(bundle.assets.map((a) => [a.id, a]))), createZoneOverlay(terrain, 'blue', '#2f6fe0'), createZoneOverlay(terrain, 'red', '#d8373a'));
+    const water = terrain.diorama ? null : createWater(terrain);
+    if (terrain.diorama) scene.add(createDiorama(terrain));
+    else scene.add(terrain.island ? createIsland(terrain) : createPlateau(terrain), createScenery(terrain, new Map(bundle.assets.map((a) => [a.id, a]))));
+    scene.add(createZoneOverlay(terrain, 'blue', '#2f6fe0'), createZoneOverlay(terrain, 'red', '#d8373a'));
     if (water) scene.add(water.mesh);
     const camera = new THREE.PerspectiveCamera(45, 1, 1, map.size * 8);
     const resize = () => {

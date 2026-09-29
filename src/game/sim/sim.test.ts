@@ -174,7 +174,7 @@ test('battles with every skill stay deterministic', () => {
 });
 
 test('stars raise HP and damage of one side only, deterministically', () => {
-  const { terrain, armies } = botArmies('dong-co', 3);
+  const { terrain, armies } = botArmies('rung-thong', 3);
   const blueIds = new Set(armies.blue.map((p) => p.unitId));
   const stars = { blue: Object.fromEntries([...blueIds].map((id) => [id, 3])) };
   const base = new BattleSim(SEED, terrain.map, terrain, armies, 9);
@@ -278,7 +278,7 @@ test('3-way FFA: 2+ survivors when the time limit hits is a draw', () => {
 });
 
 test('different seeds diverge', () => {
-  const { terrain, armies } = botArmies('dong-co', 3);
+  const { terrain, armies } = botArmies('rung-thong', 3);
   const s1 = new BattleSim(SEED, terrain.map, terrain, armies, 1);
   const s2 = new BattleSim(SEED, terrain.map, terrain, armies, 2);
   for (let i = 0; i < 30 * 20; i++) {
@@ -352,4 +352,20 @@ test('island map: zones stop at the coast and a brawl never leaves the land', ()
     sim.step();
     for (const u of sim.units) assert.ok(!u.alive || terrain.onLand(u.x, u.z), `${u.def.id} off the island at ${u.x.toFixed(1)},${u.z.toFixed(1)}`);
   }
+});
+
+test('a diving melee flyer never sinks into a ground unit it attacks', () => {
+  const giant: UnitDef = { ...SEED.units.find((u) => u.id === 'giant')!, weaponId: 'noop', skillIds: [] };
+  const content = { ...SEED, units: [...SEED.units.filter((u) => u.id !== 'giant'), giant, DUMMY], weapons: [...SEED.weapons, NOOP] };
+  const sim = new BattleSim(content, ARENA, new Terrain(ARENA, []), armies({ blue: [{ unitId: 'eagle', x: -8, z: 0 }, { unitId: 'eagle', x: -8, z: 2 }, { unitId: 'dummy', x: -16, z: 0 }], red: [{ unitId: 'giant', x: 8, z: 0 }] }), 3);
+  const g = sim.units.find((u) => u.def.id === 'giant')!;
+  let worst = Infinity;
+  for (let i = 0; i < 30 * 10 && g.alive; i++) {
+    sim.step();
+    for (const e of sim.units) {
+      if (!e.alive || !e.flying || e.y >= g.y + g.def.height) continue;
+      worst = Math.min(worst, Math.hypot(e.x - g.x, e.z - g.z) - (e.radius + g.radius));
+    }
+  }
+  assert.ok(worst > -0.3, `flyer sank ${(-worst).toFixed(2)} m into the giant`);
 });

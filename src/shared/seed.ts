@@ -241,7 +241,7 @@ const units: UnitDef[] = [
   U({ id: 'monk', name: 'Võ tăng', factionId: 'phuong-dong', role: 'melee', cost: 250, hp: 220, speed: 5.5, weaponId: 'dam', modelId: 'm-monk', equipment: gear({ handR: 'e-monk-staff' }), description: 'Nhanh, đánh liên hoàn.' }),
   U({ id: 'fire-archer', name: 'Hỏa tiễn thủ', factionId: 'phuong-dong', role: 'ranged', cost: 400, hp: 80, speed: 3.5, skillIds: ['mua-hoa-tien'], weaponId: 'fire-bow', modelId: 'm-fire-archer' }),
   U({ id: 'war-elephant', name: 'Chiến tượng', factionId: 'phuong-dong', role: 'melee', cost: 2000, hp: 3000, speed: 3.2, mass: 40, radius: 2, height: 4, armorClass: 'beast', knockbackResist: 0.9, trampleDamage: 50, skillIds: ['mua-ten', 'voi-dam-chan', 'voi-quet-voi', 'voi-hat-voi'], weaponId: 'elephant-bow', modelId: 'm-war-elephant' }),
-  U({ id: 'eagle', name: 'Cá đuối bay', factionId: 'huyen-thoai', role: 'melee', cost: 300, hp: 150, speed: 8, mass: 0.8, radius: 0.8, height: 1.2, armorClass: 'beast', flying: true, altitude: 7, weaponId: 'talons', modelId: 'm-eagle', description: 'Bay lượn, quật vây cắn xé.' }),
+  U({ id: 'eagle', name: 'Cá đuối bay', factionId: 'huyen-thoai', role: 'melee', cost: 300, hp: 150, speed: 8, mass: 0.8, radius: 1.4, height: 1.2, armorClass: 'beast', flying: true, altitude: 7, weaponId: 'talons', modelId: 'm-eagle', description: 'Bay lượn, quật vây cắn xé.' }),
   U({ id: 'wizard', name: 'Pháp sư', factionId: 'huyen-thoai', role: 'ranged', cost: 700, hp: 120, speed: 3.4, skillIds: ['thien-thach'], weaponId: 'fireball-staff', modelId: 'm-wizard' }),
   U({ id: 'giant', name: 'Người khổng lồ', factionId: 'huyen-thoai', role: 'melee', cost: 1600, hp: 2500, speed: 3.4, mass: 25, radius: 1.3, height: 4.6, armorClass: 'beast', knockbackResist: 0.7, trampleDamage: 20, skillIds: ['golem-nhay'], weaponId: 'giant-club', modelId: 'm-giant', description: 'Nhảy tới đập xuống, một búa bay cả hàng.' }),
   U({ id: 'dragon', name: 'Rồng lửa', factionId: 'huyen-thoai', role: 'ranged', cost: 5000, hp: 6000, speed: 5, mass: 50, radius: 3, height: 3, armorClass: 'beast', flying: true, altitude: 9, knockbackResist: 0.95, skillIds: ['mua-thien-thach'], weaponId: 'baby-dragon-breath', modelId: 'm-dragon', description: 'Phun lửa từ trên cao.' }),
@@ -338,7 +338,7 @@ const assets: AssetDef[] = [
   A({ id: 'bush-dry', name: 'Bụi khô', kind: 'bush', scale: 0.5, seed: 9, params: { leaf: '#a89a5a', leaf2: '#c8b46a' }, glb: { url: '/models/bui-kho.glb', fileName: 'bui kho.glb', uploadedAt: 0, tint: {}, hide: [] } }),
 ];
 
-const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef => ({
+export const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef => ({
   size: 70,
   shape: 'square',
   heightScale: 3,
@@ -362,7 +362,6 @@ const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef =>
 });
 
 const maps: MapDef[] = [
-  M({ id: 'dong-co', name: 'Đồng cỏ', seed: 1234, trees: { perHectare: 12, kinds: ['tree-oak', 'tree-birch'] }, bushes: { perHectare: 30, kinds: ['bush-green', 'bush-berry'] } }),
   M({ id: 'rung-thong', name: 'Rừng thông', seed: 4242, heightScale: 5, hilliness: 1.4, trees: { perHectare: 55, kinds: ['tree-pine'] }, rocks: { perHectare: 12, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 20, kinds: ['bush-green'] }, grassColor: '#4f8f45', skyTop: '#6a9ccc', skyBottom: '#dfe9ef', fog: 0.45, budget: 5000 }),
   // ---- made for sieges (the red side has room for a castle)
   M({ id: 'thanh-tren-doi', name: 'Thành trên đồi', seed: 3131, size: 75, heightScale: 2.2, hilliness: 0.9, rise: 9, trees: { perHectare: 6, kinds: ['tree-oak', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 18, kinds: ['bush-green'] }, grassColor: '#6aa84a', defenseDepth: 28, budget: 5000 }),
@@ -370,6 +369,8 @@ const maps: MapDef[] = [
   M({ id: 'thanh-tuyet', name: 'Thành tuyết', seed: 8484, size: 75, heightScale: 4, hilliness: 1.2, trees: { perHectare: 22, kinds: ['tree-snow', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray'] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#e8eef2', dirtColor: '#9aa3ad', sandColor: '#cfd8df', waterColor: '#6fa8c8', skyTop: '#9fb4c8', skyBottom: '#eef3f7', fog: 0.6, defenseDepth: 27, budget: 5000 }),
   // Small floating island for close combat (TABS style).
   M({ id: 'mini-map', name: 'Mini map', seed: 2468, size: 60, shape: 'island', heightScale: 1.6, hilliness: 0.8, trees: { perHectare: 14, kinds: ['tree-oak', 'tree-birch'] }, rocks: { perHectare: 8, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 30, kinds: ['bush-green', 'bush-berry'] }, grassColor: '#9cc45c', dirtColor: '#8c7358', sandColor: '#d9cf9a', waterColor: '#5fc6bd', skyTop: '#8ec5e6', skyBottom: '#c4e2ee', fog: 0.05, deployDepth: 10, defenseDepth: 20 }),
+  // Hex-tile diorama (KayKit Medieval Hexagon): terraced tiles, river, castles and mountains round the border.
+  M({ id: 'sa-ban-luc-giac', name: 'Sa bàn lục giác', seed: 7373, size: 70, shape: 'diorama', heightScale: 5, hilliness: 1.3, river: { enabled: true, width: 8, meander: 8, ford: 0 }, trees: { perHectare: 45, kinds: ['tree-pine', 'tree-oak'] }, rocks: { perHectare: 10, kinds: ['rock-gray'] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#a8c94a', waterColor: '#3f8fe0', skyTop: '#6fb8f0', skyBottom: '#dff1ff', fog: 0.05 }),
   M({ id: 'sa-mac', name: 'Sa mạc', seed: 9001, size: 80, heightScale: 4, hilliness: 0.8, trees: { perHectare: 6, kinds: ['tree-palm', 'tree-cactus'] }, rocks: { perHectare: 14, kinds: ['rock-sand'] }, bushes: { perHectare: 8, kinds: ['bush-dry'] }, grassColor: '#d8b870', dirtColor: '#c29a58', sandColor: '#e8d39a', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.2, budget: 6000 }),
 ];
 

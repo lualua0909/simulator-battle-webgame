@@ -24,6 +24,7 @@ import { ParticleSystem } from './particles';
 import { ProjectileRenderer } from './projectiles';
 import { FrameRateGovernor, LOWER_TIER, QUALITY, type QualityTier } from './quality';
 import { loadRapier, RagdollWorld } from './ragdoll';
+import { createDiorama } from './diorama';
 import { createIsland, createPlateau } from './island';
 import { createScenery } from './scenery';
 import { DebrisSystem } from './debris';
@@ -350,10 +351,16 @@ export class BattleEngine {
     this.terrain = terrain;
     this.heights = new HeightField(terrain);
     this.governor.hold();
-    this.mapGroup.add(terrain.island ? createIsland(terrain) : createPlateau(terrain));
-    this.water = createWater(terrain, this.gpu?.waterMaterial);
-    if (this.water) this.mapGroup.add(this.water.mesh);
-    this.mapGroup.add(createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a]))));
+    if (terrain.diorama) {
+      // Hex tiles carry their own water and scenery.
+      this.water = null;
+      this.mapGroup.add(createDiorama(terrain));
+    } else {
+      this.mapGroup.add(terrain.island ? createIsland(terrain) : createPlateau(terrain));
+      this.water = createWater(terrain, this.gpu?.waterMaterial);
+      if (this.water) this.mapGroup.add(this.water.mesh);
+      this.mapGroup.add(createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a]))));
+    }
     this.zones = {};
     for (const side of terrain.activeSides) {
       const overlay = createZoneOverlay(terrain, side, ZONE_COLOR[side]);
@@ -900,12 +907,6 @@ export class BattleEngine {
     return Math.atan2(c.z, c.x);
   }
 
-  /** Camera yaw looking across the battle line: screen-right points from the map centre to `side`'s zone. */
-  private flankYaw(side: Side): number {
-    const c = this.zoneCenter(side);
-    return Math.atan2(c.x, -c.z);
-  }
-
   private armyCenter(sim: BattleSim, side: Side): THREE.Vector3 {
     let x = 0;
     let z = 0;
@@ -977,10 +978,6 @@ export class BattleEngine {
   }
 
   private overviewCamera(dt: number): void {
-    // Side view: the director still picks the shot, but always from the own army's flank.
-    const side = this.view.mode === 'side' && this.mode === 'battle' && !!this.terrain;
-    this.director.flat = side;
-    this.rts.lockYaw = side ? this.flankYaw(this.director.side) : null;
     this.director.update(dt, this.mode === 'battle' ? this.sim : null);
     this.rts.update(dt);
   }
@@ -989,7 +986,7 @@ export class BattleEngine {
   private poseFollowCamera(u: SimUnit): void {
     const heading = this.view.heading;
     this.camera.position.copy(this.view.eye(u, heading, this.terrain, this.eyeAt));
-    this.camera.lookAt(this.view.look(u, heading, this.lookAt));
+    this.camera.lookAt(this.view.look(u, heading, this.terrain, this.lookAt));
     this.camera.updateMatrixWorld();
     this.view.switched = false;
   }
@@ -1311,7 +1308,8 @@ export class BattleEngine {
     const animDt = this.mode === 'battle' && !this.holdSim ? simDt : dt;
     this.time += animDt;
     this.alpha = this.acc / SIM_DT;
-    const followed = unitView && sim ? this.view.track(sim, this.director.side, this.alpha, dt, this.rts.target) : null;
+    // VR keeps the sandbox table for the MOBA view: a head 20 m up in the air is no fun.
+    const followed = unitView && sim && !(vr && this.view.mode === 'moba') ? this.view.track(sim, this.director.side, this.alpha, dt, this.rts.target) : null;
     this.following = !!followed;
     if (vr) this.updateRig(followed);
     else if (followed) this.poseFollowCamera(followed);

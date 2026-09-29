@@ -4,6 +4,24 @@ import type { AssetDef, MapDef } from '@/shared/schema';
 import { Rng, clamp, smooth01, valueNoise, valueNoise1 } from './rng';
 
 export const EDGE_MARGIN = 6;
+/** Every map plays at the mini-map's size (m); larger maps shrink proportionally. */
+export const MAP_SIZE = 60;
+
+/** A map shrunk to MAP_SIZE: every horizontal / vertical distance scales by the same factor. */
+function fitMap(map: MapDef): MapDef {
+  const k = MAP_SIZE / map.size;
+  if (k >= 1) return map;
+  return {
+    ...map,
+    size: MAP_SIZE,
+    heightScale: map.heightScale * k,
+    hilliness: map.hilliness / k,
+    rise: map.rise * k,
+    deployDepth: map.deployDepth * k,
+    defenseDepth: map.defenseDepth * k,
+    river: { ...map.river, width: map.river.width * k, meander: map.river.meander * k, ford: map.river.ford * k },
+  };
+}
 /** Siege wall / watchtower grid cell (m). */
 export const WALL_CELL = 2;
 
@@ -15,6 +33,27 @@ export function wallIndex(v: number): number {
 /** Centre of a grid index. */
 export function wallCenter(i: number): number {
   return (i + 0.5) * WALL_CELL;
+}
+
+/** Diorama maps: hex tile width across flats (m), circumradius and terrace step. Pointy-top hexes, rows along z. */
+export const HEX_WIDTH = 4;
+export const HEX_RADIUS = HEX_WIDTH / 1.7320508075688772;
+export const HEX_STEP = 0.75;
+
+/** Centre of the diorama hex cell holding (x, z) (cube rounding; no trig so every engine agrees). */
+export function hexCenter(x: number, z: number): [number, number] {
+  const q = (x * 0.5773502691896258 - z / 3) / HEX_RADIUS;
+  const r = ((z * 2) / 3) / HEX_RADIUS;
+  const s = -q - r;
+  let rq = Math.round(q);
+  let rr = Math.round(r);
+  const rs = Math.round(s);
+  const dq = Math.abs(rq - q);
+  const dr = Math.abs(rr - r);
+  const ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) rq = -rr - rs;
+  else if (dr > ds) rr = -rq - rs;
+  return [HEX_WIDTH * (rq + rr / 2), HEX_RADIUS * 1.5 * rr];
 }
 
 export type Side = 'blue' | 'red' | 'green' | 'yellow';
@@ -60,6 +99,8 @@ export class Terrain {
   readonly island: boolean;
   /** Mean coast radius (island only). */
   readonly islandRadius: number;
+  /** Diorama map: square field of flat-topped hex tiles on stepped terraces (KayKit hexagon look). */
+  readonly diorama: boolean;
   /** Ground height past the map's edge / the island's coast: the sea at the foot of the cliffs. */
   readonly islandFloor = -9;
 
@@ -69,14 +110,17 @@ export class Terrain {
   private readonly meander: number;
   private readonly riverLimit: number;
 
+  readonly map: MapDef;
+
   constructor(
-    readonly map: MapDef,
+    source: MapDef,
     assets: readonly AssetDef[] = [],
     /** Siege mode: the defending side (its zone uses map.defenseDepth); null = open battle. Siege is 2-side only. */
     readonly defense: Side | null = null,
     /** Sides deploying in this match, in seat order. 2 keeps the classic opposite-strip layout; 3-4 deploy at corners spaced evenly around the centre. */
     activeSides: readonly Side[] = ['blue', 'red'],
   ) {
+    const map = (this.map = fitMap(source));
     this.size = map.size;
     this.half = map.size / 2;
     this.activeSides = activeSides;
@@ -84,6 +128,7 @@ export class Terrain {
     this.heightScale = map.heightScale;
     this.freq = 0.018 * map.hilliness;
     this.island = map.shape === 'island';
+    this.diorama = map.shape === 'diorama';
     this.islandRadius = this.half - 2;
 
     const usable = this.half - EDGE_MARGIN;
@@ -163,6 +208,11 @@ export class Terrain {
   }
 
   inWater(x: number, z: number): boolean {
+    if (this.diorama) {
+      // Whole hex tiles are water or land.
+      const [cx, cz] = hexCenter(x, z);
+      return this.riverDistance(cx, cz) < this.riverHalfWidth;
+    }
     return this.riverDistance(x, z) < this.riverHalfWidth;
   }
 
@@ -211,6 +261,16 @@ export class Terrain {
     // Both shapes are raised land: past the edge (square) or the coast (island) the ground drops to the sea.
     const lim = this.half + 1e-6;
     if ((x < 0 ? -x : x) > lim || (z < 0 ? -z : z) > lim || !this.onLand(x, z)) return this.islandFloor;
+    if (this.diorama) {
+      // Flat hex tops: the field height at the tile's centre, snapped to terrace steps.
+      const [cx, cz] = hexCenter(x, z);
+      return Math.round(this.fieldHeight(cx, cz) / HEX_STEP) * HEX_STEP;
+    }
+    return this.fieldHeight(x, z);
+  }
+
+  /** The smooth ground (hills, plateau, river valley) ignoring the map's edge. */
+  fieldHeight(x: number, z: number): number {
     let h = this.baseHeight(x, z);
     if (this.riverEnabled) {
       const d = this.riverDistance(x, z);
@@ -293,8 +353,9 @@ export class Terrain {
       }
     };
 
-    place('rock', this.map.rocks.perHectare, this.map.rocks.kinds);
-    place('tree', this.map.trees.perHectare, this.map.trees.kinds);
-    place('bush', this.map.bushes.perHectare, this.map.bushes.kinds);
+    // Maps play at MAP_SIZE, so scenery is denser than the per-hectare setting to keep the field lush.
+    place('rock', this.map.rocks.perHectare * 2, this.map.rocks.kinds);
+    place('tree', this.map.trees.perHectare * 1.6, this.map.trees.kinds);
+    place('bush', this.map.bushes.perHectare * 3, this.map.bushes.kinds);
   }
 }

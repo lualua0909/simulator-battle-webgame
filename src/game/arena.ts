@@ -1,7 +1,7 @@
 // Practice arena for previews: one caster against a block of passive training dummies on a
 // small flat map. Content is built in memory from the live bundle plus the unsaved draft.
 import type { AssetDef, ConfigBundle, MapDef, UnitDef, WeaponDef } from '@/shared/schema';
-import { SEED } from '@/shared/seed';
+import { M, SEED } from '@/shared/seed';
 import { armies as fullArmies, type Armies } from './sim/army';
 import { clamp } from './sim/rng';
 
@@ -13,8 +13,7 @@ const HOLD = '__hold';
 const SPARRER = '__sparrer';
 const SPAR = '__spar';
 
-const map: MapDef = {
-  ...SEED.maps[0],
+const map: MapDef = M({
   id: ARENA_MAP_ID,
   name: 'Đấu trường',
   seed: 5,
@@ -26,7 +25,7 @@ const map: MapDef = {
   bushes: { perHectare: 0, kinds: [] },
   fog: 0,
   deployDepth: 20,
-};
+});
 
 const dummyAsset: AssetDef = {
   id: DUMMY,
