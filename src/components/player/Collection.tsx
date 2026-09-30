@@ -35,13 +35,12 @@ export default function Collection({ bundle, thumbs, selectedId, onSelect: setSe
     [bundle],
   );
   const [tab, setTab] = useState('all');
-  const units = useMemo(
-    () =>
-      bundle.units
-        .filter((u) => !u.hidden && (tab === 'all' || u.factionId === tab))
-        .sort((a, b) => Number(isUnlocked(b, player)) - Number(isUnlocked(a, player)) || a.cost - b.cost),
-    [bundle, tab, player],
-  );
+  const units = useMemo(() => {
+    const factionOrder = (u: UnitDef) => bundle.factions.find((f) => f.id === u.factionId)?.order ?? Infinity;
+    return bundle.units
+      .filter((u) => !u.hidden && (tab === 'all' || u.factionId === tab))
+      .sort((a, b) => factionOrder(a) - factionOrder(b) || Number(isUnlocked(b, player)) - Number(isUnlocked(a, player)) || a.cost - b.cost);
+  }, [bundle, tab, player]);
   const selected = bundle.units.find((u) => u.id === selectedId) ?? null;
   // Desktop keeps a persistent side panel; mobile only shows a popup after a tap.
   const desktopSelected = selected ?? units[0] ?? null;

@@ -16,7 +16,6 @@ import { chestThumbnail } from '@/game/render/chestThumbnails';
 import { unitThumbnails } from '@/game/render/thumbnails';
 import { useConfig } from '@/game/useConfig';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import LanguageToggle from '@/lib/i18n/LanguageToggle';
 import BoxOpening from './BoxOpening';
 import { CoinIcon } from './icons';
 import PlayerAvatar from './PlayerAvatar';
@@ -89,7 +88,6 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
   if (!user) {
     return (
       <div className="pointer-events-auto flex max-w-full min-w-0 items-center gap-2">
-        <LanguageToggle compact />
         <Link href="/collection" className="reward-slot" title={t('hud.collection')} aria-label={t('hud.collection')}>
           <span className="text-2xl">
             <WalletCards />
@@ -108,7 +106,6 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
 
   return (
     <div ref={box} className="pointer-events-auto relative flex max-w-full min-w-0 items-center gap-1.5 sm:gap-3">
-      <LanguageToggle compact />
       <div className="mr-0 min-w-0 shrink sm:mr-4">
         <CoinBar value={player?.coins ?? 0} loading={walletLoading && !player} />
       </div>

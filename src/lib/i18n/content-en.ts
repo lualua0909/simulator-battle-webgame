@@ -108,10 +108,10 @@ export const MAP_EN: Record<string, string> = {
 };
 
 export const BOT_EN: Record<string, { name: string; description: string }> = {
-  de: { name: 'Easy', description: 'Small budget, messy attacks.' },
-  thuong: { name: 'Normal', description: 'Balanced army, even budget.' },
-  kho: { name: 'Hard', description: 'Scouts your army then picks counters.' },
-  'huyen-thoai': { name: 'Legendary', description: 'Elite troops, much bigger budget.' },
+  de: { name: 'Easy', description: 'Messy attacks. 5,000 gold each side.' },
+  thuong: { name: 'Normal', description: 'Balanced army. 7,500 gold each side.' },
+  kho: { name: 'Hard', description: 'Scouts your army then picks counters. 10,000 gold each side.' },
+  'huyen-thoai': { name: 'Legendary', description: 'Elite troops. 15,000 gold each side.' },
   'random-fill': { name: 'Random', description: '' },
 };
 

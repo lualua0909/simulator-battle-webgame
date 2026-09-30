@@ -1,17 +1,21 @@
 'use client';
 
-import { ArrowRight, Bot, Gamepad2, Gift, Globe, Palette, Shield, Star, Swords, Trophy, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Bot, Gamepad2, Gift, Globe, ImagePlus, Palette, Shield, Star, Swords, Trophy, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import WorldChat from '@/components/chat/WorldChat';
 import GameTitle from '@/components/home/GameTitle';
 import HeroBanner from '@/components/home/HeroBanner';
 import Reveal from '@/components/home/Reveal';
+import UnitRequestModal from '@/components/home/UnitRequestModal';
 import PlayerHud from '@/components/player/PlayerHud';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import LanguageToggle from '@/lib/i18n/LanguageToggle';
 import { IS_VERCEL } from '@/shared/deploy';
 
 export default function Home() {
   const { t } = useLanguage();
+  const [requestOpen, setRequestOpen] = useState(false);
 
   const MODES = [
     {
@@ -233,10 +237,32 @@ export default function Home() {
           </div>
         </Reveal>
       </section>
+
+      {/* ===== CONTRIBUTE ===== */}
+      <section id="contribute" className="relative pb-14 pt-2 text-center">
+        <Reveal variant="up" className="relative mx-auto max-w-3xl px-4">
+          <div className="rounded-3xl border-[3px] border-[#2d3232] bg-[#f6eedb] p-5 shadow-[0_6px_0_0_#2d3232] sm:p-8">
+            <h2 className="text-3xl sm:text-4xl">
+              <ImagePlus /> {t('unitRequest.sectionTitle')}
+            </h2>
+            <p className="mx-auto mt-2 max-w-xl opacity-80">{t('unitRequest.sectionDesc')}</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/unit-request-example.webp" alt={t('unitRequest.exampleAlt')} width={737} height={207} loading="lazy" className="mt-4 w-full rounded-2xl border-2 border-[#2d3232] bg-white" />
+            <button type="button" className="btn btn-gold mt-5 max-w-full px-6 py-3 text-xl sm:text-2xl" onClick={() => setRequestOpen(true)}>
+              <ImagePlus /> {t('unitRequest.button')}
+            </button>
+          </div>
+        </Reveal>
+      </section>
       </div>
       <footer className="border-t-[3px] border-[#2d3232] bg-[#14102e] py-5 text-center text-white/80">
         <p><Swords /> {t('home.footer')}</p>
+        <button type="button" className="btn mt-3 px-4 py-1.5 text-base" onClick={() => setRequestOpen(true)}>
+          <ImagePlus /> {t('unitRequest.button')}
+        </button>
+        <div className="mt-3 flex justify-center"><LanguageToggle /></div>
       </footer>
+      {requestOpen && <UnitRequestModal onClose={() => setRequestOpen(false)} />}
 
       <WorldChat />
     </main>

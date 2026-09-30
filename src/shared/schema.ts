@@ -5,6 +5,8 @@ import { z } from 'zod';
 export const DAMAGE_TYPES = ['blunt', 'slash', 'pierce', 'fire', 'magic'] as const;
 export const ARMOR_CLASSES = ['unarmored', 'light', 'heavy', 'beast', 'siege'] as const;
 export const ROLES = ['melee', 'ranged', 'support', 'siege'] as const;
+/** Card rarity, most common first (collection sort order). */
+export const RARITIES = ['common', 'rare', 'epic', 'legendary'] as const;
 export const ATTACK_KINDS = ['melee', 'projectile', 'breath', 'heal', 'chain', 'strike', 'vortex', 'nova', 'dash'] as const;
 /** Body animation while winding up / releasing an ability ('auto' = derived from the kind and the held weapon). */
 export const CAST_STYLES = ['auto', 'swing', 'thrust', 'bow', 'throw', 'cast', 'gun', 'raise', 'palm', 'slam'] as const;
@@ -46,6 +48,7 @@ export const STAR_MAX = 5;
 export type DamageType = (typeof DAMAGE_TYPES)[number];
 export type ArmorClass = (typeof ARMOR_CLASSES)[number];
 export type Role = (typeof ROLES)[number];
+export type Rarity = (typeof RARITIES)[number];
 export type AssetKind = (typeof ASSET_KINDS)[number];
 export type UnitAssetKind = (typeof UNIT_ASSET_KINDS)[number];
 export type StructureKind = (typeof STRUCTURE_KINDS)[number];
@@ -116,6 +119,8 @@ export const unitSchema = z.object({
   // ---- player collection (coins: 1 coin = 1 VND)
   /** Hidden from players (not published): left out of the palette, collection, boxes and bot armies. */
   hidden: z.boolean().default(false),
+  /** Card rarity; the collection lists common cards first. */
+  rarity: z.enum(RARITIES).default('common'),
   /** Coins to unlock the unit; 0 = every player has it, guests included. */
   unlockCost: z.number().int().min(0).max(100_000_000).default(0),
   /** Shop price of one card; 0 = not sold. */
@@ -491,7 +496,8 @@ export const botSchema = z.object({
   name,
   description: z.string().max(300).default(''),
   difficulty: z.number().int().min(1).max(5),
-  budgetMultiplier: z.number().min(0.2).max(5).default(1),
+  /** Vs-AI army budget, the same for the player and every bot side (siege role multipliers apply on top). */
+  budget: z.number().int().min(100).max(1_000_000).default(7500),
   strategy: z.enum(BOT_STRATEGIES),
   factionIds: z.array(idSchema).default([]),
   reactive: z.boolean().default(false),

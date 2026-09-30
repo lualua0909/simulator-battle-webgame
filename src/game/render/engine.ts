@@ -1381,7 +1381,7 @@ export class BattleEngine {
       this.units.manage(simDt, this.unitSettings);
       this.units.update(sim, this.mode === 'battle' ? this.alpha : 1, animDt, this.hidden, this.camera);
       this.walls.update(animDt, this.hidden);
-      this.healthBars.update(sim, this.mode === 'battle' ? this.alpha : 1, this.director.side, this.hidden, this.camera);
+      this.healthBars.update(sim, this.mode === 'battle' ? this.alpha : 1, this.hidden, this.camera);
       this.projectiles.update(sim, this.alpha, simDt, this.particles);
     }
     this.effects.update(animDt, this.mode === 'battle' ? sim : null, this.alpha, this.effectHost);

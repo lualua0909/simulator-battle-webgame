@@ -7,7 +7,7 @@ import { useLanguage } from '@/lib/i18n/LanguageContext';
 import UnitCardFace from './UnitCardFace';
 
 interface Props {
-  unit: Pick<UnitDef, 'id' | 'name' | 'cost' | 'unlockCost'> & Partial<Pick<UnitDef, 'role'>>;
+  unit: Pick<UnitDef, 'id' | 'name' | 'cost' | 'unlockCost'> & Partial<Pick<UnitDef, 'role' | 'factionId'>>;
   thumb?: string;
   faction?: Pick<Faction, 'color'>;
   /** Star level; hidden when undefined. */
@@ -60,7 +60,7 @@ export default function UnitCard({ unit, thumb, faction, star, progress, locked,
       )}
       <span className="unit-card-inner">
         <span className="unit-card-side unit-card-front">
-          <UnitCardFace name={unitName(unit.id, unit.name)} cost={unit.cost} thumb={thumb} color={faction?.color} locked={locked} star={star} count={count} artwork={artwork} />
+          <UnitCardFace name={unitName(unit.id, unit.name)} cost={unit.cost} thumb={thumb} color={faction?.color} locked={locked} star={star} count={count} artwork={artwork} factionId={unit.factionId} />
         </span>
         {back && <span className="unit-card-side unit-card-back">{back}</span>}
       </span>

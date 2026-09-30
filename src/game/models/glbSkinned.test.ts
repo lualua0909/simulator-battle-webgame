@@ -284,8 +284,8 @@ const EXTRA_DINOS = [
 ] as const;
 
 for (const d of EXTRA_DINOS) {
-  // stegosaurus.glb / triceratops.glb are Draco-compressed with no Run/Jump clips: covered by their own tests below.
-  if (d.file !== 'stegosaurus.glb' && d.file !== 'triceratops.glb') test(`committed ${d.file} parses with all six clips`, async () => {
+  // stegosaurus.glb / triceratops.glb / parasaurolophus.glb / t-rex.glb are Draco-compressed with no Jump clip: covered by their own tests below.
+  if (!['stegosaurus.glb', 'triceratops.glb', 'parasaurolophus.glb', 't-rex.glb'].includes(d.file)) test(`committed ${d.file} parses with all six clips`, async () => {
     const file = path.join(process.cwd(), 'public', 'models', d.file);
     assert.ok(existsSync(file), `public/models/${d.file} is committed`);
     const buf = readFileSync(file);
@@ -440,6 +440,7 @@ test('elephant yaw corrections map the snout onto engine forward +Z', () => {
     ['/models/khunng%20long%20co%20dai.glb', -1, Math.PI / 2],
     ['/models/khung-long-bay.glb', -1, Math.PI / 2],
     ['/models/rong%20lua.glb', -1, Math.PI / 2],
+    ['/models/triceratops.glb', 1, -Math.PI / 2],
   ];
   for (const [url, headX, corr] of cases) {
     assert.equal(yawCorrectionFor(url), corr, url);
@@ -541,6 +542,34 @@ test('triceratops.glb: horn headbutt is the attack clip', () => {
   assert.equal(pickClipName(names, 'idle'), 'Idle');
   assert.equal(pickClipName(names, 'walk'), 'Walk');
   assert.equal(pickClipName(names, 'run'), 'Walk');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+});
+
+test('parasaurolophus.glb: bite is the attack clip', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'parasaurolophus.glb');
+  assert.ok(existsSync(file), 'public/models/parasaurolophus.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(names, 'idle'), 'Idle');
+  assert.equal(pickClipName(names, 'walk'), 'Walk');
+  assert.equal(pickClipName(names, 'run'), 'Run');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+});
+
+test('t-rex.glb: bite shake is the attack clip', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 't-rex.glb');
+  assert.ok(existsSync(file), 'public/models/t-rex.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.equal(pickClipName(names, 'attack'), 'Attack_BiteShake');
+  assert.equal(pickClipName(names, 'idle'), 'Idle');
+  assert.equal(pickClipName(names, 'walk'), 'Walk');
+  assert.equal(pickClipName(names, 'run'), 'Run');
   assert.equal(pickClipName(names, 'death'), 'Death');
 });
 

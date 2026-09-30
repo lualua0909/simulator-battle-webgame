@@ -3,34 +3,20 @@
 // World chat: a floating button in the bottom-right corner opening a panel that follows the
 // Firestore doc `chat/world` live. Sending goes through /api/chat (the server owns the log).
 import { Earth, MessageCircle, Send, User, X } from 'lucide-react';
-import { doc, getFirestore, onSnapshot } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
-import { CHAT_COLLECTION, CHAT_MAX_CHARS, parseMessages, WORLD_CHAT_DOC, type ChatMessage } from '@/shared/chat';
+import { CHAT_MAX_CHARS } from '@/shared/chat';
 import { useAuth } from '@/components/auth/AuthProvider';
 import PlayerAvatar from '@/components/player/PlayerAvatar';
-import { firebaseApp } from '@/lib/firebase';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-
-const time = (at: number, locale: string) => new Date(at).toLocaleTimeString(locale === 'vi' ? 'vi-VN' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+import { chatTime as time, useWorldChat } from './useWorldChat';
 
 export default function WorldChat() {
   const { t, locale } = useLanguage();
   const { user, openAuth } = useAuth();
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { messages, sending, error, send: post } = useWorldChat(open);
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    return onSnapshot(
-      doc(getFirestore(firebaseApp()), CHAT_COLLECTION, WORLD_CHAT_DOC),
-      (snap) => setMessages(parseMessages(snap.data())),
-      (e) => setError(`${locale === 'vi' ? 'Không tải được phòng chat' : 'Could not load chat'}: ${e.message}`),
-    );
-  }, [open, locale]);
 
   // New messages (and opening the panel) scroll to the bottom.
   useEffect(() => {
@@ -40,20 +26,7 @@ export default function WorldChat() {
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    const body = text.trim();
-    if (!body || sending) return;
-    setSending(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: body }) });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? (locale === 'vi' ? 'Chưa gửi được tin nhắn' : 'Could not send message'));
-      setText('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSending(false);
-    }
+    if (await post(text)) setText('');
   }
 
   return (

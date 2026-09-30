@@ -493,7 +493,7 @@ export function BotTester({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) {
   const parsed = botSchema.safeParse(draft);
   const army = useMemo(() => {
     if (!parsed.success || !terrain) return [];
-    return generateBotArmy({ bot: parsed.data, content: bundle, terrain, side: 'red', budget: Math.round(budget * parsed.data.budgetMultiplier), seed });
+    return generateBotArmy({ bot: parsed.data, content: bundle, terrain, side: 'red', budget: parsed.data.budget, seed });
   }, [parsed.success, parsed.data, terrain, bundle, budget, seed]); // eslint-disable-line react-hooks/exhaustive-deps
   const counts = new Map<string, number>();
   for (const p of army) counts.set(p.unitId, (counts.get(p.unitId) ?? 0) + 1);
@@ -554,7 +554,7 @@ export function BotTester({ doc, bundle }: { doc: Doc; bundle: ConfigBundle }) {
           ))}
       </ul>
       <p className="text-sm font-bold">
-        {army.length} lính · {armyCost(bundle, army)} / {parsed.success ? Math.round(budget * parsed.data.budgetMultiplier) : budget} vàng
+        {army.length} lính · {armyCost(bundle, army)} / {parsed.success ? parsed.data.budget : budget} vàng
       </p>
     </Frame>
   );

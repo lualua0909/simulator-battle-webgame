@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import PlayerHud from '@/components/player/PlayerHud';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import LanguageToggle from '@/lib/i18n/LanguageToggle';
 import { formatTopupCoins, formatVnd, vietqrImageUrl, type TopupOrder, type TopupPackage } from '@/shared/topup';
 
 interface Config {
@@ -323,6 +324,7 @@ export default function TopupClient() {
       </div>
       <footer className="border-t-[3px] border-[#2d3232] bg-[#14102e] py-5 text-center text-white/80">
         <p><Swords /> {t('home.footer')}</p>
+        <div className="mt-3 flex justify-center"><LanguageToggle /></div>
       </footer>
     </main>
   );

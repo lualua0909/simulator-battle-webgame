@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, ArrowRight, Castle, Check, Dices, Flame, LocateFixed, Plus, Swords, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Castle, Check, Dices, Flame, LocateFixed, Plus, Swords, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react';
 import { botBoxTier, boxTierNum, isUnlocked, playerBudget } from '@/shared/economy';
 import { IS_VERCEL } from '@/shared/deploy';
@@ -22,6 +22,7 @@ import type { BattleResult } from '@/game/sim/world';
 import { useConfig } from '@/game/useConfig';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import UnitPalette from './UnitPalette';
+import GameChat from '@/components/chat/GameChat';
 import { BattleHud, CinematicBars, Handoff, HelpHint, OnlineLobby, orderedBots, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_BG, sideName, type ModeChoice } from './panels';
 import { RankedBar, RankedLobby, RankResultPanel } from './ranked';
 
@@ -40,7 +41,7 @@ const RANDOM_FILL: BotDef = {
   name: 'Random',
   description: '',
   difficulty: 3,
-  budgetMultiplier: 1,
+  budget: 0,
   strategy: 'balanced',
   factionIds: [],
   reactive: false,
@@ -98,7 +99,6 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const [vrOk, setVrOk] = useState(false);
   const cineRef = useRef<CinematicKind | null>(null);
   /** Deploy UI over the map (top toolbar, its right-hand column, unit tray): the camera works in the space they leave. */
-  const toolbarRef = useRef<HTMLDivElement>(null);
   const sideColRef = useRef<HTMLDivElement>(null);
   const trayRef = useRef<HTMLDivElement>(null);
   /** Set on a fresh entry into deployment (not a return from battle) → establishing flight. */
@@ -259,9 +259,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const mySide: Side = online ? net.seat?.side ?? 'blue' : side;
   const myArmy = armies[mySide];
   const spent = bundle ? armyCost(bundle, myArmy) : 0;
-  /** Base budget: online the server's figure for this seat (level budget; ranked: the map's), offline this player's level budget (both local sides too). */
+  /** Base budget: online the server's figure for this seat (level budget; ranked: the map's), vs AI the bot's (same for every side), local this player's level budget (both sides). */
   const seatBudget = online ? net.room?.players[mySide]?.budget : undefined;
-  const budget = bundle ? seatBudget ?? playerBudget(player, bundle.settings.economy) : 0;
+  const botBudget = mode === 'bot' ? bundle?.bots.find((b) => b.id === botId)?.budget : undefined;
+  const budget = bundle ? seatBudget ?? botBudget ?? playerBudget(player, bundle.settings.economy) : 0;
   const myBudget = bundle ? sideBudget(bundle.settings, budget, mySide, defense) : budget;
   // The server raises the seat budget after the XP of an online battle: reload the wallet to match.
   useEffect(() => {
@@ -530,13 +531,12 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     const canvas = engine.renderer.domElement;
     const measure = () => {
       const c = canvas.getBoundingClientRect();
-      const bar = toolbarRef.current?.getBoundingClientRect();
       const col = sideColRef.current?.getBoundingClientRect();
       const tray = trayRef.current?.getBoundingClientRect();
-      if (!bar || !col || !tray || !c.height) return;
-      const top = Math.max(0, bar.bottom - c.top);
+      if (!col || !tray || !c.height) return;
+      const top = 0;
       const bottom = Math.max(0, c.bottom - tray.top);
-      // The right-hand column (start button, room or opponent panel) can hang below the toolbar: clear it across
+      // The right-hand column (start button, room or opponent panel) sits at the top right: clear it across
       // the full width, unless leaving its strip out keeps clearly more height (a tall online room panel).
       const below = Math.max(top, col.bottom - c.top);
       const wide = c.height - bottom - below >= (c.height - bottom - top) * 0.7;
@@ -544,7 +544,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     };
     measure();
     const ro = new ResizeObserver(measure);
-    for (const el of [canvas, toolbarRef.current, sideColRef.current, trayRef.current]) if (el) ro.observe(el);
+    for (const el of [canvas, sideColRef.current, trayRef.current]) if (el) ro.observe(el);
     return () => {
       ro.disconnect();
       engine.setViewInsets(null);
@@ -595,7 +595,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   const botArmy = useCallback(
     (side: Side, enemy: Placement[]): Placement[] => {
       if (!bundle || !bot || !engine?.terrain) return [];
-      const sideBudgetAmt = Math.round(sideBudget(bundle.settings, budget, side, defense) * bot.budgetMultiplier);
+      const sideBudgetAmt = sideBudget(bundle.settings, budget, side, defense);
       if (defense === side) return generateSiegeDefense({ bot, content: bundle, terrain: engine.terrain, side, budget: sideBudgetAmt, seed: randomSeed() });
       return generateBotArmy({ bot, content: bundle, terrain: engine.terrain, side, budget: sideBudgetAmt, enemy, seed: randomSeed() });
     },
@@ -846,44 +846,6 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         {bundle && phase === 'deploy' && (
           <>
             <div className={`flex flex-wrap items-start gap-1.5 sm:gap-2 ${cine ? 'invisible' : ''}`}>
-              <div ref={toolbarRef} className="panel pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-y-auto overscroll-contain p-1.5 sm:gap-2 sm:overflow-visible sm:p-2 max-h-[24vh] sm:max-h-none">
-                <button className="btn px-2 py-1 text-sm" onClick={online ? backToLobby : backToSetup} aria-label={t('game.back')}>
-                  <ArrowLeft />
-                </button>
-                <span className={`rounded-lg px-1.5 py-1 font-display text-white sm:px-2 ${SIDE_BG[mySide]}`}>
-                  <span className="hidden sm:inline">{t('game.side')} </span>
-                  {sideName(mySide, locale)}
-                  {defense && <span className="hidden sm:inline">{defense === mySide ? <> · <Castle /> {t('panels.defendYou')}</> : <> · <Flame /> {t('panels.attackYou')}</>}</span>}
-                </span>
-                <span className="text-xs font-bold">
-                  {myArmy.length - wallBlocks}/{maxUnits} {t('game.units')}
-                  {wallBlocks > 0 && ` · ${wallBlocks} ${t('game.wallBlocks')}`}
-                </span>
-                <button className={`btn px-2 py-1 text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')} title={t('game.place')} aria-label={t('game.place')}>
-                  <Plus /><span className="hidden sm:inline"> {t('game.place')}</span>
-                </button>
-                <button className={`btn px-2 py-1 text-sm ${tool === 'erase' ? 'btn-gold' : ''}`} onClick={() => setTool('erase')} title={`${t('game.erase')} (X)`} aria-label={t('game.erase')}>
-                  <X /><span className="hidden sm:inline"> {t('game.erase')}</span>
-                </button>
-                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={fillRandom} title={t('game.randomDeploy')} aria-label={t('game.randomDeploy')}>
-                  <Dices /><span className="hidden sm:inline"> {t('game.random')}</span>
-                </button>
-                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={undo} title={`${t('game.undo')} (Ctrl/⌘+Z)`} aria-label={t('game.undo')}>
-                  <Undo2 /><span className="hidden sm:inline"> {t('game.undo')}</span>
-                </button>
-                <button
-                  className="btn px-2 py-1 text-sm"
-                  disabled={locked}
-                  onClick={() => {
-                    snapshot();
-                    setArmies({ ...armiesRef.current, [mySide]: [] });
-                  }}
-                  title={t('game.clearAll')}
-                  aria-label={t('game.clearAll')}
-                >
-                  <Trash2 /><span className="hidden sm:inline"> {t('game.clearAll')}</span>
-                </button>
-              </div>
               <div ref={sideColRef} className="ml-auto flex min-w-0 max-w-[46vw] shrink-0 flex-col items-end gap-2 sm:max-w-none">
                 <div className="hidden max-w-full sm:block">
                   <PlayerHud bundle={bundle} />
@@ -926,6 +888,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 )}
               </div>
             </div>
+            {/* World chat in the free strip between the right-hand column and the unit tray. */}
+            <div className={`flex min-h-0 flex-1 items-end justify-end py-2 ${cine ? 'invisible' : ''}`}>
+              <GameChat className="max-h-[22rem]" />
+            </div>
             <div ref={trayRef} className={`mt-auto flex items-end gap-1.5 sm:gap-2 ${cine ? 'invisible' : ''}`}>
               <HelpHint text={t('game.deployHelp')} />
               <div className="min-w-0 flex-1">
@@ -945,9 +911,46 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   player={player}
                   stars={mode === 'bot' || (online && net.room?.useStars) ? player?.stars : undefined}
                   action={
-                    <button className="btn px-2 py-0.5 text-xs sm:text-sm" onClick={() => engine?.frameDeploy(mySide)} title={t('game.recenterTitle')} aria-label={t('game.recenter')}>
-                      <LocateFixed /> {t('game.recenter')}
-                    </button>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <button className="btn px-2 py-0.5 text-xs sm:text-sm" onClick={online ? backToLobby : backToSetup} aria-label={t('game.back')}>
+                          <ArrowLeft />
+                        </button>
+                        <span className={`rounded-lg px-1.5 py-0.5 text-xs font-display sm:text-sm text-white sm:px-2 ${SIDE_BG[mySide]}`}>
+                          <span className="hidden sm:inline">{t('game.side')} </span>
+                          {sideName(mySide, locale)}
+                          {defense && <span className="hidden sm:inline">{defense === mySide ? <> · <Castle /> {t('panels.defendYou')}</> : <> · <Flame /> {t('panels.attackYou')}</>}</span>}
+                        </span>
+                        <span className="whitespace-nowrap text-xs font-bold">
+                          {myArmy.length - wallBlocks}/{maxUnits} {t('game.units')}
+                          {wallBlocks > 0 && ` · ${wallBlocks} ${t('game.wallBlocks')}`}
+                        </span>
+                        <button className={`btn px-2 py-0.5 text-xs sm:text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')} title={t('game.place')} aria-label={t('game.place')}>
+                          <Plus /><span className="hidden sm:inline"> {t('game.place')}</span>
+                        </button>
+                        <button className={`btn px-2 py-0.5 text-xs sm:text-sm ${tool === 'erase' ? 'btn-gold' : ''}`} onClick={() => setTool('erase')} title={`${t('game.erase')} (X)`} aria-label={t('game.erase')}>
+                          <X /><span className="hidden sm:inline"> {t('game.erase')}</span>
+                        </button>
+                        <button className="btn px-2 py-0.5 text-xs sm:text-sm" disabled={locked} onClick={fillRandom} title={t('game.randomDeploy')} aria-label={t('game.randomDeploy')}>
+                          <Dices /><span className="hidden sm:inline"> {t('game.random')}</span>
+                        </button>
+                        <button
+                          className="btn px-2 py-0.5 text-xs sm:text-sm"
+                          disabled={locked}
+                          onClick={() => {
+                            snapshot();
+                            setArmies({ ...armiesRef.current, [mySide]: [] });
+                          }}
+                          title={t('game.clearAll')}
+                          aria-label={t('game.clearAll')}
+                        >
+                          <Trash2 /><span className="hidden sm:inline"> {t('game.clearAll')}</span>
+                        </button>
+                      </div>
+                      <button className="btn px-2 py-0.5 text-xs sm:text-sm" onClick={() => engine?.frameDeploy(mySide)} title={t('game.recenterTitle')} aria-label={t('game.recenter')}>
+                        <LocateFixed /> {t('game.recenter')}
+                      </button>
+                    </div>
                   }
                 />
               </div>
@@ -976,6 +979,16 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             onRecenter={() => engine?.recenterBattle()}
             onVR={vrOk ? () => (view.vr ? engine?.exitVR() : void engine?.enterVR().catch((err) => flash(`${t('game.vrError')} ${err instanceof Error ? err.message : err}`))) : undefined}
           />
+        )}
+        {bundle && (phase === 'setup' || phase === 'lobby') && (
+          <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-3">
+            <GameChat className="max-h-[40vh]" />
+          </div>
+        )}
+        {bundle && phase === 'battle' && !cine && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <GameChat className="max-h-[40vh]" />
+          </div>
         )}
         {desync && phase === 'battle' && <div className="panel pointer-events-auto absolute left-1/2 top-20 max-w-[calc(100vw-2rem)] -translate-x-1/2 break-words px-3 py-1 text-center text-sm text-red-team">{t('game.desync')}</div>}
       </div>

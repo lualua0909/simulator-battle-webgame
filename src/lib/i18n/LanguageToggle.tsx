@@ -3,7 +3,7 @@
 import { useLanguage } from './LanguageContext';
 import type { Locale } from './locales';
 
-/** Compact EN / VI toggle. Place in nav bars (home header, PlayerHud). */
+/** Compact EN / VI toggle. Placed in page footers (home, topup). */
 export default function LanguageToggle({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale, t } = useLanguage();
   const next: Locale = locale === 'en' ? 'vi' : 'en';

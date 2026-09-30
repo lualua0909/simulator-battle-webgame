@@ -78,6 +78,7 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
                   thumb={thumbs[u.id]}
                   color={faction?.color}
                   locked={locked}
+                  factionId={u.factionId}
                 />
               </button>
             );

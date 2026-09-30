@@ -12,12 +12,14 @@ interface Props {
   star?: number;
   count?: number;
   artwork?: ReactNode;
+  /** Faction id, exposed as a frame class for faction-specific styling (Huyền thoại gets a patterned portrait). */
+  factionId?: string;
 }
 
 /** Shared card artwork; its parent owns selection, clicking and drag behavior. */
-export default function UnitCardFace({ name, cost, thumb, color = '#4384f5', locked, star, count, artwork }: Props) {
+export default function UnitCardFace({ name, cost, thumb, color = '#4384f5', locked, star, count, artwork, factionId }: Props) {
   return (
-    <span className="unit-card-frame" style={{ '--portrait-color': color } as CSSProperties}>
+    <span className={`unit-card-frame ${factionId ? `unit-card-faction-${factionId}` : ''}`} style={{ '--portrait-color': color } as CSSProperties}>
       <span className="unit-card-header">
         <span className="unit-card-level"><CoinIcon size={24} /></span>
         <span className="unit-card-price" title={`${cost}`}>

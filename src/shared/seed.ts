@@ -213,6 +213,7 @@ const U = (u: Partial<UnitDef> & Pick<UnitDef, 'id' | 'name' | 'factionId' | 'ro
   spawnInterval: 1,
   spawnMax: 10,
   hidden: false,
+  rarity: 'common',
   // Every unit is unlocked by default; admins can still set a price in the CMS.
   unlockCost: 0,
   cardPrice: Math.min(5, Math.max(1, Math.round((Math.round(u.cost / 50) * 5) / 100))),
@@ -281,9 +282,9 @@ const assets: AssetDef[] = [
   A({ id: 'm-war-elephant', name: 'Chiến tượng', kind: 'elephant', scale: 2, params: { skin: '#8d8f96', tusks: true, howdah: false, blanket: '#d23c3c' }, glb: { url: '/models/voi-trang.glb', fileName: 'voi-trang.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-eagle', name: 'Cá đuối bay', kind: 'bird', scale: 1.4, params: {}, glb: { url: '/models/ca-duoi-bay.glb', fileName: 'ca-duoi-bay.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-raptor', name: 'Khủng long Raptor', kind: 'raptor', params: { body: '#5f9e4d', belly: '#d9cf9e', back: '#3c6e35', eye: '#ffd23f' }, glb: { url: '/models/velociraptor.glb', fileName: 'Velociraptor by Quaternius.glb', uploadedAt: 0, tint: {}, hide: [] } }),
-  A({ id: 'm-t-rex', name: 'Khủng long T-Rex', kind: 'raptor', scale: 2.6, params: { body: '#8a6a4a', belly: '#d9c49a', back: '#5a422a', eye: '#ffd23f' }, glb: { url: '/models/t-rex.glb', fileName: 'T-Rex by Quaternius.glb', uploadedAt: 0, tint: {}, hide: [] } }),
+  A({ id: 'm-t-rex', name: 'Khủng long T-Rex', kind: 'raptor', scale: 2.6, params: { body: '#8a6a4a', belly: '#d9c49a', back: '#5a422a', eye: '#ffd23f' }, glb: { url: '/models/t-rex.glb', fileName: 't-rex.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-stegosaurus', name: 'Khủng long Stegosaurus', kind: 'raptor', scale: 1.7, params: { body: '#5f8e4d', belly: '#cfc48f', back: '#3c6e35', eye: '#2a2018' }, glb: { url: '/models/stegosaurus.glb', fileName: 'stegosaurus.glb', uploadedAt: 0, tint: {}, hide: [] } }),
-  A({ id: 'm-parasaurolophus', name: 'Khủng long Parasaurolophus', kind: 'raptor', scale: 1.2, params: { body: '#7fae5a', belly: '#e3d9a8', back: '#4a7a3a', eye: '#3a2a1a' }, glb: { url: '/models/parasaurolophus.glb', fileName: 'Parasaurolophus by Quaternius.glb', uploadedAt: 0, tint: {}, hide: [] } }),
+  A({ id: 'm-parasaurolophus', name: 'Khủng long Parasaurolophus', kind: 'raptor', scale: 1.2, params: { body: '#7fae5a', belly: '#e3d9a8', back: '#4a7a3a', eye: '#3a2a1a' }, glb: { url: '/models/parasaurolophus.glb', fileName: 'parasaurolophus.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-triceratops', name: 'Khủng long Triceratops', kind: 'raptor', scale: 1.8, params: { body: '#8a7a5a', belly: '#d9cfa8', back: '#5a4a32', eye: '#2a2018' }, glb: { url: '/models/triceratops.glb', fileName: 'triceratops.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-long-neck', name: 'Khủng long cổ dài', kind: 'raptor', params: {}, glb: { url: '/models/khunng%20long%20co%20dai.glb', fileName: 'khunng long co dai.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-dragon', name: 'Rồng lửa', kind: 'dragon', scale: 1.5, params: {}, glb: { url: '/models/rong%20lua.glb', fileName: 'rong lua.glb', uploadedAt: 0, tint: {}, hide: [] } }),
@@ -357,10 +358,10 @@ const maps: MapDef[] = [
 ];
 
 const bots: BotDef[] = [
-  { id: 'de', name: 'Dễ', description: 'Quân ít tiền, đánh lộn xộn.', difficulty: 1, budgetMultiplier: 0.8, strategy: 'balanced', factionIds: [], reactive: false, formation: 'scatter', randomness: 0.8, maxUnits: 60 },
-  { id: 'thuong', name: 'Thường', description: 'Đội hình cân bằng, ngang tiền.', difficulty: 2, budgetMultiplier: 1, strategy: 'balanced', factionIds: [], reactive: false, formation: 'line', randomness: 0.4, maxUnits: 100 },
-  { id: 'kho', name: 'Khó', description: 'Xem quân của bạn rồi chọn quân khắc chế.', difficulty: 4, budgetMultiplier: 1.15, strategy: 'counter', factionIds: [], reactive: true, formation: 'wedge', randomness: 0.2, maxUnits: 120 },
-  { id: 'huyen-thoai', name: 'Huyền thoại', description: 'Quân tinh nhuệ, nhiều tiền hơn hẳn.', difficulty: 5, budgetMultiplier: 1.5, strategy: 'elite', factionIds: [], reactive: true, formation: 'flanks', randomness: 0.1, maxUnits: 120 },
+  { id: 'de', name: 'Dễ', description: 'Đánh lộn xộn. Hai bên 5.000 vàng.', difficulty: 1, budget: 5000, strategy: 'balanced', factionIds: [], reactive: false, formation: 'scatter', randomness: 0.8, maxUnits: 60 },
+  { id: 'thuong', name: 'Thường', description: 'Đội hình cân bằng. Hai bên 7.500 vàng.', difficulty: 2, budget: 7500, strategy: 'balanced', factionIds: [], reactive: false, formation: 'line', randomness: 0.4, maxUnits: 100 },
+  { id: 'kho', name: 'Khó', description: 'Xem quân của bạn rồi chọn quân khắc chế. Hai bên 10.000 vàng.', difficulty: 4, budget: 10000, strategy: 'counter', factionIds: [], reactive: true, formation: 'wedge', randomness: 0.2, maxUnits: 120 },
+  { id: 'huyen-thoai', name: 'Huyền thoại', description: 'Quân tinh nhuệ. Hai bên 15.000 vàng.', difficulty: 5, budget: 15000, strategy: 'elite', factionIds: [], reactive: true, formation: 'flanks', randomness: 0.1, maxUnits: 120 },
 ];
 
 const settings: Settings = {

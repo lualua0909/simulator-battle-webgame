@@ -25,7 +25,8 @@ export const NORMALIZED_HEIGHT = 2;
  * voi-mamut.glb is authored with forward -X (head at -X, tail at +X) and needs +90°;
  * voi-trang.glb is authored with forward +X and needs -90°; khunng long co dai.glb (long-neck)
  * has its neck along -X and needs +90°; khung-long-bay.glb (Rồng Xanh) has its head at -X and
- * needs +90°; rong lua.glb (Rồng lửa) likewise has its head at -X and needs +90°. Without it they walk sideways. Matched by URL suffix so tint/hide
+ * needs +90°; rong lua.glb (Rồng lửa) likewise has its head at -X and needs +90°; triceratops.glb
+ * has its head at +X and needs -90°. Without it they walk sideways. Matched by URL suffix so tint/hide
  * variants and re-uploads under a new path with the same file name keep the fix.
  */
 const YAW_CORRECTIONS: Array<[string, number]> = [
@@ -34,6 +35,7 @@ const YAW_CORRECTIONS: Array<[string, number]> = [
   ['khunng long co dai.glb', Math.PI / 2],
   ['khung-long-bay.glb', Math.PI / 2],
   ['rong lua.glb', Math.PI / 2],
+  ['triceratops.glb', -Math.PI / 2],
 ];
 
 /** Yaw correction for `url` in radians (0 when the file already faces +Z). Pure — unit-tested. */
