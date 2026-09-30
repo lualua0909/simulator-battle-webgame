@@ -308,6 +308,7 @@ export async function putSettings(settings: Settings): Promise<void> {
 export async function getContent(): Promise<ContentBundle> {
   const content = { settings: await getSettings() } as ContentBundle;
   for (const c of COLLECTIONS) (content as unknown as Record<string, unknown>)[c] = await listDocs(c);
+  content.maps.sort((a, b) => a.order - b.order);
   // A retired/missing flyer asset must not leave existing player cards with the
   // magenta missing-asset mesh. Keep customized assets when they are present.
   const flyer = content.units.find((unit) => unit.id === 'eagle');

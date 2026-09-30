@@ -3,6 +3,7 @@
 import { ArrowLeft, ArrowRight, Castle, Check, Dices, Flame, LocateFixed, Plus, Swords, Trash2, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react';
 import { botBoxTier, boxTierNum, isUnlocked, playerBudget } from '@/shared/economy';
+import { IS_VERCEL } from '@/shared/deploy';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
 import { useAuth } from '@/components/auth/AuthProvider';
 import BoxOpening from '@/components/player/BoxOpening';
@@ -676,7 +677,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   /** Tells the server a bot battle starts: its win reward needs this ticket. */
   const startBotTicket = () => {
-    if (user && bot) void act({ action: 'bot-start', botId: bot.id, botCount: botSides.length }).catch(() => {});
+    if (user && bot && !IS_VERCEL) void act({ action: 'bot-start', botId: bot.id, botCount: botSides.length }).catch(() => {});
   };
 
   const primaryAction = async () => {
@@ -1001,7 +1002,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           {mode === 'ranked' && bundle && <RankResultPanel bundle={bundle} res={rankResult} />}
         </ResultModal>
       )}
-      {bundle && user && mode === 'bot' && bot && phase === 'result' && result && result.winner === 'blue' && !rewardClosed && (
+      {!IS_VERCEL && bundle && user && mode === 'bot' && bot && phase === 'result' && result && result.winner === 'blue' && !rewardClosed && (
         <BoxOpening
           bundle={bundle}
           action={{ action: 'bot-win' }}

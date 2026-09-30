@@ -33,7 +33,7 @@ export const UNIT_EN: Record<string, { name: string; description?: string }> = {
   triceratops: { name: 'Triceratops', description: 'Three-horned tank, gores anything in its path.' },
   'long-neck': { name: 'Long-Neck Dinosaur', description: 'A giant herbivore that crushes enemies with its tail.' },
   musketeer: { name: 'Musketeer', description: 'Straight-flying bullets pierce light armor; sometimes fires a burst.' },
-  'wind-shaman': { name: 'Wind Shaman', description: 'Heals allies, summons tornadoes that lift enemies.' },
+  'wind-shaman': { name: 'Wind Shaman', description: 'Heals allies, hurls wind blades, blasts back anyone who closes in and summons tornadoes that lift enemies.' },
   pyromancer: { name: 'Pyromancer', description: 'Breathes fire from hand, summons flame tornadoes.' },
   'thunder-mage': { name: 'Thunder Mage', description: 'Chain lightning from hand, calls down sky thunder.' },
   'storm-lord': { name: 'Storm Lord', description: 'Calls a thunderstorm covering the battlefield.' },
@@ -83,6 +83,8 @@ export const WEAPON_EN: Record<string, string> = {
   'set-chuoi': 'Chain Lightning',
   'phun-lua': 'Fire Breath',
   'loc-xoay': 'Tornado',
+  'phong-nhan': 'Wind Blades',
+  'cuong-phong': 'Gale Burst',
   'loc-lua': 'Fire Tornado',
   'thien-thach': 'Meteor',
   'mua-thien-thach': 'Meteor Shower',
@@ -101,7 +103,7 @@ export const MAP_EN: Record<string, string> = {
   'mini-map': 'Mini map',
   'rung-thong': 'Pine Forest',
   'deo-song': 'River Pass',
-  'thanh-tuyet': 'Snow Castle',
+  'thanh-tuyet': 'Snow Forest',
   'sa-mac': 'Desert',
 };
 

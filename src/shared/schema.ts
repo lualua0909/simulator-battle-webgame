@@ -23,7 +23,7 @@ export const HELD_SHIELDS = ['shield-round', 'shield-kite', 'buckler'] as const;
  * attack animation), `back` (slung across the back), `hipL`/`hipR` (sheathed at the belt).
  */
 export const EQUIP_SLOTS = ['handR', 'handL', 'back', 'hipL', 'hipR'] as const;
-export const PROJECTILE_MODELS = ['arrow', 'spear', 'stone', 'boulder', 'fireball', 'orb', 'bullet', 'meteor', 'shuriken'] as const;
+export const PROJECTILE_MODELS = ['arrow', 'spear', 'stone', 'boulder', 'fireball', 'orb', 'bullet', 'meteor', 'shuriken', 'wind-blade'] as const;
 export const PARTICLE_SHAPES = ['cube', 'tetra', 'sphere'] as const;
 export const PARTICLE_DIRECTIONS = ['up', 'sphere', 'hemisphere', 'forward'] as const;
 export const BOT_STRATEGIES = ['balanced', 'rush', 'ranged', 'tank', 'swarm', 'elite', 'counter'] as const;
@@ -321,7 +321,7 @@ export const structureParamsSchema = z.object({
 });
 
 export const treeParamsSchema = z.object({
-  type: z.enum(['pine', 'oak', 'birch', 'dead', 'palm', 'cactus']).default('pine'),
+  type: z.enum(['pine', 'oak', 'birch', 'cactus']).default('pine'),
   trunk: hex.default('#6b4424'),
   leaf: hex.default('#2f7a3a'),
   leaf2: hex.default('#4f9a3f'),
@@ -451,6 +451,8 @@ const scatterSchema = z.object({
 export const mapSchema = z.object({
   id: idSchema,
   name,
+  /** Display order in map pickers (ascending, then id). */
+  order: z.number().int().default(0),
   seed: z.number().int().min(0).max(1_000_000),
   size: z.number().min(60).max(300).default(70),
   /** island: a floating island (round playable disc, cliffs, sea below) instead of the square field. */

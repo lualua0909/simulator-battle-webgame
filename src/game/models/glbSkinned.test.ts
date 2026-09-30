@@ -228,7 +228,6 @@ const MAGE_TINTS: Array<{ asset: string; to: string }> = [
   { asset: 'm-wizard', to: '#4a2a8a' },
   { asset: 'm-pyromancer', to: '#b3262e' },
   { asset: 'm-thunder-mage', to: '#2a5aff' },
-  { asset: 'm-storm-lord', to: '#c8922a' },
 ];
 
 test('committed phap-su.glb parses with spell clips', async () => {
@@ -285,7 +284,8 @@ const EXTRA_DINOS = [
 ] as const;
 
 for (const d of EXTRA_DINOS) {
-  test(`committed ${d.file} parses with all six clips`, async () => {
+  // stegosaurus.glb is Draco-compressed with no Run/Jump clips: covered by its own test below.
+  if (d.file !== 'stegosaurus.glb') test(`committed ${d.file} parses with all six clips`, async () => {
     const file = path.join(process.cwd(), 'public', 'models', d.file);
     assert.ok(existsSync(file), `public/models/${d.file} is committed`);
     const buf = readFileSync(file);
@@ -497,6 +497,37 @@ test('wind shaman.glb: staff thrust is the attack clip', () => {
   const asset = SEED.assets.find((a) => a.id === 'm-wind-shaman')!;
   assert.equal(asset.glb?.url, '/models/wind%20shaman.glb');
   assert.deepEqual(assetSchema.parse(asset), asset);
+});
+
+test('shaman.glb: storm lord model, slash attack and sweep skill', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'shaman.glb');
+  assert.ok(existsSync(file), 'public/models/shaman.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Slash');
+  assert.equal(pickClipName(names, 'sweep'), 'Attack_Sweep');
+  assert.equal(pickClipName(names, 'idle'), 'Idle');
+  assert.equal(pickClipName(names, 'walk'), 'Walk');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+  const asset = SEED.assets.find((a) => a.id === 'm-storm-lord')!;
+  assert.equal(asset.glb?.url, '/models/shaman.glb');
+  assert.deepEqual(assetSchema.parse(asset), asset);
+});
+
+test('stegosaurus.glb: tail swipe is the attack clip', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'stegosaurus.glb');
+  assert.ok(existsSync(file), 'public/models/stegosaurus.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.equal(pickClipName(names, 'attack'), 'Attack_TailSwipe');
+  assert.equal(pickClipName(names, 'idle'), 'Idle');
+  assert.equal(pickClipName(names, 'walk'), 'Walk');
+  assert.equal(pickClipName(names, 'run'), 'Walk');
+  assert.equal(pickClipName(names, 'death'), 'Death');
 });
 
 test('elephant files seat riders on top of their back, others keep the horse-height seat', () => {

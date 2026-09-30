@@ -579,6 +579,9 @@ export class AudioEngine {
       case 'shuriken':
         this.noise(dest, 0.07, { type: 'bandpass', freq: 3500, q: 6, peak: 0.6, attack: 0.001 });
         break;
+      case 'wind-blade':
+        this.noise(dest, 0.22, { type: 'bandpass', freq: 900, freqEnd: 2600, q: 2, peak: 0.55, attack: 0.02 });
+        break;
       case 'meteor':
         break; // voiced by the 'strike' boom instead
     }

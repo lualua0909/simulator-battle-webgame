@@ -1,5 +1,5 @@
 // Projectile models, authored pointing along +Z (velocity direction).
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import type { ProjectileDef } from '@/shared/schema';
 import { ball, beam, box, cone, cyl, detail, faceColors, jitter, mesh, metal, modelRoot } from './common';
 
@@ -46,6 +46,11 @@ export function createProjectileModel(def: Pick<ProjectileDef, 'model' | 'color'
       // Four-point star lying in the flight plane.
       for (let i = 0; i < 4; i++) root.add(metal(`shuriken-blade-${i}`, cone(0.045, 0.16, 3).rotateX(Math.PI / 2).translate(0, 0, 0.08).rotateY((i * Math.PI) / 2), tint ?? '#c9ced6'));
       root.add(metal('shuriken-hub', cyl(0.035, 0.035, 0.02, 6), '#3a3a40'));
+      break;
+    case 'wind-blade':
+      // Crescent of cut air lying flat, horns trailing back, a bright edge along its front.
+      root.add(mesh('wind-blade-arc', new THREE.TorusGeometry(0.42, 0.07, 3, 14, Math.PI * 0.9).scale(1, 1, 0.35).rotateX(Math.PI / 2).rotateY(Math.PI * 0.05), tint ?? '#bff5e6', [0, 0, -0.3], [0, 0, 0], { emissive: 0.7 }));
+      root.add(mesh('wind-blade-edge', new THREE.TorusGeometry(0.44, 0.025, 3, 14, Math.PI * 0.7).rotateX(Math.PI / 2).rotateY(Math.PI * 0.15), '#ffffff', [0, 0, -0.29], [0, 0, 0], { emissive: 1 }));
       break;
   }
   root.scale.setScalar(def.scale);

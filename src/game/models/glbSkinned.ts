@@ -115,7 +115,8 @@ const KEYWORDS: Record<SkinState, string[]> = {
   // 'attack_breath' first: khung-long-bay.glb (Rồng Xanh, breath weapon) ships Attack_Bite ahead of it.
   // 'hammer' before 'attack': giant golem.glb ships Attack_Leap ahead of Attack_Hammer.
   // 'attack_thrust' before 'attack': wind shaman.glb ships Attack_Kick ahead of its staff thrust.
-  attack: ['attack_breath', 'spell', 'cast', 'staff_attack', 'hammer', 'attack_thrust', 'attack', 'shoot', 'bite', 'strike', 'punch', 'slash', 'kick', 'hit'],
+  // 'attack_tailswipe' before 'attack': stegosaurus.glb ships Attack_BiteShake ahead of its tail swipe.
+  attack: ['attack_breath', 'spell', 'cast', 'staff_attack', 'hammer', 'attack_thrust', 'attack_tailswipe', 'attack', 'shoot', 'bite', 'strike', 'punch', 'slash', 'kick', 'hit'],
   // Dash/leap skill (giant golem.glb Attack_Leap); packs without one reuse the attack clip.
   leap: ['attack_leap', 'leap', 'spell', 'cast', 'staff_attack', 'attack', 'bite', 'strike', 'slash'],
   death: ['death', 'die', 'dead'],

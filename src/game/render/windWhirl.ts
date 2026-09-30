@@ -89,8 +89,8 @@ function windTexture(color: THREE.Color, haze: boolean): THREE.DataTexture {
       let k: number;
       if (haze) {
         const n = shape(u * 8, v * 8) * 0.6 + fine(u * 16, v * 16) * 0.4;
-        a = 0.18 + THREE.MathUtils.smoothstep(n, 0.25, 0.8) * 0.5;
-        k = n * 0.35;
+        a = 0.08 + THREE.MathUtils.smoothstep(n, 0.3, 0.85) * 0.34;
+        k = 0.2 + n * 0.4;
       } else {
         // Wavy horizontal lines: 9 per tile, each wobbling, dashed by low-frequency noise.
         const wob = (shape(u * 8, v * 8) - 0.5) * 0.9;
@@ -100,7 +100,7 @@ function windTexture(color: THREE.Color, haze: boolean): THREE.DataTexture {
         a = thin * dash * (0.7 + 0.3 * fine(u * 16, v * 16));
         k = a;
       }
-      c.copy(color).multiplyScalar(0.7 + 0.3 * k).lerp(white, THREE.MathUtils.smoothstep(k, 0.45, 1));
+      c.copy(color).multiplyScalar(0.8 + 0.2 * k).lerp(white, THREE.MathUtils.smoothstep(k, 0.3, 0.9));
       const i = (y * TEX + x) * 4;
       data[i] = Math.min(255, c.r * 255);
       data[i + 1] = Math.min(255, c.g * 255);
@@ -171,7 +171,23 @@ function funnel(radius: number, height: number, layer: Layer): THREE.BufferGeome
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
   g.setIndex(index);
+  g.computeVertexNormals();
   return g;
+}
+
+/**
+ * Fades a sheet where it is seen edge-on, so the funnel's outline dissolves softly instead of
+ * stacking into a hard rim. WebGL only (WebGPU node materials skip onBeforeCompile and keep the rim).
+ */
+function softEdges(material: THREE.MeshBasicMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vFacing;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvFacing = abs(dot(normalize(normalMatrix * normal), normalize(-mvPosition.xyz)));');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vFacing;')
+      .replace('#include <opaque_fragment>', '#include <opaque_fragment>\ngl_FragColor.a *= smoothstep(0.08, 0.7, vFacing);');
+  };
 }
 
 /** Deterministic 0..1 sequence for the debris layout. */
@@ -213,6 +229,7 @@ export class WindWhirlKit {
         side: THREE.DoubleSide,
         fog: false,
       });
+      softEdges(material);
       this.shells.push({ geometry: funnel(radius, height, layer), material, layer });
     }
     this.ring = {

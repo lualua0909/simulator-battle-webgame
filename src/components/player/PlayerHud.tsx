@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { boxTierNum, formatCoins, liveBoxes, type BoxKind } from '@/shared/economy';
 import type { ChestVariant, ConfigBundle } from '@/shared/schema';
+import { IS_VERCEL } from '@/shared/deploy';
 import { canAccessCms } from '@/shared/users';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { chestThumbnail } from '@/game/render/chestThumbnails';
@@ -116,7 +117,9 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
             <WalletCards />
           </span>
       </Link>
-      {economy &&
+      {/* Daily bonus + x-hour box are hidden on Vercel. */}
+      {!IS_VERCEL &&
+        economy &&
         status &&
         (status.daily.ready ? (
           <button className="reward-slot reward-slot-ready" onClick={() => setWeekly(true)} title={t('hud.dailyBox')}>

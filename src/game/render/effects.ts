@@ -306,7 +306,8 @@ export class EffectRenderer {
         this.addRing('shock', e.x, e.z, e.radius * 0.7, 0.6, w.vfxColor);
         this.ringBurst(w.areaParticleId, e.x, e.y + 0.2, e.z, e.radius, host);
         if (!heal) {
-          this.addRing('scorch', e.x, e.z, e.radius * 0.3, 7, '#000000');
+          // Only a slam or a blast marks the ground; a gust of wind leaves it clean.
+          if (w.damageType === 'blunt' || w.damageType === 'fire') this.addRing('scorch', e.x, e.z, e.radius * 0.3, 7, '#000000');
           host.shake(0.2 + e.radius * 0.03, e.x, e.z);
           if (w.damageType === 'blunt') this.quake(e.x, e.z, e.radius, host);
           else if (w.damageType === 'fire') this.fireBlast(e.x, e.y, e.z, e.radius, false, host);
@@ -471,12 +472,11 @@ export class EffectRenderer {
     host.rumble(0.3, 0.5, x, z);
   }
 
-  /** Earthquake: the ground splits outward from the stomp, rocks hop into the air, the view rumbles. */
+  /** Earthquake: the ground splits outward from the stomp, rocks hop into the air (the caller's single shake jolts the view). */
   private quake(x: number, z: number, radius: number, host: EffectHost): void {
     if (!this.terrain) return;
     this.addCracks(x, z, radius, false);
     this.hopStones(x, z, radius * 1.15, Math.round(12 + radius * radius * 1.3), host);
-    host.rumble(0.3 + radius * 0.03, 0.8 + radius * 0.08, x, z);
   }
 
   /** Pebbles (and a few slabs near the centre) jolted into the air, the far ones as the wave arrives. */

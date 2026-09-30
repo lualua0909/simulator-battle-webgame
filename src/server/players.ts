@@ -29,6 +29,7 @@ import {
   type Quiet,
 } from '@/shared/economy';
 import type { BattleOutcome } from '@/shared/net';
+import { IS_VERCEL } from '@/shared/deploy';
 import { claimSeasonReward, currentSeason } from '@/shared/ranked';
 import type { ContentBundle } from '@/shared/schema';
 import { getContent, getSettings } from './content';
@@ -95,6 +96,10 @@ function botOf(content: ContentBundle, botId: string) {
 }
 
 export function runPlayerAction(uid: string, action: PlayerAction): Promise<PlayerView & { reward?: BoxReward }> {
+  // Daily bonus, x-hour box and bot-win (post-match) rewards are hidden on Vercel.
+  if (IS_VERCEL && (action.action === 'open-box' || action.action === 'bot-start' || action.action === 'bot-win')) {
+    return Promise.reject(new EconomyError('Tính năng không hỗ trợ khi deploy trên Vercel'));
+  }
   switch (action.action) {
     case 'open-box':
       return change(uid, (p, c, now) => openBox(p, action.kind, c.units, c.settings.economy, now, random));
