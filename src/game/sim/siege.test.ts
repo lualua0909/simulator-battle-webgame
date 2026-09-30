@@ -224,7 +224,7 @@ test('bot siege defence only posts real shooters on walls (no short-range breath
   // Cheapest ranged unit, so the old role-only filter would always have picked it.
   const pyro = { ...SEED.units.find((u) => u.id === 'pyromancer')!, weaponId: 'baby-dragon-breath', cost: 10 };
   const content = { ...SEED, units: SEED.units.map((u) => (u.id === 'pyromancer' ? pyro : u)) };
-  const terrain = new Terrain(SEED.maps.find((m) => m.id === 'thanh-tren-doi')!, SEED.assets, 'red');
+  const terrain = new Terrain(SEED.maps.find((m) => m.id === 'thanh-tuyet')!, SEED.assets, 'red');
   for (let seed = 1; seed <= 20; seed++) {
     const army = generateSiegeDefense({ bot: SEED.bots[1], content, terrain, side: 'red', budget: 12000, seed });
     const walls = new Set(army.filter((p) => p.unitId === 'tuong-thanh').map((p) => `${Math.floor(p.x / 2)},${Math.floor(p.z / 2)}`));

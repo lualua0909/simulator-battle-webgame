@@ -100,7 +100,6 @@ export const WEAPON_EN: Record<string, string> = {
 export const MAP_EN: Record<string, string> = {
   'mini-map': 'Mini map',
   'rung-thong': 'Pine Forest',
-  'thanh-tren-doi': 'Hill Castle',
   'deo-song': 'River Pass',
   'thanh-tuyet': 'Snow Castle',
   'sa-mac': 'Desert',

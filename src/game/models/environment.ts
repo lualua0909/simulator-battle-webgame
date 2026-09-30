@@ -1,7 +1,7 @@
-// Low-poly scenery: trees (pine/oak/birch/dead/palm/cactus), rocks, bushes.
+// Low-poly scenery: trees (pine/oak/birch/dead/palm/cactus). Rocks and bushes are GLB-only.
 // Every variant is seeded, so the same map seed always grows the same forest.
 import type * as THREE from 'three';
-import type { BushParams, RockParams, TreeParams } from '@/shared/schema';
+import type { TreeParams } from '@/shared/schema';
 import { Rng, ball, beam, box, cone, detail, faceColors, jitter, limb, mesh, modelRoot, shade, sweep, type Vec3 } from './common';
 
 export function createTreeModel(p: TreeParams, seed = 1): THREE.Group {
@@ -95,37 +95,5 @@ export function createTreeModel(p: TreeParams, seed = 1): THREE.Group {
       break;
     }
   }
-  return root;
-}
-
-export function createRockModel(p: RockParams, seed = 1): THREE.Group {
-  const root = modelRoot('rock', 'static');
-  const geo = jitter(ball(1, 1), 0.2 + p.roughness * 0.7, seed * 101 + 3).scale(1.05, p.flatness, 0.95);
-  root.add(mesh('rock', faceColors(geo, p.color, p.color2, seed * 7), p.color, [0, p.flatness * 0.55, 0], [0, seed, 0]));
-  if (seed % 2 === 1) {
-    const pebble = jitter(ball(0.35, 0), 0.15, seed + 1).scale(1, p.flatness, 1);
-    root.add(detail(mesh('pebble', faceColors(pebble, p.color2, p.color, seed + 2), p.color, [0.9, 0.15, 0.4])));
-  }
-  return root;
-}
-
-export function createBushModel(p: BushParams, seed = 1): THREE.Group {
-  const root = modelRoot('bush', 'static');
-  const rng = new Rng(seed * 53 + 1);
-  const n = 3 + rng.int(3);
-  for (let i = 0; i < n; i++) {
-    const r = 0.42 + rng.next() * 0.25;
-    const a = (i / n) * Math.PI * 2;
-    const d = i === 0 ? 0 : 0.35;
-    const geo = faceColors(jitter(ball(r, 1), 0.12, seed * 19 + i), p.leaf, p.leaf2, seed * 23 + i);
-    root.add(mesh(`clump-${i}`, geo, p.leaf, [Math.cos(a) * d, r * 0.8, Math.sin(a) * d]));
-    if (p.berries) {
-      for (let j = 0; j < 3; j++) {
-        const b = a + j * 2.1;
-        root.add(detail(mesh(`berry-${i}-${j}`, ball(0.06, 0), p.berryColor, [Math.cos(a) * d + Math.cos(b) * r * 0.9, r * 0.8 + (rng.next() - 0.3) * r, Math.sin(a) * d + Math.sin(b) * r * 0.9])));
-      }
-    }
-  }
-  root.add(detail(mesh('bush-shadow-root', box(0.2, 0.1, 0.2), shade(p.leaf, 0.5), [0, 0.05, 0])));
   return root;
 }

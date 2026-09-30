@@ -1,7 +1,7 @@
 // RTS camera tuned for mouse, trackpad and touch:
 //   wheel / pinch                 zoom toward the cursor, proportional to the scroll amount
-//   right button                  ignored (does not move the camera)
-//   middle-drag                   grab-pan: the ground point under the cursor sticks to it
+//   right-drag                    orbit (yaw) and tilt
+//   middle-drag / shift+right     grab-pan: the ground point under the cursor sticks to it
 //   left-drag when `leftPan`      grab-pan too (whenever the left button is not placing units)
 //   one-finger drag               grab-pan; two fingers pinch to zoom, twist to orbit, drag to pan
 //   WASD / arrows pan, Q/E rotate.
@@ -145,8 +145,8 @@ export class RtsCamera {
           return;
         }
       }
-      const pan = e.button === 1 || (e.button === 0 && this.panWithLeft);
-      if (!pan) return;
+      const pan = e.button === 1 || (e.button === 2 && e.shiftKey) || (e.button === 0 && this.panWithLeft);
+      if (!pan && e.button !== 2) return;
       this.spin = 0;
       this.onInput?.({ kind: pan ? 'pan' : 'orbit' });
       this.drag = { mode: pan ? 'pan' : 'orbit', x: e.clientX, y: e.clientY, grab: pan ? this.groundUnder(e.clientX, e.clientY)?.clone() ?? null : null };

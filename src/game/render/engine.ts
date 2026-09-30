@@ -18,7 +18,7 @@ import { Cinematic, type Shot } from './cinematic';
 import { CameraDirector } from './director';
 import { EffectRenderer, type EffectHost } from './effects';
 import { Fireworks } from './fireworks';
-import { Snowfall } from './snowfall';
+import { createWeather, type Weather } from './weather';
 import { HeightField } from './heightField';
 import { Glow } from './glow';
 import { ParticleSystem } from './particles';
@@ -134,7 +134,7 @@ export class BattleEngine {
   private zones: Partial<Record<Side, THREE.Group>> | null = null;
   private water: Water | null = null;
   private trees: AnimatedTrees[] = [];
-  private snow: Snowfall | null = null;
+  private weather: Weather | null = null;
   private readonly units: UnitRenderer;
   private readonly walls: WallRenderer;
   private readonly healthBars = new HealthBars();
@@ -383,9 +383,10 @@ export class BattleEngine {
     const scenery = createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a])));
     this.trees = scenery.trees;
     this.mapGroup.add(scenery);
-    if (map.id === 'thanh-tuyet') {
-      this.snow = new Snowfall(terrain);
-      this.mapGroup.add(this.snow.mesh);
+    const weather = map.id === 'thanh-tuyet' ? 'snow' : map.id === 'sa-mac' ? 'sand' : null;
+    if (weather) {
+      this.weather = createWeather(weather, terrain, this.particles, this.bundle.particles.find((p) => p.id === 'whirl-dust') ?? null);
+      this.mapGroup.add(this.weather.object);
     }
     this.zones = {};
     for (const side of terrain.activeSides) {
@@ -643,6 +644,17 @@ export class BattleEngine {
 
   cycleView(): void {
     this.setViewMode(VIEW_MODES[(VIEW_MODES.indexOf(this.view.mode) + 1) % VIEW_MODES.length]);
+  }
+
+  /** Back to the overview, gliding to the post-intro view close behind the own army's centre. */
+  recenterBattle(): void {
+    const sim = this.sim;
+    if (!sim || !this.terrain || this.mode !== 'battle' || this.cine) return;
+    const side = this.director.side;
+    this.setViewMode('overview');
+    const own = this.armyCenter(sim, side);
+    const f = -(Math.sign(this.zoneCenter(side).x) || 1);
+    this.rts.glideTo(this.closeView(side, own.x + f * 4, own.z, 20));
   }
 
   /** Follow the next soldier of the own army (from the overview: switches to the third-person view). */
@@ -986,7 +998,12 @@ export class BattleEngine {
   private clearMap(): void {
     for (const t of this.trees) t.dispose();
     this.trees = [];
-    this.snow = null;
+    if (this.weather) {
+      // Owns its geometry (the sand funnels share theirs), so it is freed here rather than by the traversal below.
+      this.mapGroup.remove(this.weather.object);
+      this.weather.dispose();
+      this.weather = null;
+    }
     for (const child of [...this.mapGroup.children]) {
       this.mapGroup.remove(child);
       child.traverse((o) => {
@@ -1375,7 +1392,7 @@ export class BattleEngine {
     this.updateDusk(dt);
     this.water?.update(this.time);
     for (const t of this.trees) t.update(animDt, this.mode === 'battle' ? sim : null);
-    this.snow?.update(dt, this.time);
+    this.weather?.update(dt, this.time);
     this.sky.position.setFromMatrixPosition(this.camera.matrixWorld);
     if (vr) this.shakeAmount = this.rumbleLeft = 0;
     if (this.rumbleLeft > 0) {

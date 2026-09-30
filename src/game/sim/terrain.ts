@@ -286,7 +286,11 @@ export class Terrain {
     const pineRoadHalfWidth = this.map.id === 'rung-thong' || this.map.id === 'thanh-tuyet' ? Math.max(7, this.half * 0.18) : 0;
 
     const place = (kind: ObstacleKind, perHectare: number, kinds: readonly string[]) => {
-      const usable = kinds.filter((id) => byId.get(id)?.kind === kind);
+      // Rocks and bushes are GLB-only: an asset without an uploaded file places nothing.
+      const usable = kinds.filter((id) => {
+        const a = byId.get(id);
+        return a?.kind === kind && (kind === 'tree' || !!a.glb);
+      });
       if (usable.length === 0 || perHectare <= 0) return;
       const target = Math.round(perHectare * hectares);
       let placed = 0;

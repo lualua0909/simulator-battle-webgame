@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type GameControl = 'overview' | 'moba' | 'third' | 'first' | 'second' | 'next' | 'vr' | 'sound' | 'muted' | 'play' | 'pause' | 'stop' | 'help';
+export type GameControl = 'overview' | 'moba' | 'third' | 'first' | 'second' | 'next' | 'recenter' | 'vr' | 'sound' | 'muted' | 'play' | 'pause' | 'stop' | 'help';
 
 /** Solid arcade symbols: white faces, dark outlines, readable at button size. */
 export default function GameControlIcon({ name }: { name: GameControl }) {
@@ -11,6 +11,7 @@ export default function GameControlIcon({ name }: { name: GameControl }) {
     first: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3.5" fill="#292130" stroke="none" /></>,
     second: <><circle cx="12" cy="4" r="2.5" /><path d="m9 8-6-2-1 3 7 3-3 9 3 1 3-7 3 7 3-1-3-9 7-3-1-3-6 2Z" /></>,
     next: <><path d="m3 4 12 8L3 20Z" /><rect x="17" y="4" width="4" height="16" rx="1" /></>,
+    recenter: <><circle cx="13" cy="13" r="7" fill="none" strokeWidth="4" /><circle cx="13" cy="13" r="7" fill="none" stroke="white" strokeWidth="2" /><path d="M13 2v5M13 19v5M2 13h5M19 13h5" fill="none" strokeWidth="4" /><path d="M13 2v5M13 19v5M2 13h5M19 13h5" fill="none" stroke="white" strokeWidth="2" /><circle cx="13" cy="13" r="2.5" /></>,
     vr: <><path d="M5 6h14l3 5v8h-7l-3-4-3 4H2v-8Z" /><path d="M6 9h3v5H6ZM15 9h3v5h-3Z" fill="#292130" stroke="none" /></>,
     sound: <><path d="M3 9h4l6-5v16l-6-5H3Z" /><path d="M17 8q4 4 0 8M20 4q7 8 0 16" fill="none" stroke="#292130" strokeWidth="4" /><path d="M17 8q4 4 0 8M20 4q7 8 0 16" fill="none" stroke="white" strokeWidth="2" /></>,
     muted: <><path d="M3 9h4l6-5v16l-6-5H3Z" /><path d="m17 9 5 6m0-6-5 6" fill="none" strokeWidth="4" /><path d="m17 9 5 6m0-6-5 6" fill="none" stroke="white" strokeWidth="2" /></>,

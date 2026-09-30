@@ -6,7 +6,6 @@ import { isUnlocked, starScale, type PlayerState } from '@/shared/economy';
 import type { ConfigBundle, UnitDef } from '@/shared/schema';
 import { unitPower } from '@/game/bot/generate';
 import UnitCardFace from '@/components/player/UnitCardFace';
-import { NamedIcon } from '@/components/ui/NamedIcon';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface Props {
@@ -48,7 +47,7 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
         </Tab>
         {factions.map((f) => (
           <Tab key={f.id} active={tab === f.id} onClick={() => setTab(f.id)} color={f.color} label={factionName(f.id, f.name)}>
-            <NamedIcon name={f.icon} /> <span className="hidden min-[420px]:inline">{factionName(f.id, f.name)}</span>
+            {factionName(f.id, f.name)}
           </Tab>
         ))}
         {action && <div className="ml-auto shrink-0">{action}</div>}

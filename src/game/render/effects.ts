@@ -10,6 +10,7 @@ import { createProjectileModel } from '../models/projectiles';
 import type { Terrain } from '../sim/terrain';
 import type { BattleSim, SimEvent } from '../sim/world';
 import type { DebrisBurst } from './debris';
+import { FireWhirlKit } from './fireWhirl';
 import { GLOW_LAYER } from './glow';
 import { commitInstances } from './instancing';
 import type { ParticleSystem } from './particles';
@@ -111,6 +112,8 @@ interface Whirl {
   seen: number;
   dust: ParticleDef | null;
   dustAcc: number;
+  /** Fire tornado: flame shells instead of dusty bands (then `bands` is empty). */
+  fire: { kit: FireWhirlKit; spin: THREE.Mesh[]; phase: number; flameAcc: number; lightAt: number } | null;
 }
 
 // ---------------------------------------------------------------- ground cracks
@@ -184,6 +187,9 @@ export class EffectRenderer {
   private readonly meteorMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.7, emissive: '#ff5a10', emissiveIntensity: 0.35 });
   private readonly whirls = new Map<number, Whirl>();
   private readonly whirlTemplates = new Map<string, { template: ModelTemplate; material: THREE.Material }>();
+  private readonly fireKits = new Map<string, FireWhirlKit>();
+  /** Copies of flame / ember particles flung along the fire whirl's spin instead of straight up. */
+  private readonly swirlDefs = new Map<string, ParticleDef>();
   private frame = 0;
   private time = 0;
   private readonly cracks: Crack[] = [];
@@ -1137,6 +1143,10 @@ export class EffectRenderer {
         band.position.z = Math.cos(time * 1.5 + i * 0.9) * i * 0.04 * r;
       });
       if (whirl.debris) whirl.debris.rotation.y = -time * 3.6;
+      if (whirl.fire) {
+        this.animateFireWhirl(whirl, whirl.fire, dt, host);
+        continue;
+      }
       if (whirl.dust && dt > 0 && whirl.fade > 0.5) {
         whirl.dustAcc += whirl.dust.rate * dt * (0.6 + r * 0.25);
         const whole = Math.floor(whirl.dustAcc);
@@ -1151,17 +1161,79 @@ export class EffectRenderer {
     }
   }
 
+  /** Flames licking up the funnel, embers flung round it, flickering light. */
+  private animateFireWhirl(whirl: Whirl, fire: NonNullable<Whirl['fire']>, dt: number, host: EffectHost): void {
+    const { kit } = fire;
+    kit.tick(this.time);
+    kit.animate(fire.spin, this.time, fire.phase);
+    if (dt <= 0 || whirl.fade <= 0.5) return;
+    const p = whirl.group.position;
+    const r = whirl.radius;
+    const h = kit.height;
+    const flame = this.burnDef && this.swirlDef(this.burnDef, [2.5, 5], [0.35, 0.75]);
+    if (flame) {
+      fire.flameAcc += dt * (26 + r * 8);
+      for (; fire.flameAcc >= 1; fire.flameAcc--) {
+        const a = Math.random() * Math.PI * 2;
+        const t = Math.random() ** 1.6 * 0.6;
+        const rr = r * (0.35 + 0.95 * t ** 1.5) * (0.5 + Math.random() * 0.5);
+        this.dir.x = -Math.sin(a) * 1.5;
+        this.dir.y = 1;
+        this.dir.z = Math.cos(a) * 1.5;
+        host.particles.emit(flame, p.x + Math.cos(a) * rr, p.y + t * h, p.z + Math.sin(a) * rr, this.dir, 1, 2.2 + r * 0.5 * (1 - t));
+      }
+    }
+    if (whirl.dust) {
+      const ember = this.swirlDef(whirl.dust, [4, 9], whirl.dust.lifetime);
+      whirl.dustAcc += whirl.dust.rate * dt * (0.6 + r * 0.25) + dt * 22;
+      for (; whirl.dustAcc >= 1; whirl.dustAcc--) {
+        const a = Math.random() * Math.PI * 2;
+        const t = Math.random() * 0.9;
+        const rr = r * (0.35 + 0.95 * t ** 1.5);
+        this.dir.x = -Math.sin(a);
+        this.dir.y = 0.8;
+        this.dir.z = Math.cos(a);
+        host.particles.emit(ember, p.x + Math.cos(a) * rr, p.y + t * h, p.z + Math.sin(a) * rr, this.dir, 1);
+      }
+    }
+    if (this.time >= fire.lightAt) {
+      fire.lightAt = this.time + 0.09 + Math.random() * 0.08;
+      this.v1.set(p.x, p.y + h * 0.3, p.z);
+      this.flash(this.v1, '#ff7a24', 2.5 + r * 0.8 + Math.random() * 1.5, 0.22, true);
+    }
+  }
+
+  private swirlDef(def: ParticleDef, speed: [number, number], lifetime: [number, number]): ParticleDef {
+    let d = this.swirlDefs.get(def.id);
+    if (!d) {
+      d = { ...def, direction: 'forward', spread: 0.35, speed, lifetime, emitRadius: Math.min(def.emitRadius, 0.3) };
+      this.swirlDefs.set(def.id, d);
+    }
+    return d;
+  }
+
   private createWhirl(w: WeaponDef, radius: number): Whirl {
+    const dust = w.areaParticleId ? this.particleDefs.get(w.areaParticleId) ?? null : null;
+    const height = 2.5 + radius * 2.2;
+    const c = new THREE.Color(w.vfxColor);
+    // Fiery colours become a column of flame; dusty ones are lit, translucent shells.
+    if (c.r > 0.75 && c.g < 0.65 && c.b < 0.4) {
+      const fireKey = `${w.vfxColor}|${radius}`;
+      let kit = this.fireKits.get(fireKey);
+      if (!kit) {
+        kit = new FireWhirlKit(radius, height, w.vfxColor);
+        this.fireKits.set(fireKey, kit);
+      }
+      const { group, spin } = kit.build();
+      this.group.add(group);
+      const fire = { kit, spin, phase: Math.random() * 10, flameAcc: 0, lightAt: 0 };
+      return { group, bands: [], debris: null, radius, age: 0, fade: 1, seen: this.frame, dust, dustAcc: 0, fire };
+    }
     const key = `${w.id}|${w.vfxColor}|${radius}`;
     let entry = this.whirlTemplates.get(key);
     if (!entry) {
-      const template = bakeModel(createTornadoModel({ radius, height: 2.5 + radius * 2.2, color: w.vfxColor, seed: 11 }));
-      const c = new THREE.Color(w.vfxColor);
-      // Fiery colours burn unlit; dusty ones are lit, translucent shells.
-      const hot = c.r > 0.75 && c.g < 0.65 && c.b < 0.4;
-      const material = hot
-        ? new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide })
-        : new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.66, depthWrite: false, side: THREE.DoubleSide, roughness: 1 });
+      const template = bakeModel(createTornadoModel({ radius, height, color: w.vfxColor, seed: 11 }));
+      const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.66, depthWrite: false, side: THREE.DoubleSide, roughness: 1 });
       entry = { template, material };
       this.whirlTemplates.set(key, entry);
     }
@@ -1181,8 +1253,7 @@ export class EffectRenderer {
       else if (p.local.startsWith('band')) bands.push(mesh);
     }
     this.group.add(group);
-    const dust = w.areaParticleId ? this.particleDefs.get(w.areaParticleId) ?? null : null;
-    return { group, bands, debris, radius, age: 0, fade: 1, seen: this.frame, dust, dustAcc: 0 };
+    return { group, bands, debris, radius, age: 0, fade: 1, seen: this.frame, dust, dustAcc: 0, fire: null };
   }
 
   // ------------------------------------------------------------------ lifecycle
@@ -1228,6 +1299,7 @@ export class EffectRenderer {
       for (const p of template.parts) p.geometry?.dispose();
       material.dispose();
     }
+    for (const kit of this.fireKits.values()) kit.dispose();
   }
 }
 

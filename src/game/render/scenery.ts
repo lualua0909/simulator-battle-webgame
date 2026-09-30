@@ -192,8 +192,6 @@ function createGlbGrass(terrain: Terrain, geometry: THREE.BufferGeometry, source
 /** Sparse grass makes the biome silhouettes read clearly. */
 function grassDensity(terrain: Terrain): number {
   switch (terrain.map.id) {
-    case 'thanh-tren-doi':
-      return 0.28;
     case 'thanh-tuyet':
       return 0.1;
     case 'sa-mac':

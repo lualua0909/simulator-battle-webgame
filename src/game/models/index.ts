@@ -6,7 +6,7 @@ import { createCatapultModel } from './catapult';
 import { createDragonModel } from './dragon';
 import { createElephantModel } from './elephant';
 import { createEquipmentModel, equipmentKey, itemOf, legacyEquipment, mountEquipment, unitEquipment, type EquipItem } from './equipment';
-import { createBushModel, createRockModel, createTreeModel } from './environment';
+import { createTreeModel } from './environment';
 import { createHorseModel } from './horse';
 import { createHumanoidModel, HIP_Y } from './humanoid';
 import { getCustomGlbGroup } from './glbStatic';
@@ -102,10 +102,9 @@ export function createAssetModel(asset: AssetDef, seedOverride?: number, equipme
       root = createTreeModel(parseAssetParams('tree', asset.params), seed);
       break;
     case 'rock':
-      root = createRockModel(parseAssetParams('rock', asset.params), seed);
-      break;
     case 'bush':
-      root = createBushModel(parseAssetParams('bush', asset.params), seed);
+      // GLB-only: the procedural rock/bush builders were deleted, so without an upload there is nothing to draw.
+      root = new THREE.Group();
       break;
   }
   root.scale.setScalar(asset.scale);

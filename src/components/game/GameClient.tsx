@@ -972,6 +972,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             view={view}
             onView={(m) => engine?.setViewMode(m)}
             onNextUnit={() => engine?.nextViewUnit()}
+            onRecenter={() => engine?.recenterBattle()}
             onVR={vrOk ? () => (view.vr ? engine?.exitVR() : void engine?.enterVR().catch((err) => flash(`${t('game.vrError')} ${err instanceof Error ? err.message : err}`))) : undefined}
           />
         )}

@@ -309,16 +309,11 @@ const assets: AssetDef[] = [
   A({ id: 'm-barracks', name: 'Nhà lính', kind: 'structure', scale: 3.3, params: { type: 'barracks', roof: '#6b4a2e', accent: '#8a2a2a' }, glb: { url: '/models/nha-linh.glb', fileName: 'nha-linh.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'm-keep', name: 'Nhà chính', kind: 'structure', scale: 4.2, params: { type: 'keep', roof: '#b3262e' } }),
   A({ id: 'tree-pine', name: 'Cây thông', kind: 'tree', scale: 2.7, params: { type: 'pine', leaf: '#2f6a3a', leaf2: '#3f7f42', height: 7 }, glb: { url: '/models/cay-thong-animation.glb', fileName: 'cay-thong-animation.glb', uploadedAt: 0, tint: {}, hide: [] } }),
-  A({ id: 'tree-snow', name: 'Thông phủ tuyết', kind: 'tree', scale: 1.2, seed: 4, params: { type: 'pine', trunk: '#5a4636', leaf: '#e6eef3', leaf2: '#3f6a4a', height: 7 }, glb: { url: '/models/thong-phu-tuyet.glb', fileName: 'thong phu tuyet.glb', uploadedAt: 0, tint: {}, hide: [] } }),
+  A({ id: 'tree-snow', name: 'Thông phủ tuyết', kind: 'tree', scale: 3.5, seed: 4, params: { type: 'pine', trunk: '#5a4636', leaf: '#e6eef3', leaf2: '#3f6a4a', height: 7 }, glb: { url: '/models/thong-phu-tuyet.glb', fileName: 'thong phu tuyet.glb', uploadedAt: 0, tint: {}, hide: [] } }),
   A({ id: 'tree-dead', name: 'Cây khô', kind: 'tree', scale: 1.7, params: { type: 'dead', trunk: '#5a4636', height: 5 } }),
-  A({ id: 'tree-palm', name: 'Cây cọ', kind: 'tree', scale: 1.75, params: { type: 'palm', trunk: '#9a7a4a', leaf: '#4f9a3f', leaf2: '#6fb44a', height: 7 }, glb: { url: '/models/cay-co.glb', fileName: 'cay co.glb', uploadedAt: 0, tint: {}, hide: [] } }),
+  A({ id: 'tree-palm', name: 'Cây cọ', kind: 'tree', params: { type: 'palm', trunk: '#9a7a4a', leaf: '#4f9a3f', leaf2: '#6fb44a', height: 7 } }),
   A({ id: 'tree-cactus', name: 'Xương rồng', kind: 'tree', scale: 4.8, params: { type: 'cactus', leaf: '#4f8a3a', leaf2: '#6fa84a', height: 3 }, glb: { url: '/models/xuong-rong.glb', fileName: 'xuong rong.glb', uploadedAt: 0, tint: {}, hide: [] } }),
-  A({ id: 'rock-gray', name: 'Đá xám', kind: 'rock', params: { color: '#8b8d90', color2: '#6f7276' } }),
-  A({ id: 'rock-mossy', name: 'Đá rêu', kind: 'rock', seed: 7, params: { color: '#7d8a74', color2: '#5f7a4a', roughness: 0.45 } }),
   A({ id: 'rock-sand', name: 'Đá sa thạch', kind: 'rock', scale: 1.2, seed: 3, params: { color: '#c89a68', color2: '#a87a4a', flatness: 0.55 }, glb: { url: '/models/da-sa-thach.glb', fileName: 'da sa thach.glb', uploadedAt: 0, tint: {}, hide: [] } }),
-  A({ id: 'bush-green', name: 'Bụi cỏ', kind: 'bush', scale: 0.4, params: {}, glb: { url: '/models/bui-co.glb', fileName: 'bui co.glb', uploadedAt: 0, tint: {}, hide: [] } }),
-  A({ id: 'bush-berry', name: 'Bụi quả mọng', kind: 'bush', scale: 0.23, seed: 5, params: { berries: true }, glb: { url: '/models/bui-qua-mong.glb', fileName: 'bui qua mong.glb', uploadedAt: 0, tint: {}, hide: [] } }),
-  A({ id: 'bush-dry', name: 'Bụi khô', kind: 'bush', scale: 0.5, seed: 9, params: { leaf: '#a89a5a', leaf2: '#c8b46a' }, glb: { url: '/models/bui-kho.glb', fileName: 'bui kho.glb', uploadedAt: 0, tint: {}, hide: [] } }),
 ];
 
 export const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): MapDef => ({
@@ -329,8 +324,8 @@ export const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): Ma
   river: { enabled: false, width: 8, meander: 10, ford: 0 },
   rise: 0,
   trees: { perHectare: 10, kinds: ['tree-pine'] },
-  rocks: { perHectare: 6, kinds: ['rock-gray'] },
-  bushes: { perHectare: 25, kinds: ['bush-green'] },
+  rocks: { perHectare: 0, kinds: [] },
+  bushes: { perHectare: 0, kinds: [] },
   grassColor: '#6fae4b',
   dirtColor: '#8a6a3f',
   sandColor: '#d9c58a',
@@ -345,14 +340,13 @@ export const M = (m: Partial<MapDef> & Pick<MapDef, 'id' | 'name' | 'seed'>): Ma
 });
 
 const maps: MapDef[] = [
-  M({ id: 'rung-thong', name: 'Rừng thông', seed: 4242, heightScale: 5, hilliness: 1.4, trees: { perHectare: 200, kinds: ['tree-pine'] }, rocks: { perHectare: 12, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 20, kinds: ['bush-green'] }, grassColor: '#4f8f45', skyTop: '#6a9ccc', skyBottom: '#dfe9ef', fog: 0.45, budget: 5000 }),
+  M({ id: 'rung-thong', name: 'Rừng thông', seed: 4242, heightScale: 5, hilliness: 1.4, trees: { perHectare: 200, kinds: ['tree-pine'] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#4f8f45', skyTop: '#6a9ccc', skyBottom: '#dfe9ef', fog: 0.45, budget: 5000 }),
   // ---- made for sieges (the red side has room for a castle)
-  M({ id: 'thanh-tren-doi', name: 'Thành trên đồi', seed: 3131, size: 75, heightScale: 2.2, hilliness: 0.9, rise: 9, trees: { perHectare: 6, kinds: ['tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray', 'rock-mossy'] }, bushes: { perHectare: 18, kinds: ['bush-green'] }, grassColor: '#6aa84a', defenseDepth: 28, budget: 5000 }),
-  M({ id: 'deo-song', name: 'Đèo sông', seed: 5150, size: 80, heightScale: 3, hilliness: 1.1, river: { enabled: true, width: 11, meander: 4, ford: 14 }, trees: { perHectare: 12, kinds: ['tree-pine'] }, rocks: { perHectare: 12, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 20, kinds: ['bush-green'] }, grassColor: '#5e9e48', defenseDepth: 25, budget: 5000 }),
-  M({ id: 'thanh-tuyet', name: 'Thành tuyết', seed: 8484, size: 75, heightScale: 4, hilliness: 1.2, trees: { perHectare: 60, kinds: ['tree-snow', 'tree-pine', 'tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-gray'] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#e8eef2', dirtColor: '#9aa3ad', sandColor: '#cfd8df', waterColor: '#6fa8c8', skyTop: '#9fb4c8', skyBottom: '#eef3f7', fog: 0.6, defenseDepth: 27, budget: 5000 }),
+  M({ id: 'deo-song', name: 'Đèo sông', seed: 5150, size: 80, heightScale: 3, hilliness: 1.1, river: { enabled: true, width: 11, meander: 4, ford: 14 }, trees: { perHectare: 12, kinds: ['tree-pine'] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#5e9e48', defenseDepth: 25, budget: 5000 }),
+  M({ id: 'thanh-tuyet', name: 'Thành tuyết', seed: 8484, size: 75, heightScale: 4, hilliness: 1.2, trees: { perHectare: 60, kinds: ['tree-snow', 'tree-pine', 'tree-pine'] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#e8eef2', dirtColor: '#9aa3ad', sandColor: '#cfd8df', waterColor: '#6fa8c8', skyTop: '#9fb4c8', skyBottom: '#eef3f7', fog: 0.6, defenseDepth: 27, budget: 5000 }),
   // Small floating island for close combat (TABS style).
-  M({ id: 'mini-map', name: 'Mini map', seed: 2468, size: 60, shape: 'island', heightScale: 1.6, hilliness: 0.8, trees: { perHectare: 14, kinds: ['tree-pine'] }, rocks: { perHectare: 8, kinds: ['rock-mossy', 'rock-gray'] }, bushes: { perHectare: 30, kinds: ['bush-green', 'bush-berry'] }, grassColor: '#9cc45c', dirtColor: '#8c7358', sandColor: '#d9cf9a', waterColor: '#5fc6bd', skyTop: '#8ec5e6', skyBottom: '#c4e2ee', fog: 0.05, deployDepth: 10, defenseDepth: 20 }),
-  M({ id: 'sa-mac', name: 'Sa mạc', seed: 9001, size: 80, heightScale: 4, hilliness: 0.8, trees: { perHectare: 12, kinds: ['tree-palm', 'tree-cactus', 'tree-cactus'] }, rocks: { perHectare: 24, kinds: ['rock-sand'] }, bushes: { perHectare: 8, kinds: ['bush-dry'] }, grassColor: '#d8b870', dirtColor: '#c29a58', sandColor: '#e8d39a', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.2, budget: 6000 }),
+  M({ id: 'mini-map', name: 'Mini map', seed: 2468, size: 60, shape: 'island', heightScale: 1.6, hilliness: 0.8, trees: { perHectare: 14, kinds: ['tree-pine'] }, rocks: { perHectare: 0, kinds: [] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#9cc45c', dirtColor: '#8c7358', sandColor: '#d9cf9a', waterColor: '#5fc6bd', skyTop: '#8ec5e6', skyBottom: '#c4e2ee', fog: 0.05, deployDepth: 10, defenseDepth: 20 }),
+  M({ id: 'sa-mac', name: 'Sa mạc', seed: 9001, size: 80, heightScale: 4, hilliness: 0.8, trees: { perHectare: 12, kinds: ['tree-palm', 'tree-cactus', 'tree-cactus'] }, rocks: { perHectare: 24, kinds: ['rock-sand'] }, bushes: { perHectare: 0, kinds: [] }, grassColor: '#d8b870', dirtColor: '#c29a58', sandColor: '#e8d39a', skyTop: '#6fb6f2', skyBottom: '#fff1d6', fog: 0.2, budget: 6000 }),
 ];
 
 const bots: BotDef[] = [

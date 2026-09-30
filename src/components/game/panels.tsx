@@ -446,6 +446,7 @@ export function BattleHud(props: {
   view: ViewState;
   onView(mode: ViewMode): void;
   onNextUnit(): void;
+  onRecenter(): void;
   /** Shown only on a WebXR headset (Quest Browser). */
   onVR?(): void;
 }) {
@@ -501,6 +502,9 @@ export function BattleHud(props: {
             <GameControlIcon name="next" />
           </button>
         )}
+        <button className="btn btn-icon" onClick={props.onRecenter} title={t('game.recenter')} aria-label={t('game.recenter')}>
+          <GameControlIcon name="recenter" />
+        </button>
         {props.onVR && (
           <button className={`btn btn-icon ${props.view.vr ? 'btn-gold' : ''}`} onClick={props.onVR} title={props.view.vr ? (locale === 'vi' ? 'Thoát VR' : 'Exit VR') : (locale === 'vi' ? 'Chơi bằng kính VR (Quest)' : 'Play in VR (Quest)')} aria-label="VR">
             <GameControlIcon name="vr" />
