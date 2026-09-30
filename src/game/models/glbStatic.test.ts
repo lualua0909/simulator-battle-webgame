@@ -10,6 +10,8 @@ import { SEED } from '@/shared/seed';
 const FILES = [
   // Draco + webp: needs the browser loaders, so it takes the textured branch below.
   { file: 'cay-thong-animation.glb', asset: 'tree-pine', textured: true },
+  { file: 'cay-vang.glb', asset: 'tree-yellow', textured: true },
+  { file: 'cay-xanh.glb', asset: 'tree-green', textured: true },
   { file: 'da-sa-thach.glb', asset: 'rock-sand', textured: true },
   { file: 'thong-phu-tuyet.glb', asset: 'tree-snow', textured: true },
   { file: 'xuong-rong.glb', asset: 'tree-cactus', textured: false },
@@ -44,7 +46,7 @@ for (const f of FILES) {
   });
 }
 
-for (const file of ['cay-thong-animation.glb', 'thong-phu-tuyet.glb']) {
+for (const file of ['cay-thong-animation.glb', 'cay-vang.glb', 'cay-xanh.glb', 'thong-phu-tuyet.glb']) {
   test(`${file} is skinned with Sway / Wind / Interact_Shake clips`, () => {
     const buf = readFileSync(path.join(process.cwd(), 'public', 'models', file));
     const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as {

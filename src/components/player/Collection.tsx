@@ -126,7 +126,7 @@ export default function Collection({ bundle, thumbs, selectedId, onSelect: setSe
                 </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
-                {true ? <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} /> : <GuestDetail unit={selected} onSignIn={() => openAuth('signin')} />}
+                <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} />
               </div>
             </div>
           </div>

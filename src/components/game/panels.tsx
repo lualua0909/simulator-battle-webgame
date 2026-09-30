@@ -562,10 +562,13 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
   const title = resultTitle(result, props.mySide, locale);
   const color = result.winner !== 'draw' ? SIDE_TEXT[result.winner] : 'text-ink';
   const survivors = ALL_SIDES.filter((s) => result.survivors[s] !== undefined);
+  const outcome = result.winner === 'draw' ? 'draw' : props.mySide && result.winner !== props.mySide ? 'loss' : 'win';
   return (
-    <div className="pointer-events-auto absolute inset-0 flex items-center justify-center overflow-y-auto bg-ink/45 p-3 overscroll-contain">
-      <div className="panel flex max-h-[92dvh] w-[min(420px,92vw)] flex-col items-center gap-3 overflow-y-auto overscroll-contain p-6 text-center">
-        <div className={`result-title font-display text-3xl break-words sm:text-4xl ${color}`}>{title}</div>
+    <div className="result-backdrop pointer-events-auto absolute inset-0 flex items-center justify-center overflow-y-auto p-3 overscroll-contain">
+      <div className={`panel result-modal result-${outcome} flex max-h-[92dvh] w-[min(420px,92vw)] flex-col items-center gap-4 overflow-y-auto overscroll-contain px-5 pt-0 pb-5 text-center`}>
+        <div className="result-ribbon">
+          <div className={`result-title font-display text-3xl break-words sm:text-4xl ${color}`}>{title}</div>
+        </div>
         <p className="result-description text-sm">
           {result.reason === 'surrender'
             ? props.mySide && result.winner === props.mySide
@@ -578,19 +581,21 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
                   ? t('panels.defenseHeld')
                   : t('panels.timeoutDraw')
                 : t('panels.eliminated')}
-          <br />
-          {t('panels.alive')}:{' '}
-          {survivors.map((s, i) => (
-            <span key={s}>
-              {i > 0 && ' · '}
+        </p>
+        <div className="result-stats flex flex-wrap justify-center gap-2" aria-label={t('panels.alive')}>
+          {survivors.map((s) => (
+            <span key={s} className="result-chip">
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-ink/60 ${SIDE_BG[s]}`} />
               <b className={SIDE_TEXT[s]}>{result.survivors[s]}</b> {sideName(s, locale).toLowerCase()}
             </span>
-          ))}{' '}
-          · {(result.tick / 30).toFixed(0)} {t('panels.seconds')}
-        </p>
+          ))}
+          <span className="result-chip">
+            <Timer className="h-3.5 w-3.5" /> {(result.tick / 30).toFixed(0)} {t('panels.seconds')}
+          </span>
+        </div>
         {props.children}
-        <div className="flex flex-wrap justify-center gap-2">
-          <button className="btn btn-gold" onClick={props.onRematch}>
+        <div className="grid w-full grid-cols-2 gap-2.5">
+          <button className="btn btn-gold col-span-2 text-lg" onClick={props.onRematch}>
             {props.rematchLabel ?? t('panels.rematch')}
           </button>
           {props.onEdit && (
@@ -599,11 +604,11 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
             </button>
           )}
           {props.onMenu ? (
-            <button className="btn" onClick={props.onMenu}>
+            <button className={`btn ${props.onEdit ? '' : 'col-span-2'}`} onClick={props.onMenu}>
               Menu
             </button>
           ) : (
-            <Link href="/" className="btn">
+            <Link href="/" className={`btn ${props.onEdit ? '' : 'col-span-2'}`}>
               Menu
             </Link>
           )}
