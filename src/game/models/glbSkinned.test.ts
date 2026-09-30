@@ -226,7 +226,6 @@ test('repaintPixels reaches white without pinking it', () => {
 
 const MAGE_TINTS: Array<{ asset: string; to: string }> = [
   { asset: 'm-wizard', to: '#4a2a8a' },
-  { asset: 'm-wind-shaman', to: '#e8e8e8' },
   { asset: 'm-pyromancer', to: '#b3262e' },
   { asset: 'm-thunder-mage', to: '#2a5aff' },
   { asset: 'm-storm-lord', to: '#c8922a' },
@@ -482,6 +481,22 @@ test('giant golem.glb: hammer is the attack clip, leap the dash clip', () => {
   const asset = SEED.assets.find((a) => a.id === 'm-giant')!;
   assert.equal(asset.glb?.url, '/models/giant%20golem.glb');
   assert.deepEqual(SEED.units.find((u) => u.id === 'giant')!.skillIds, ['golem-nhay']);
+});
+
+test('wind shaman.glb: staff thrust is the attack clip', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'wind shaman.glb');
+  assert.ok(existsSync(file), 'public/models/wind shaman.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Thrust');
+  assert.equal(pickClipName(names, 'idle'), 'Idle');
+  assert.equal(pickClipName(names, 'walk'), 'Walk');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+  const asset = SEED.assets.find((a) => a.id === 'm-wind-shaman')!;
+  assert.equal(asset.glb?.url, '/models/wind%20shaman.glb');
+  assert.deepEqual(assetSchema.parse(asset), asset);
 });
 
 test('elephant files seat riders on top of their back, others keep the horse-height seat', () => {

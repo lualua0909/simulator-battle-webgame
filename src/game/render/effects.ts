@@ -4,13 +4,13 @@
 // Driven by sim events plus read-only sim state; purely cosmetic (never feeds the sim).
 import * as THREE from 'three';
 import type { ConfigBundle, ParticleDef, ProjectileDef, WeaponDef } from '@/shared/schema';
-import { bakeModel, mergeTemplate, type ModelTemplate } from '../models/bake';
-import { createTornadoModel } from '../models/effects';
+import { bakeModel, mergeTemplate } from '../models/bake';
 import { createProjectileModel } from '../models/projectiles';
 import type { Terrain } from '../sim/terrain';
 import type { BattleSim, SimEvent } from '../sim/world';
 import type { DebrisBurst } from './debris';
 import { FireWhirlKit } from './fireWhirl';
+import { WindWhirlKit } from './windWhirl';
 import { GLOW_LAYER } from './glow';
 import { commitInstances } from './instancing';
 import type { ParticleSystem } from './particles';
@@ -104,16 +104,16 @@ interface Meteor {
 
 interface Whirl {
   group: THREE.Group;
-  bands: THREE.Mesh[];
-  debris: THREE.Mesh | null;
   radius: number;
   age: number;
   fade: number;
   seen: number;
   dust: ParticleDef | null;
   dustAcc: number;
-  /** Fire tornado: flame shells instead of dusty bands (then `bands` is empty). */
+  /** Fire tornado: flame shells, a glowing scorch disc and flung embers. */
   fire: { kit: FireWhirlKit; spin: THREE.Mesh[]; phase: number; flameAcc: number; lightAt: number } | null;
+  /** Wind tornado: streaked gust shells, dust ring and orbiting leaves. */
+  wind: { kit: WindWhirlKit; spin: THREE.Mesh[]; ring: THREE.Mesh; debris: THREE.Mesh; phase: number } | null;
 }
 
 // ---------------------------------------------------------------- ground cracks
@@ -186,8 +186,8 @@ export class EffectRenderer {
   private readonly meteorGeo = new Map<string, THREE.BufferGeometry>();
   private readonly meteorMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.7, emissive: '#ff5a10', emissiveIntensity: 0.35 });
   private readonly whirls = new Map<number, Whirl>();
-  private readonly whirlTemplates = new Map<string, { template: ModelTemplate; material: THREE.Material }>();
   private readonly fireKits = new Map<string, FireWhirlKit>();
+  private readonly windKits = new Map<string, WindWhirlKit>();
   /** Copies of flame / ember particles flung along the fire whirl's spin instead of straight up. */
   private readonly swirlDefs = new Map<string, ParticleDef>();
   private frame = 0;
@@ -1136,26 +1136,28 @@ export class EffectRenderer {
       const s = grow * grow * (3 - 2 * grow) * Math.max(0, whirl.fade);
       whirl.group.scale.set(s, 0.3 + 0.7 * s, s);
       const r = whirl.radius;
-      const time = this.time;
-      whirl.bands.forEach((band, i) => {
-        band.rotation.y = -time * (5.2 - i * 0.45) + i;
-        band.position.x = Math.sin(time * 1.9 + i * 0.7) * i * 0.05 * r;
-        band.position.z = Math.cos(time * 1.5 + i * 0.9) * i * 0.04 * r;
-      });
-      if (whirl.debris) whirl.debris.rotation.y = -time * 3.6;
+      if (whirl.wind) {
+        whirl.wind.kit.tick(this.time);
+        whirl.wind.kit.animate(whirl.wind, this.time, whirl.wind.phase);
+      }
       if (whirl.fire) {
         this.animateFireWhirl(whirl, whirl.fire, dt, host);
         continue;
       }
-      if (whirl.dust && dt > 0 && whirl.fade > 0.5) {
+      if (whirl.dust && whirl.wind && dt > 0 && whirl.fade > 0.5) {
+        // Dust kicked up at the foot, then flung round the funnel as it climbs.
+        const swirl = this.swirlDef(whirl.dust, [3, 7], [0.6, 1.2]);
+        const h = whirl.wind.kit.height;
         whirl.dustAcc += whirl.dust.rate * dt * (0.6 + r * 0.25);
-        const whole = Math.floor(whirl.dustAcc);
-        whirl.dustAcc -= whole;
         const p = whirl.group.position;
-        for (let k = 0; k < whole; k++) {
+        for (; whirl.dustAcc >= 1; whirl.dustAcc--) {
           const a = Math.random() * Math.PI * 2;
-          const rr = r * (0.3 + Math.random() * 0.8);
-          host.particles.emit(whirl.dust, p.x + Math.cos(a) * rr, p.y + 0.2, p.z + Math.sin(a) * rr, { x: -Math.sin(a), y: 0.6, z: Math.cos(a) }, 1);
+          const t = Math.random() ** 2 * 0.7;
+          const rr = r * (0.3 + 1.2 * t ** 1.6) * (0.8 + Math.random() * 0.5);
+          this.dir.x = -Math.sin(a);
+          this.dir.y = 0.5;
+          this.dir.z = Math.cos(a);
+          host.particles.emit(t < 0.08 ? whirl.dust : swirl, p.x + Math.cos(a) * rr, p.y + 0.2 + t * h, p.z + Math.sin(a) * rr, this.dir, 1);
         }
       }
     }
@@ -1227,33 +1229,18 @@ export class EffectRenderer {
       const { group, spin } = kit.build();
       this.group.add(group);
       const fire = { kit, spin, phase: Math.random() * 10, flameAcc: 0, lightAt: 0 };
-      return { group, bands: [], debris: null, radius, age: 0, fade: 1, seen: this.frame, dust, dustAcc: 0, fire };
+      return { group, radius, age: 0, fade: 1, seen: this.frame, dust, dustAcc: 0, fire, wind: null };
     }
-    const key = `${w.id}|${w.vfxColor}|${radius}`;
-    let entry = this.whirlTemplates.get(key);
-    if (!entry) {
-      const template = bakeModel(createTornadoModel({ radius, height, color: w.vfxColor, seed: 11 }));
-      const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.66, depthWrite: false, side: THREE.DoubleSide, roughness: 1 });
-      entry = { template, material };
-      this.whirlTemplates.set(key, entry);
+    const windKey = `${w.vfxColor}|${radius}`;
+    let kit = this.windKits.get(windKey);
+    if (!kit) {
+      kit = new WindWhirlKit(radius, height, w.vfxColor);
+      this.windKits.set(windKey, kit);
     }
-    const group = new THREE.Group();
-    const bands: THREE.Mesh[] = [];
-    let debris: THREE.Mesh | null = null;
-    const pos = new THREE.Vector3();
-    for (const p of entry.template.parts) {
-      if (!p.geometry) continue;
-      const mesh = new THREE.Mesh(p.geometry, entry.material);
-      mesh.frustumCulled = false;
-      pos.setFromMatrixPosition(p.rest);
-      mesh.position.copy(pos);
-      mesh.renderOrder = 2;
-      group.add(mesh);
-      if (p.local === 'debris') debris = mesh;
-      else if (p.local.startsWith('band')) bands.push(mesh);
-    }
+    const { group, spin, ring, debris } = kit.build();
     this.group.add(group);
-    return { group, bands, debris, radius, age: 0, fade: 1, seen: this.frame, dust, dustAcc: 0, fire: null };
+    const wind = { kit, spin, ring, debris, phase: Math.random() * 10 };
+    return { group, radius, age: 0, fade: 1, seen: this.frame, dust, dustAcc: 0, fire: null, wind };
   }
 
   // ------------------------------------------------------------------ lifecycle
@@ -1295,11 +1282,8 @@ export class EffectRenderer {
     }
     for (const g of this.meteorGeo.values()) g.dispose();
     this.meteorMaterial.dispose();
-    for (const { template, material } of this.whirlTemplates.values()) {
-      for (const p of template.parts) p.geometry?.dispose();
-      material.dispose();
-    }
     for (const kit of this.fireKits.values()) kit.dispose();
+    for (const kit of this.windKits.values()) kit.dispose();
   }
 }
 
