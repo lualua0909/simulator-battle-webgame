@@ -12,6 +12,7 @@ import type { BattleResult } from '@/game/sim/world';
 import type { BattleStats, ViewState } from '@/game/render/engine';
 import { followsUnit, type ViewMode } from '@/game/render/unitView';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { IS_VERCEL } from '@/shared/deploy';
 
 export const SIDE_NAME: Record<Side, string> = { blue: 'Blue', red: 'Red', green: 'Green', yellow: 'Yellow' };
 export function sideName(side: Side, locale?: string): string {
@@ -188,19 +189,19 @@ export function SetupPanel(props: {
   onStart(): void;
 }) {
   const { bundle, mode } = props;
-  const { t, locale, mapName, botName } = useLanguage();
+  const { t, mapName, botName } = useLanguage();
   const modeTitle = mode === 'bot' ? t('modes.botTitle') : t('modes.localTitle');
   const lv = playerLevel(props.player?.xp ?? 0, bundle.settings.economy);
   return (
     <div className="panel glass-popup pointer-events-auto m-auto flex max-h-full w-[min(760px,94vw)] flex-col gap-2 overflow-y-auto overscroll-contain p-3 touch-pan-y sm:max-h-[88vh] sm:gap-3 sm:p-4">
       <h2 className="font-display text-2xl">{modeTitle}</h2>
-      <section>
-        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{locale === 'vi' ? 'Chế độ' : 'Mode'}</h3>
+      {!IS_VERCEL && <section>
+        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{t('panels.mode')}</h3>
         <ModePicker mode={mode} value={props.choice} onChange={props.setChoice} />
-        {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">{locale === 'vi' ? 'Phe thủ chỉ đứng trong vùng của mình, cần 1 Nhà chính. Phe công phá Nhà chính để thắng; hết giờ thì phe thủ thắng.' : 'Defenders stay in their zone and need 1 Keep. Attackers win by destroying the Keep; defenders win on timeout.'}</p>}
-      </section>
+        {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">{t('panels.siegeRules')}</p>}
+      </section>}
       <section>
-        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{locale === 'vi' ? 'Bản đồ' : 'Map'}</h3>
+        <h3 className="mb-1 text-sm font-extrabold uppercase opacity-70">{t('panels.map')}</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {bundle.maps.map((m) => (
             <button
@@ -213,7 +214,7 @@ export function SetupPanel(props: {
               <div className="h-8 rounded-md" style={{ background: `linear-gradient(180deg, ${m.skyTop}, ${m.skyBottom} 55%, ${m.grassColor} 56%, ${m.dirtColor})` }} />
               <div className="mt-1 font-bold">{mapName(m.id, m.name)}</div>
               <div className="text-xs opacity-70">
-                {m.size}m {m.river.enabled ? (locale === 'vi' ? '· có sông' : '· river') : ''} {m.defenseDepth > 0 && <>· <Castle /></>}
+                {m.size}m {m.river.enabled ? t('panels.river') : ''} {m.defenseDepth > 0 && <>· <Castle /></>}
               </div>
             </button>
           ))}
@@ -225,7 +226,7 @@ export function SetupPanel(props: {
           {lv.need > 0 && ` · ${lv.into}/${lv.need} XP`}
         </span>
         {mode === 'bot' && props.choice === 'battle' && (
-          <select value={props.botCount} onChange={(e) => props.setBotCount(Number(e.target.value))} className="field flex-none shrink-0" style={{ width: 'auto' }} title="Số lượng bot" aria-label="Số lượng bot">
+          <select value={props.botCount} onChange={(e) => props.setBotCount(Number(e.target.value))} className="field flex-none shrink-0" style={{ width: 'auto' }} title={t('panels.botCount')} aria-label={t('panels.botCount')}>
             {[1, 2, 3].map((n) => (
               <option key={n} value={n}>
                 {n} bot
@@ -255,12 +256,12 @@ export function SetupPanel(props: {
               );
             })}
           </div>
-          {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">{locale === 'vi' ? 'Thủ/công thành chỉ đấu 1 bot.' : 'Siege battles use 1 bot.'}</p>}
+          {props.choice !== 'battle' && <p className="mt-1 text-xs opacity-70">{t('panels.siegeOneBot')}</p>}
         </section>
       ) : (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={props.blind} onChange={(e) => props.setBlind(e.target.checked)} />
-          {locale === 'vi' ? 'Xếp quân bí mật (không thấy quân đối phương khi đặt)' : 'Secret deployment (hide enemy army while placing)'}
+          {t('panels.secretDeploy')}
         </label>
       )}
       <div className="flex justify-between">
@@ -268,7 +269,7 @@ export function SetupPanel(props: {
           <ArrowLeft /> Menu
         </Link>
         <button className="btn btn-gold text-lg" onClick={props.onStart}>
-          {locale === 'vi' ? 'Vào xếp quân' : 'Deploy'} <ArrowRight />
+          {t('panels.enterDeploy')} <ArrowRight />
         </button>
       </div>
     </div>
@@ -287,14 +288,15 @@ export function OnlineLobby(props: {
   onJoin(code: string): void;
   busy: boolean;
 }) {
+  const { t } = useLanguage();
   const [code, setCode] = useState(props.initialCode ?? '');
   if (props.playerName === null) {
     return (
       <div className="panel pointer-events-auto m-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
-        <h2 className="font-display text-2xl">Đấu online</h2>
-        <p className="text-sm">Cần đăng nhập để đấu online. Kết quả trận được lưu theo tài khoản.</p>
+        <h2 className="font-display text-2xl">{t('panels.onlineTitle')}</h2>
+        <p className="text-sm">{t('panels.onlineSigninHint')}</p>
         <button className="btn btn-gold" disabled={props.authLoading} onClick={props.onSignIn}>
-          <User /> Đăng nhập
+          <User /> {t('auth.signin')}
         </button>
         <Link href="/" className="text-sm underline">
           <ArrowLeft /> Menu
@@ -304,25 +306,25 @@ export function OnlineLobby(props: {
   }
   return (
     <div className="panel pointer-events-auto m-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
-      <h2 className="font-display text-2xl">Đấu online</h2>
+      <h2 className="font-display text-2xl">{t('panels.onlineTitle')}</h2>
       <p className="text-sm">
-        Chơi với tên <b>{props.playerName}</b>
+        {t('panels.playingAs')} <b>{props.playerName}</b>
       </p>
-      <p className={`text-sm ${props.error ? 'text-red-team' : 'opacity-75'}`}>{props.connected ? 'Đã kết nối máy chủ.' : (props.error ?? 'Đang kết nối máy chủ…')}</p>
+      <p className={`text-sm ${props.error ? 'text-red-team' : 'opacity-75'}`}>{props.connected ? t('panels.connected') : (props.error ?? t('panels.connecting'))}</p>
       <button className="btn btn-gold" disabled={!props.connected || props.busy} onClick={props.onCreate}>
-        Tạo phòng mới
+        {t('panels.createRoom')}
       </button>
       <div className="flex items-center gap-2 text-xs uppercase opacity-60">
-        <span className="h-px flex-1 bg-ink/30" /> hoặc <span className="h-px flex-1 bg-ink/30" />
+        <span className="h-px flex-1 bg-ink/30" /> {t('panels.or')} <span className="h-px flex-1 bg-ink/30" />
       </div>
       <div className="flex gap-2">
-        <input className="field font-mono uppercase" maxLength={5} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="MÃ PHÒNG" />
+        <input className="field font-mono uppercase" maxLength={5} value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={t('panels.roomCode')} />
         <button
           className="btn"
           disabled={code.length < 5 || !props.connected || props.busy}
           onClick={() => props.onJoin(code)}
         >
-          Vào phòng
+          {t('panels.joinRoom')}
         </button>
       </div>
       <Link href="/" className="text-sm underline">
@@ -344,6 +346,7 @@ export function useCountdown(deadline: number | null): number | null {
 }
 
 export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: Side; onSettings(next: RoomSettings): void }) {
+  const { t, mapName } = useLanguage();
   const { room, mySide, bundle } = props;
   const current: RoomSettings = { mapId: room.mapId, useStars: room.useStars, defense: room.defense };
   const set = (patch: Partial<RoomSettings>) => props.onSettings({ ...current, ...patch });
@@ -356,7 +359,7 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
   return (
     <div className="panel pointer-events-auto flex max-h-[22vh] w-44 max-w-[calc(100vw-1.5rem)] flex-col gap-2 overflow-y-auto overscroll-contain p-2 text-sm sm:max-h-[50vh] sm:w-52 md:max-h-none md:overflow-visible">
       <div className="flex items-center gap-2">
-        <span className="font-display">Phòng {room.code}</span>
+        <span className="font-display">{t('panels.room')} {room.code}</span>
         <button
           className="btn px-2 py-0.5 text-xs"
           onClick={() => {
@@ -365,22 +368,22 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
             setTimeout(() => setCopied(false), 1500);
           }}
         >
-          {copied ? 'Đã chép!' : 'Chép link mời'}
+          {copied ? t('panels.copied') : t('panels.copyInvite')}
         </button>
       </div>
       {secondsLeft !== null && (
-        <div className={`text-center font-display text-lg ${secondsLeft <= 10 ? 'text-red-team' : ''}`}>Bắt đầu sau {secondsLeft}s</div>
+        <div className={`text-center font-display text-lg ${secondsLeft <= 10 ? 'text-red-team' : ''}`}>{t('panels.startsIn')} {secondsLeft}s</div>
       )}
       {slots.map((s) => {
         const p = room.players[s];
         return (
           <div key={s} className="flex items-center gap-2">
             <span className={`h-3 w-3 rounded-full ${SIDE_BG[s]}`} />
-            <span className="font-bold">{p ? p.name : '— đang chờ —'}</span>
-            {s === mySide && <span className="text-xs opacity-60">(bạn)</span>}
-            {p && <span className="text-xs tabular-nums opacity-60" title="Ngân sách theo cấp">{p.budget}</span>}
-            {p && !p.connected && <span className="text-xs text-red-team">mất kết nối</span>}
-            {p?.ready && <span className="ml-auto rounded bg-green-600 px-1.5 text-xs font-bold text-white">SẴN SÀNG</span>}
+            <span className="font-bold">{p ? p.name : t('panels.waiting')}</span>
+            {s === mySide && <span className="text-xs opacity-60">{t('panels.you')}</span>}
+            {p && <span className="text-xs tabular-nums opacity-60" title={t('panels.budgetByLevel')}>{p.budget}</span>}
+            {p && !p.connected && <span className="text-xs text-red-team">{t('panels.disconnected')}</span>}
+            {p?.ready && <span className="ml-auto rounded bg-green-600 px-1.5 text-xs font-bold text-white">{t('panels.ready')}</span>}
           </div>
         );
       })}
@@ -388,34 +391,35 @@ export function RoomBar(props: { bundle: ConfigBundle; room: RoomState; mySide: 
         <select className="field" disabled={!host} value={room.mapId} onChange={(e) => set({ mapId: e.target.value })}>
           {bundle.maps.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.name}
+              {mapName(m.id, m.name)}
             </option>
           ))}
         </select>
       </div>
       <select className="field" disabled={!host} value={room.defense ?? 'battle'} onChange={(e) => set({ defense: e.target.value === 'battle' ? null : (e.target.value as Side) })}>
-        <option value="battle">Đại chiến</option>
-        <option value="blue">Thủ thành: Xanh thủ</option>
-        <option value="red">Thủ thành: Đỏ thủ</option>
+        <option value="battle">{t('panels.battle')}</option>
+        <option value="blue">{t('panels.defendBlue')}</option>
+        <option value="red">{t('panels.defendRed')}</option>
       </select>
-      <label className="flex items-center gap-2" title="Lính đã nâng sao được cộng máu và sát thương theo sao của từng người">
+      <label className="flex items-center gap-2" title={t('panels.starsEnabled')}>
         <input type="checkbox" disabled={!host} checked={room.useStars} onChange={(e) => set({ useStars: e.target.checked })} />
-        <Star /> Tính sao nâng cấp của lính
+        <Star /> {t('panels.starsEnabled')}
       </label>
-      {!host && <p className="text-xs opacity-60">Chủ phòng (Xanh) chọn bản đồ, ngân sách, chế độ và có tính sao hay không.</p>}
+      {!host && <p className="text-xs opacity-60">{t('panels.hostSettings')}</p>}
     </div>
   );
 }
 
 export function HelpHint({ text, className = '' }: { text: string; className?: string }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   return (
     <div className={`pointer-events-auto relative shrink-0 ${className}`}>
       <button
         className="btn btn-icon"
         onClick={() => setOpen((o) => !o)}
-        title="Hướng dẫn điều khiển"
-        aria-label="Hướng dẫn điều khiển"
+        title={t('panels.controls')}
+        aria-label={t('panels.controls')}
       >
         <GameControlIcon name="help" />
       </button>
@@ -445,6 +449,7 @@ export function BattleHud(props: {
   /** Shown only on a WebXR headset (Quest Browser). */
   onVR?(): void;
 }) {
+  const { t, locale } = useLanguage();
   const { stats, total, activeSides } = props;
   const left = Math.max(0, props.timeLimit - stats.time);
   const mm = Math.floor(left / 60);
@@ -468,11 +473,11 @@ export function BattleHud(props: {
         <div className="h-5 w-px shrink-0 bg-ink/15" />
         <span
           className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-display tabular-nums leading-none text-white sm:px-2.5 sm:text-lg ${left < 30 ? 'bg-red-team' : 'bg-ink'}`}
-          title={props.defense ? `Thời gian còn lại · Phe ${SIDE_NAME[props.defense]} thủ thành` : 'Thời gian còn lại'}
+          title={props.defense ? `${t('panels.timeRemaining')} · ${sideName(props.defense, locale)}` : t('panels.timeRemaining')}
         >
           <Timer /> {mm}:{ss}
           {props.defense && (
-            <span className="text-[11px] leading-none" title={`Phe ${SIDE_NAME[props.defense]} thủ`}>
+            <span className="text-[11px] leading-none" title={sideName(props.defense, locale)}>
               <Castle />
             </span>
           )}
@@ -485,24 +490,24 @@ export function BattleHud(props: {
         </div>
       </div>
       <div className="battle-controls panel pointer-events-auto absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 flex max-h-[28vh] max-w-[calc(100vw-1rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 overflow-y-auto overscroll-contain p-1 sm:bottom-3 sm:max-h-none sm:overflow-visible">
-        <HelpHint text="Chuột trái/giữa kéo: kéo bản đồ · Chuột phải kéo: xoay/nghiêng · Lăn/pinch: zoom theo con trỏ · WASD/QE · V: đổi góc nhìn · N: lính kế · Bấm vào lính để theo lính đó" />
+        <HelpHint text={t('panels.battleHelp')} />
         {VIEW_BUTTONS.map((b) => (
-          <button key={b.mode} className={`btn btn-icon ${props.view.mode === b.mode ? 'btn-gold' : ''}`} onClick={() => props.onView(b.mode)} title={b.title} aria-label={b.label}>
+          <button key={b.mode} className={`btn btn-icon ${props.view.mode === b.mode ? 'btn-gold' : ''}`} onClick={() => props.onView(b.mode)} title={b[locale].title} aria-label={b[locale].label}>
             <GameControlIcon name={b.mode} />
           </button>
         ))}
         {followsUnit(props.view.mode) && (
-          <button className="btn btn-icon" onClick={props.onNextUnit} title={`Theo lính kế tiếp (N)${props.view.unit ? ` · đang theo: ${props.view.unit}` : ''}`} aria-label="Lính kế">
+          <button className="btn btn-icon" onClick={props.onNextUnit} title={t('panels.nextUnit')} aria-label={t('panels.nextUnit')}>
             <GameControlIcon name="next" />
           </button>
         )}
         {props.onVR && (
-          <button className={`btn btn-icon ${props.view.vr ? 'btn-gold' : ''}`} onClick={props.onVR} title={props.view.vr ? 'Thoát VR' : 'Chơi bằng kính VR (Quest)'} aria-label="VR">
+          <button className={`btn btn-icon ${props.view.vr ? 'btn-gold' : ''}`} onClick={props.onVR} title={props.view.vr ? (locale === 'vi' ? 'Thoát VR' : 'Exit VR') : (locale === 'vi' ? 'Chơi bằng kính VR (Quest)' : 'Play in VR (Quest)')} aria-label="VR">
             <GameControlIcon name="vr" />
           </button>
         )}
         <div className="mx-0.5 h-6 w-px shrink-0 bg-ink/15" />
-        <button className={`btn btn-icon ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title="Bật/tắt âm thanh">
+        <button className={`btn btn-icon ${props.muted ? 'btn-gold' : ''}`} onClick={props.onMute} title={t('panels.sound')}>
           <GameControlIcon name={props.muted ? 'muted' : 'sound'} />
         </button>
         {props.onPause && (
@@ -512,7 +517,7 @@ export function BattleHud(props: {
         )}
         {props.onSpeed &&
           [1, 2].map((s, i) => (
-            <button key={s} className={`btn btn-icon text-xs ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed?.(s)} title={`${s}× · Phím ${i + 1}`}>
+            <button key={s} className={`btn btn-icon text-xs ${props.speed === s ? 'btn-gold' : ''}`} onClick={() => props.onSpeed?.(s)} title={`${s}× · ${locale === 'vi' ? 'Phím' : 'Key'} ${i + 1}`}>
               {s}×
             </button>
           ))}
@@ -525,18 +530,19 @@ export function BattleHud(props: {
   );
 }
 
-const VIEW_BUTTONS: { mode: ViewMode; label: string; title: string }[] = [
-  { mode: 'overview', label: 'Toàn cảnh', title: 'Toàn cảnh (V)' },
-  { mode: 'moba', label: 'MOBA', title: 'Góc nhìn MOBA: sau lưng chếch bên phải lính, nhìn xéo thấy cả hông và lưng (V)' },
-  { mode: 'third', label: 'Sau lưng', title: 'Góc nhìn thứ 3: đứng sau lưng lính (V)' },
-  { mode: 'first', label: 'Mắt lính', title: 'Góc nhìn thứ 1: nhìn bằng mắt lính (V)' },
-  { mode: 'second', label: 'Trước mặt', title: 'Góc nhìn thứ 2: đứng trước mặt lính, nhìn nó lao tới (V)' },
+const VIEW_BUTTONS: Array<{ mode: ViewMode; en: { label: string; title: string }; vi: { label: string; title: string } }> = [
+  { mode: 'overview', en: { label: 'Overview', title: 'Overview (V)' }, vi: { label: 'Toàn cảnh', title: 'Toàn cảnh (V)' } },
+  { mode: 'moba', en: { label: 'MOBA', title: 'MOBA view: behind and to the right of a unit (V)' }, vi: { label: 'MOBA', title: 'Góc nhìn MOBA: sau lưng chếch bên phải lính (V)' } },
+  { mode: 'third', en: { label: 'Behind', title: 'Third-person view: behind a unit (V)' }, vi: { label: 'Sau lưng', title: 'Góc nhìn thứ 3: đứng sau lưng lính (V)' } },
+  { mode: 'first', en: { label: 'First person', title: 'First-person view: through a unit\'s eyes (V)' }, vi: { label: 'Mắt lính', title: 'Góc nhìn thứ 1: nhìn bằng mắt lính (V)' } },
+  { mode: 'second', en: { label: 'Front', title: 'Front view: facing a charging unit (V)' }, vi: { label: 'Trước mặt', title: 'Góc nhìn thứ 2: đứng trước mặt lính (V)' } },
 ];
 
 function TeamBar({ side, alive, total, flip }: { side: Side; alive: number; total: number; flip: boolean }) {
+  const { locale } = useLanguage();
   const pct = total > 0 ? Math.max(0, Math.min(100, (alive / total) * 100)) : 0;
   return (
-    <div className={`flex shrink-0 items-center gap-1 sm:gap-1.5 ${flip ? 'flex-row-reverse' : ''}`} title={`${SIDE_NAME[side]}: còn ${alive}/${total}`}>
+    <div className={`flex shrink-0 items-center gap-1 sm:gap-1.5 ${flip ? 'flex-row-reverse' : ''}`} title={`${sideName(side, locale)}: ${alive}/${total}`}>
       <span className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-ink/60 ${SIDE_BG[side]}`} />
       <span className={`font-display tabular-nums sm:text-lg ${SIDE_TEXT[side]}`}>{alive}</span>
       <div className="h-2.5 w-12 overflow-hidden rounded-full border border-ink/80 bg-black/10 sm:h-3 sm:w-20 lg:w-24">
@@ -547,8 +553,9 @@ function TeamBar({ side, alive, total, flip }: { side: Side; alive: number; tota
 }
 
 export function ResultModal(props: { result: BattleResult; mySide?: Side; siege: boolean; onRematch(): void; onEdit?(): void; onMenu?(): void; rematchLabel?: string; children?: ReactNode }) {
+  const { t, locale } = useLanguage();
   const { result } = props;
-  const title = resultTitle(result, props.mySide);
+  const title = resultTitle(result, props.mySide, locale);
   const color = result.winner !== 'draw' ? SIDE_TEXT[result.winner] : 'text-ink';
   const survivors = ALL_SIDES.filter((s) => result.survivors[s] !== undefined);
   return (
@@ -558,33 +565,33 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
         <p className="result-description text-sm">
           {result.reason === 'surrender'
             ? props.mySide && result.winner === props.mySide
-              ? 'Đối thủ đã dừng trận!'
-              : 'Bạn đã dừng trận.'
+              ? t('panels.opponentStopped')
+              : t('panels.youStopped')
             : result.reason === 'core'
-              ? 'Nhà chính đã bị phá hủy!'
+              ? t('panels.coreDestroyed')
               : result.reason === 'timeout'
                 ? props.siege
-                  ? 'Hết giờ — phe thủ đã giữ được thành.'
-                  : 'Hết giờ — hai bên hòa nhau.'
-                : 'Một bên đã bị tiêu diệt hoàn toàn.'}
+                  ? t('panels.defenseHeld')
+                  : t('panels.timeoutDraw')
+                : t('panels.eliminated')}
           <br />
-          Còn sống:{' '}
+          {t('panels.alive')}:{' '}
           {survivors.map((s, i) => (
             <span key={s}>
               {i > 0 && ' · '}
-              <b className={SIDE_TEXT[s]}>{result.survivors[s]}</b> {SIDE_NAME[s].toLowerCase()}
+              <b className={SIDE_TEXT[s]}>{result.survivors[s]}</b> {sideName(s, locale).toLowerCase()}
             </span>
           ))}{' '}
-          · {(result.tick / 30).toFixed(0)} giây
+          · {(result.tick / 30).toFixed(0)} {t('panels.seconds')}
         </p>
         {props.children}
         <div className="flex flex-wrap justify-center gap-2">
           <button className="btn btn-gold" onClick={props.onRematch}>
-            {props.rematchLabel ?? 'Đấu lại'}
+            {props.rematchLabel ?? t('panels.rematch')}
           </button>
           {props.onEdit && (
             <button className="btn" onClick={props.onEdit}>
-              Sửa đội hình
+              {t('panels.editFormation')}
             </button>
           )}
           {props.onMenu ? (
@@ -603,13 +610,14 @@ export function ResultModal(props: { result: BattleResult; mySide?: Side; siege:
 }
 
 export function Handoff({ onContinue }: { onContinue(): void }) {
+  const { t } = useLanguage();
   return (
     <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-red-team">
       <div className="flex flex-col items-center gap-4 text-center text-white">
-        <div className="font-display text-4xl">Tới lượt người chơi 2</div>
-        <p className="max-w-sm">Người chơi 1 hãy quay đi nhé! Người chơi 2 xếp quân phe Đỏ.</p>
+        <div className="font-display text-4xl">{t('panels.handoffTitle')}</div>
+        <p className="max-w-sm">{t('panels.handoffHint')}</p>
         <button className="btn text-lg" onClick={onContinue}>
-          Tôi là người chơi 2 <ArrowRight />
+          {t('panels.handoffContinue')} <ArrowRight />
         </button>
       </div>
     </div>

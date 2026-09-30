@@ -84,7 +84,7 @@ async function change(uid: string, rule: (player: PlayerState, content: ContentB
 
 function unitOf(content: ContentBundle, unitId: string) {
   const unit = content.units.find((u) => u.id === unitId);
-  if (!unit) throw new EconomyError('Lính không tồn tại');
+  if (!unit || unit.hidden) throw new EconomyError('Lính không tồn tại');
   return unit;
 }
 

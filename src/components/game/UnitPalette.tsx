@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
+import { Crosshair, Footprints, Heart, Shield, Sparkles, Swords, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { isUnlocked, starScale, type PlayerState } from '@/shared/economy';
 import type { ConfigBundle, UnitDef } from '@/shared/schema';
@@ -115,47 +115,44 @@ function UnitInfo({ unit, bundle, star, thumb }: { unit: UnitDef; bundle: Config
   const { dps } = unitPower(unit, bundle);
   const scale = starScale(star, bundle.settings.economy.starBonus);
   const color = bundle.factions.find((f) => f.id === unit.factionId)?.color ?? '#4384f5';
+  const stats: { icon: React.ReactNode; label: string; value: React.ReactNode; tone: string }[] = [
+    { icon: <Heart />, label: t('collection.hp'), value: Math.round(unit.hp * scale), tone: 'hp' },
+    { icon: <Swords />, label: locale === 'vi' ? 'Sát thương/s' : 'DPS', value: (dps * scale).toFixed(0), tone: 'dps' },
+    { icon: <Crosshair />, label: locale === 'vi' ? 'Tầm' : 'Range', value: `${weapon?.range ?? '-'}m`, tone: 'range' },
+    { icon: <Footprints />, label: locale === 'vi' ? 'Tốc độ' : 'Speed', value: unit.speed, tone: 'speed' },
+    ...(unit.attackSpeed !== 1 ? [{ icon: <Zap />, label: locale === 'vi' ? 'Tốc độ đánh' : 'Attack speed', value: `×${unit.attackSpeed}`, tone: 'aspd' }] : []),
+    { icon: <Shield />, label: locale === 'vi' ? 'Giáp' : 'Armor', value: ARMOR_LABEL[unit.armorClass] ?? unit.armorClass, tone: 'armor' },
+  ];
   return (
-    <div className="hidden w-64 shrink-0 overflow-y-auto break-words rounded-lg border-2 border-ink/30 bg-white p-2 text-sm md:block">
-      <div className="flex items-center gap-2">
-        <div className="size-20 shrink-0 overflow-hidden rounded-md border-2 border-ink/40" style={{ background: `linear-gradient(160deg, ${color}, color-mix(in srgb, ${color} 80%, #131840))` }}>
-          {thumb && <img src={thumb} alt="" draggable={false} className="h-full w-full scale-125 object-contain" />}
-        </div>
+    <div className="unit-info hidden w-64 shrink-0 overflow-y-auto break-words text-sm md:flex" style={{ '--faction': color } as React.CSSProperties}>
+      <div className="unit-info-head">
+        <div className="unit-info-portrait">{thumb && <img src={thumb} alt="" draggable={false} />}</div>
         <div className="min-w-0">
-          <div className="font-display text-sm">
-            {unitName(unit.id, unit.name)}
-            {star > 0 && <span className="text-amber-700"> · {star} {locale === 'vi' ? 'sao' : star > 1 ? 'stars' : 'star'}</span>}
-          </div>
-          <div className="opacity-70">
-            {ROLE_LABEL[unit.role]} · {weapon ? weaponName(weapon.id, weapon.name) : ''}
+          <div className="unit-info-name font-display">{unitName(unit.id, unit.name)}</div>
+          {star > 0 && <div className="unit-info-stars" aria-label={`${star} ${locale === 'vi' ? 'sao' : star > 1 ? 'stars' : 'star'}`}>{'★'.repeat(star)}</div>}
+          <div className="unit-info-tags">
+            <span className="unit-info-tag">{ROLE_LABEL[unit.role]}</span>
+            {weapon && <span className="unit-info-tag unit-info-tag-weapon">{weaponName(weapon.id, weapon.name)}</span>}
           </div>
         </div>
       </div>
-      <dl className="mt-1 grid grid-cols-2 gap-x-2">
-        <dt>{t('collection.hp')}</dt>
-        <dd className="text-right font-bold">{Math.round(unit.hp * scale)}</dd>
-        <dt>{locale === 'vi' ? 'Sát thương/s' : 'DPS'}</dt>
-        <dd className="text-right font-bold">{(dps * scale).toFixed(0)}</dd>
-        <dt>{locale === 'vi' ? 'Tầm' : 'Range'}</dt>
-        <dd className="text-right font-bold">{weapon?.range}m</dd>
-        <dt>{locale === 'vi' ? 'Tốc độ' : 'Speed'}</dt>
-        <dd className="text-right font-bold">{unit.speed}</dd>
-        {unit.attackSpeed !== 1 && (
-          <>
-            <dt>{locale === 'vi' ? 'Tốc độ đánh' : 'Attack speed'}</dt>
-            <dd className="text-right font-bold">×{unit.attackSpeed}</dd>
-          </>
-        )}
-        <dt>{locale === 'vi' ? 'Giáp' : 'Armor'}</dt>
-        <dd className="text-right font-bold">{ARMOR_LABEL[unit.armorClass] ?? unit.armorClass}</dd>
+      <dl className="unit-info-stats">
+        {stats.map((s) => (
+          <div key={s.tone} className={`unit-info-stat unit-info-stat-${s.tone}`}>
+            <dt>{s.icon}{s.label}</dt>
+            <dd>{s.value}</dd>
+          </div>
+        ))}
       </dl>
       {skills.length > 0 && (
-        <p className="mt-1">
-          <b><Sparkles /> {locale === 'vi' ? 'Kỹ năng:' : 'Skills:'}</b> {skills.map((w) => weaponName(w.id, w.name)).join(', ')}
-          {unit.castSpeed !== 1 && <span className="opacity-70"> ({locale === 'vi' ? 'tốc độ' : 'speed'} ×{unit.castSpeed})</span>}
-        </p>
+        <div className="unit-info-skills">
+          <div className="unit-info-label"><Sparkles /> {locale === 'vi' ? 'Kỹ năng' : 'Skills'}{unit.castSpeed !== 1 && <span className="opacity-70"> · ×{unit.castSpeed}</span>}</div>
+          <div className="unit-info-tags">
+            {skills.map((w) => <span key={w.id} className="unit-info-tag unit-info-tag-skill">{weaponName(w.id, w.name)}</span>)}
+          </div>
+        </div>
       )}
-      {unitDesc(unit.id, unit.description) && <p className="mt-1 italic opacity-80">{unitDesc(unit.id, unit.description)}</p>}
+      {unitDesc(unit.id, unit.description) && <p className="unit-info-desc">{unitDesc(unit.id, unit.description)}</p>}
     </div>
   );
 }

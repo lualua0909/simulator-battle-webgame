@@ -114,6 +114,8 @@ export const unitSchema = z.object({
   spawnInterval: z.number().min(0.2).max(60).default(1),
   spawnMax: z.number().int().min(1).max(50).default(10),
   // ---- player collection (coins: 1 coin = 1 VND)
+  /** Hidden from players (not published): left out of the palette, collection, boxes and bot armies. */
+  hidden: z.boolean().default(false),
   /** Coins to unlock the unit; 0 = every player has it, guests included. */
   unlockCost: z.number().int().min(0).max(100_000_000).default(0),
   /** Shop price of one card; 0 = not sold. */
@@ -451,8 +453,8 @@ export const mapSchema = z.object({
   name,
   seed: z.number().int().min(0).max(1_000_000),
   size: z.number().min(60).max(300).default(70),
-  /** island: a floating island (round playable disc, cliffs, sea below) instead of the square field. diorama: square field of KayKit hex tiles on terraces. */
-  shape: z.enum(['square', 'island', 'diorama']).default('square'),
+  /** island: a floating island (round playable disc, cliffs, sea below) instead of the square field. */
+  shape: z.enum(['square', 'island']).default('square'),
   heightScale: z.number().min(0).max(20).default(4),
   hilliness: z.number().min(0.2).max(4).default(1),
   river: z.object({

@@ -53,6 +53,9 @@ export function toFirestore(collection: CollectionName, doc: AnyDoc): DocumentDa
 
 /** Validated document with defaults applied, or null (logged) when it is invalid, e.g. after a hand edit in the Console. */
 export function parseDoc<K extends CollectionName>(collection: K, id: string, data: DocumentData): CollectionDocs[K] | null {
+  // Retired scenery asset (2026-09): keep stale Firestore documents from
+  // bringing the removed tree back while the one-time CMS cleanup is pending.
+  if (collection === 'assets' && (id === 'tree-oak' || id === 'tree-birch')) return null;
   const raw: DocumentData = { ...data, id };
   // Existing CMS documents outlive seed changes. Upgrade the retired flyer on
   // read so its GLB-only renderer never receives the old null model reference.
@@ -79,6 +82,23 @@ export function parseDoc<K extends CollectionName>(collection: K, id: string, da
     raw.kind = 'bird';
     raw.params = {};
     raw.glb ??= SEED.assets.find((asset) => asset.id === id)!.glb;
+  }
+  // Người khổng lồ dùng model GLB mới. Các bản ghi CMS cũ có thể không có glb
+  // (hoặc còn trỏ tới model cũ), nên luôn nâng chúng lên bản seed hiện tại.
+  if (collection === 'assets' && id === 'm-giant') {
+    raw.glb = SEED.assets.find((asset) => asset.id === id)!.glb;
+  }
+  // Map foliage density upgrade: existing Firestore map documents outlive seed
+  // changes, so migrate the old pine/snow densities when they are read.
+  if (collection === 'maps' && id === 'rung-thong' && [55, 85, 120].includes((raw.trees as { perHectare?: number } | undefined)?.perHectare ?? -1)) {
+    raw.trees = { ...(raw.trees as object), perHectare: 200 };
+  }
+  if (collection === 'maps' && id === 'thanh-tuyet' && [22, 75, 110, 180].includes((raw.trees as { perHectare?: number } | undefined)?.perHectare ?? -1)) {
+    raw.trees = { ...(raw.trees as object), perHectare: 60 };
+  }
+  if (collection === 'maps' && raw.trees && Array.isArray((raw.trees as { kinds?: unknown }).kinds)) {
+    const kinds = (raw.trees as { kinds: string[] }).kinds.filter((kind) => kind !== 'tree-oak' && kind !== 'tree-birch');
+    raw.trees = { ...(raw.trees as object), kinds: kinds.length ? kinds : ['tree-pine'] };
   }
   if (collection === 'weapons' && id === 'talons') raw.name = 'Quật vây';
   // Người khổng lồ halved (2026-09): upgrade saves still on the old default size.
@@ -183,10 +203,11 @@ function apply(s: Store, collection: CollectionName, snap: QuerySnapshot, first:
   // The first snapshot of a listener lists every document as added.
   if (first) s.docs[collection] = new Map();
   const docs = s.docs[collection];
+  // Keep the raw data: readers parse on every read, so a schema field added after this listener
+  // started (dev hot reload keeps the store) is not stripped away until the server restarts.
   for (const change of snap.docChanges()) {
-    const doc = change.type === 'removed' ? null : parseDoc(collection, change.doc.id, change.doc.data());
-    if (doc) docs.set(doc.id, doc);
-    else docs.delete(change.doc.id);
+    if (change.type === 'removed') docs.delete(change.doc.id);
+    else docs.set(change.doc.id, { ...change.doc.data(), id: change.doc.id } as AnyDoc);
   }
 }
 

@@ -179,7 +179,7 @@ export default function HeroBanner({ children, parallax = true }: { children: Re
       return (
         <Image
           src={HERO_BANNER_SRC}
-          alt="Mini Battle Simulator"
+          alt="Clay Battle - Đại chiến đất sét"
           width={1920}
           height={640}
           priority

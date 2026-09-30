@@ -8,11 +8,9 @@ import { assetSchema } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
 
 const FILES = [
-  { file: 'cay-bach-duong.glb', asset: 'tree-birch', textured: false },
   { file: 'cay-co.glb', asset: 'tree-palm', textured: true },
-  { file: 'cay-kho.glb', asset: 'tree-dead', textured: false },
-  { file: 'cay-soi.glb', asset: 'tree-oak', textured: false },
-  { file: 'cay-thong.glb', asset: 'tree-pine', textured: false },
+  // Draco + webp: needs the browser loaders, so it takes the textured branch below.
+  { file: 'cay-thong-animation.glb', asset: 'tree-pine', textured: true },
   { file: 'da-sa-thach.glb', asset: 'rock-sand', textured: true },
   { file: 'thong-phu-tuyet.glb', asset: 'tree-snow', textured: true },
   { file: 'xuong-rong.glb', asset: 'tree-cactus', textured: false },
@@ -49,3 +47,13 @@ for (const f of FILES) {
     assert.deepEqual(assetSchema.parse(asset), asset);
   });
 }
+
+test('cay-thong-animation.glb is skinned with Sway / Wind / Interact_Shake clips', () => {
+  const buf = readFileSync(path.join(process.cwd(), 'public', 'models', 'cay-thong-animation.glb'));
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as {
+    skins?: unknown[];
+    animations?: { name: string }[];
+  };
+  assert.equal(json.skins?.length, 1);
+  assert.deepEqual(json.animations?.map((a) => a.name).sort(), ['Interact_Shake', 'Sway', 'Wind']);
+});

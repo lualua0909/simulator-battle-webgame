@@ -1,7 +1,6 @@
 'use client';
 
 import { ArrowLeft, ArrowRight, Castle, Check, Dices, Flame, LocateFixed, Plus, Swords, Trash2, Undo2, X } from 'lucide-react';
-import Link from 'next/link';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentProps } from 'react';
 import { botBoxTier, boxTierNum, isUnlocked, playerBudget } from '@/shared/economy';
 import type { BotDef, ConfigBundle } from '@/shared/schema';
@@ -20,8 +19,9 @@ import { armies as fullArmies, armyCost, canField, cellKeyOf, gridCells, isGridS
 import { ALL_SIDES, wallCenter, wallIndex, type Side } from '@/game/sim/terrain';
 import type { BattleResult } from '@/game/sim/world';
 import { useConfig } from '@/game/useConfig';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import UnitPalette from './UnitPalette';
-import { BattleHud, CinematicBars, Handoff, HelpHint, OnlineLobby, orderedBots, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_BG, SIDE_NAME, type ModeChoice } from './panels';
+import { BattleHud, CinematicBars, Handoff, HelpHint, OnlineLobby, orderedBots, ResultModal, resultTitle, RoomBar, SetupPanel, SIDE_BG, sideName, type ModeChoice } from './panels';
 import { RankedBar, RankedLobby, RankResultPanel } from './ranked';
 
 export type Mode = 'bot' | 'local' | 'online' | 'ranked';
@@ -55,6 +55,7 @@ export default function GameClient({ mode, initialRoom }: { mode: Mode; initialR
 }
 
 function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string; bundle: ConfigBundle | null }) {
+  const { t, locale, botName } = useLanguage();
   const hostRef = useRef<HTMLDivElement>(null);
   const [engine, setEngine] = useState<BattleEngine | null>(null);
   const [mapVersion, setMapVersion] = useState(0);
@@ -132,7 +133,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     onStart: (s) => onStartRef.current(s),
     onDesync: () => setDesync(true),
     onResult: (res) => {
-      flash(res.ok ? 'Máy chủ đã xác nhận và lưu kết quả trận.' : `Kết quả không được lưu: ${res.error}`);
+      flash(res.ok ? t('game.resultSaved') : `${t('game.resultNotSaved')} ${res.error}`);
       if (res.ok) endOnlineRef.current(res.winner);
     },
     onEliminate: (side, tick) => engine?.eliminate(side, tick),
@@ -161,7 +162,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     if (!bundle) return;
     setMapId((m) => m || bundle.maps[0]?.id || '');
     setBotId((b) => b || bundle.bots.find((x) => x.id === 'thuong')?.id || orderedBots(bundle)[1]?.id || bundle.bots[0]?.id || '');
-    setSelected((s) => s ?? [...bundle.units].sort((a, b) => a.cost - b.cost)[0]?.id ?? null);
+    setSelected((s) => s ?? bundle.units.filter((u) => !u.hidden).sort((a, b) => a.cost - b.cost)[0]?.id ?? null);
     void unitThumbnails(bundle).then(setThumbs);
   }, [bundle]);
 
@@ -409,7 +410,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       paint.current = { active: true, erase: del, x: p.x, z: p.z, cell: cellKeyOf(p.x, p.z), tiers: 1 };
       snapshot();
       if (del) erase(p.x, p.z);
-      else if (!place(p.x, p.z) && engine?.terrain && !engine.terrain.inZone(mySide, p.x, p.z)) flash(`Chỉ được đặt trong vùng phe ${SIDE_NAME[mySide]}`);
+      else if (!place(p.x, p.z) && engine?.terrain && !engine.terrain.inZone(mySide, p.x, p.z)) flash(`${t('game.side')}: ${sideName(mySide, locale)}`);
       paint.current.tiers = gridCells(units, armiesRef.current[mySide]).get(paint.current.cell)?.blocks ?? 1;
     } else if (p.type === 'move' && paint.current.active && p.hit && !paint.current.erase && selected && isGridStructure(units.get(selected) ?? { structure: 'none' })) {
       // Walls: drag lays a line cell by cell, raising each cell to the start cell's height.
@@ -650,7 +651,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     setPhase('lobby');
   }
   onStartRef.current = (s) => {
-    if (bundle && s.configVersion !== bundle.version) flash('Cảnh báo: cấu hình game khác máy chủ — hãy tải lại trang để đồng bộ.');
+    if (bundle && s.configVersion !== bundle.version) flash(t('game.configMismatch'));
     const loaded = engine?.terrain?.activeSides;
     const sameSides = !!loaded && loaded.length === s.activeSides.length && loaded.every((v, i) => v === s.activeSides[i]);
     if (engine && (engine.map?.id !== s.mapId || (engine.terrain?.defense ?? null) !== s.defense || !sameSides)) {
@@ -680,7 +681,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   const primaryAction = async () => {
     if (!bundle) return;
-    if (myArmy.length === 0) return flash('Hãy đặt ít nhất 1 lính');
+    if (myArmy.length === 0) return flash(t('game.placeOne'));
     if (mode === 'bot') {
       const next = fullArmies({ blue: armiesRef.current.blue });
       for (const s of botSides) next[s] = bot?.reactive ? botArmy(s, armiesRef.current.blue) : armiesRef.current[s];
@@ -703,9 +704,9 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
 
   const fillRandom = () => {
     if (!bundle || !engine?.terrain) return;
-    const opts = { bot: { ...RANDOM_FILL, maxUnits: maxUnits }, content: { ...bundle, units: owned }, terrain: engine.terrain, side: mySide, budget: myBudget, seed: randomSeed() };
+    const opts = { bot: { ...RANDOM_FILL, maxUnits: maxUnits }, content: { ...bundle, units: owned }, terrain: engine.terrain, side: mySide, budget: myBudget, seed: randomSeed(), fromBack: true };
     const army = defense === mySide ? generateSiegeDefense(opts) : generateBotArmy(opts);
-    if (defense === mySide && army.length === 0) return flash('Chưa có Nhà chính trong bộ sưu tập để xây thành');
+    if (defense === mySide && army.length === 0) return flash(t('game.noKeep'));
     snapshot();
     setArmies({ ...armiesRef.current, [mySide]: army });
   };
@@ -725,6 +726,12 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
     setSide('blue');
     setArmies(EMPTY);
     setPhase('setup');
+  };
+
+  /** Online deploy: leave the room and reopen the create/join (or ranked queue) screen. */
+  const backToLobby = () => {
+    backToRankedLobby();
+    if (mode === 'online') window.history.replaceState(null, '', '/play?mode=online');
   };
 
   // keyboard
@@ -770,7 +777,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
   return (
     <div className="game-ui relative h-dvh w-screen overflow-hidden bg-[#cfe3f2] select-none">
       <div ref={hostRef} className="absolute inset-0" />
-      {!bundle && <div className="absolute inset-0 flex items-center justify-center font-display text-2xl">Đang tải…</div>}
+      {!bundle && <div className="absolute inset-0 flex items-center justify-center font-display text-2xl">{t('game.loading')}</div>}
 
       <div className="pointer-events-none absolute inset-0 flex flex-col p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
         {(phase === 'setup' || phase === 'lobby') && (
@@ -839,29 +846,29 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
           <>
             <div className={`flex flex-wrap items-start gap-1.5 sm:gap-2 ${cine ? 'invisible' : ''}`}>
               <div ref={toolbarRef} className="panel pointer-events-auto flex min-w-0 flex-1 flex-wrap items-center gap-1 overflow-y-auto overscroll-contain p-1.5 sm:gap-2 sm:overflow-visible sm:p-2 max-h-[24vh] sm:max-h-none">
-                <Link href="/" className="btn px-2 py-1 text-sm" aria-label="Về menu">
+                <button className="btn px-2 py-1 text-sm" onClick={online ? backToLobby : backToSetup} aria-label={t('game.back')}>
                   <ArrowLeft />
-                </Link>
+                </button>
                 <span className={`rounded-lg px-1.5 py-1 font-display text-white sm:px-2 ${SIDE_BG[mySide]}`}>
-                  <span className="hidden sm:inline">Phe </span>
-                  {SIDE_NAME[mySide]}
-                  {defense && <span className="hidden sm:inline">{defense === mySide ? <> · <Castle /> Thủ thành</> : <> · <Flame /> Công thành</>}</span>}
+                  <span className="hidden sm:inline">{t('game.side')} </span>
+                  {sideName(mySide, locale)}
+                  {defense && <span className="hidden sm:inline">{defense === mySide ? <> · <Castle /> {t('panels.defendYou')}</> : <> · <Flame /> {t('panels.attackYou')}</>}</span>}
                 </span>
                 <span className="text-xs font-bold">
-                  {myArmy.length - wallBlocks}/{maxUnits} lính
-                  {wallBlocks > 0 && ` · ${wallBlocks} khối tường`}
+                  {myArmy.length - wallBlocks}/{maxUnits} {t('game.units')}
+                  {wallBlocks > 0 && ` · ${wallBlocks} ${t('game.wallBlocks')}`}
                 </span>
-                <button className={`btn px-2 py-1 text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')} title="Đặt" aria-label="Đặt quân">
-                  <Plus /><span className="hidden sm:inline"> Đặt</span>
+                <button className={`btn px-2 py-1 text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')} title={t('game.place')} aria-label={t('game.place')}>
+                  <Plus /><span className="hidden sm:inline"> {t('game.place')}</span>
                 </button>
-                <button className={`btn px-2 py-1 text-sm ${tool === 'erase' ? 'btn-gold' : ''}`} onClick={() => setTool('erase')} title="Xóa (X)" aria-label="Xóa quân">
-                  <X /><span className="hidden sm:inline"> Xóa</span>
+                <button className={`btn px-2 py-1 text-sm ${tool === 'erase' ? 'btn-gold' : ''}`} onClick={() => setTool('erase')} title={`${t('game.erase')} (X)`} aria-label={t('game.erase')}>
+                  <X /><span className="hidden sm:inline"> {t('game.erase')}</span>
                 </button>
-                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={fillRandom} title="Ngẫu nhiên" aria-label="Xếp quân ngẫu nhiên">
-                  <Dices /><span className="hidden sm:inline"> Ngẫu nhiên</span>
+                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={fillRandom} title={t('game.randomDeploy')} aria-label={t('game.randomDeploy')}>
+                  <Dices /><span className="hidden sm:inline"> {t('game.random')}</span>
                 </button>
-                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={undo} title="Hoàn tác (Ctrl/⌘+Z)" aria-label="Hoàn tác">
-                  <Undo2 /><span className="hidden sm:inline"> Hoàn tác</span>
+                <button className="btn px-2 py-1 text-sm" disabled={locked} onClick={undo} title={`${t('game.undo')} (Ctrl/⌘+Z)`} aria-label={t('game.undo')}>
+                  <Undo2 /><span className="hidden sm:inline"> {t('game.undo')}</span>
                 </button>
                 <button
                   className="btn px-2 py-1 text-sm"
@@ -870,10 +877,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                     snapshot();
                     setArmies({ ...armiesRef.current, [mySide]: [] });
                   }}
-                  title="Xóa hết"
-                  aria-label="Xóa hết quân"
+                  title={t('game.clearAll')}
+                  aria-label={t('game.clearAll')}
                 >
-                  <Trash2 /><span className="hidden sm:inline"> Xóa hết</span>
+                  <Trash2 /><span className="hidden sm:inline"> {t('game.clearAll')}</span>
                 </button>
               </div>
               <div ref={sideColRef} className="ml-auto flex min-w-0 max-w-[46vw] shrink-0 flex-col items-end gap-2 sm:max-w-none">
@@ -883,25 +890,25 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 <button className={`btn pointer-events-auto max-w-full px-3 py-2 min-h-[44px] text-base sm:px-4 sm:py-2 sm:text-lg ${locked ? '' : 'btn-gold'}`} disabled={busy} onClick={() => void primaryAction()}>
                   {mode === 'bot' ? (
                     <>
-                      <Swords /><span className="sm:hidden">Bắt đầu</span><span className="hidden sm:inline"> Bắt đầu!</span>
+                      <Swords /><span className="sm:hidden">{t('game.startShort')}</span><span className="hidden sm:inline"> {t('game.startButton')}</span>
                     </>
                   ) : mode === 'local' ? (
                     side === 'blue' ? (
                       <>
-                        <ArrowRight /><span className="sm:hidden">Xong → P2</span><span className="hidden sm:inline"> Xong, tới Người chơi 2</span>
+                        <ArrowRight /><span className="sm:hidden">{t('game.doneP2Short')}</span><span className="hidden sm:inline"> {t('game.doneP2')}</span>
                       </>
                     ) : (
                       <>
-                        <Swords /><span className="sm:hidden">Bắt đầu</span><span className="hidden sm:inline"> Bắt đầu!</span>
+                        <Swords /><span className="sm:hidden">{t('game.startShort')}</span><span className="hidden sm:inline"> {t('game.startButton')}</span>
                       </>
                     )
                   ) : locked ? (
                     <>
-                      <X /><span className="sm:hidden">Hủy</span><span className="hidden sm:inline"> Hủy sẵn sàng</span>
+                      <X /><span className="sm:hidden">{t('common.cancel')}</span><span className="hidden sm:inline"> {t('game.cancelReady')}</span>
                     </>
                   ) : (
                     <>
-                      <Check /><span className="sm:hidden">Sẵn sàng</span><span className="hidden sm:inline"> Sẵn sàng</span>
+                      <Check /><span className="sm:hidden">{t('game.ready')}</span><span className="hidden sm:inline"> {t('game.ready')}</span>
                     </>
                   )}
                 </button>
@@ -909,17 +916,17 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                 {mode === 'ranked' && net.room && net.seat && <RankedBar bundle={bundle} room={net.room} opponent={opponent} mySide={net.seat.side} />}
                 {mode === 'bot' && bot && (
                   <div className="panel pointer-events-auto hidden max-w-[calc(100vw-1.5rem)] p-2 text-xs sm:block">
-                    Đối thủ: <b>{bot.name}</b>
+                    {t('game.opponent')}: <b>{botName(bot.id, bot.name)}</b>
                     {botSides.length > 1 ? ` ×${botSides.length}` : ''} ·{' '}
                     {bot.reactive
-                      ? 'sẽ chọn quân sau khi xem đội hình của bạn'
-                      : `${botSides.reduce((n, s) => n + (totals[s] ?? 0), 0)} lính (${botSides.reduce((n, s) => n + armyCost(bundle, armies[s]), 0)})`}
+                      ? t('game.opponentReactive')
+                      : `${botSides.reduce((n, s) => n + (totals[s] ?? 0), 0)} ${t('game.units')} (${botSides.reduce((n, s) => n + armyCost(bundle, armies[s]), 0)})`}
                   </div>
                 )}
               </div>
             </div>
             <div ref={trayRef} className={`mt-auto flex items-end gap-1.5 sm:gap-2 ${cine ? 'invisible' : ''}`}>
-              <HelpHint text="Chuột trái: đặt · Shift+kéo: rải · Tường: kéo để xây dãy, bấm lên tường để chồng tầng · Ctrl/⌥+click hoặc X: xóa · Ctrl/⌘+Z: hoàn tác · Chuột phải kéo: xoay/nghiêng · Chuột giữa hoặc Shift+chuột phải: kéo bản đồ · Lăn/pinch: zoom theo con trỏ · WASD/QE" />
+              <HelpHint text={t('game.deployHelp')} />
               <div className="min-w-0 flex-1">
                 <UnitPalette
                   bundle={bundle}
@@ -937,8 +944,8 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   player={player}
                   stars={mode === 'bot' || (online && net.room?.useStars) ? player?.stars : undefined}
                   action={
-                    <button className="btn px-2 py-0.5 text-xs sm:text-sm" onClick={() => engine?.frameDeploy(mySide)} title="Đưa camera về khung xếp quân" aria-label="Về giữa">
-                      <LocateFixed /> Về giữa
+                    <button className="btn px-2 py-0.5 text-xs sm:text-sm" onClick={() => engine?.frameDeploy(mySide)} title={t('game.recenterTitle')} aria-label={t('game.recenter')}>
+                      <LocateFixed /> {t('game.recenter')}
                     </button>
                   }
                 />
@@ -959,16 +966,16 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             onSpeed={online ? undefined : setSpeed}
             onPause={online ? undefined : () => setPaused((p) => !p)}
             onStop={online && phase === 'battle' ? surrenderOnline : mode === 'ranked' ? backToRankedLobby : backToDeploy}
-            stopLabel={online ? (phase === 'battle' ? 'Dừng trận' : mode === 'ranked' ? 'Về sảnh xếp hạng' : 'Về xếp quân') : 'Dừng trận'}
+            stopLabel={online ? (phase === 'battle' ? t('game.stopBattle') : mode === 'ranked' ? t('game.rankedLobby') : t('game.backToDeploy')) : t('game.stopBattle')}
             timeLimit={bundle.settings.battleTimeLimit}
             defense={engine?.sim?.defense ?? defense}
             view={view}
             onView={(m) => engine?.setViewMode(m)}
             onNextUnit={() => engine?.nextViewUnit()}
-            onVR={vrOk ? () => (view.vr ? engine?.exitVR() : void engine?.enterVR().catch((err) => flash(`Không vào được VR: ${err instanceof Error ? err.message : err}`))) : undefined}
+            onVR={vrOk ? () => (view.vr ? engine?.exitVR() : void engine?.enterVR().catch((err) => flash(`${t('game.vrError')} ${err instanceof Error ? err.message : err}`))) : undefined}
           />
         )}
-        {desync && phase === 'battle' && <div className="panel pointer-events-auto absolute left-1/2 top-20 max-w-[calc(100vw-2rem)] -translate-x-1/2 break-words px-3 py-1 text-center text-sm text-red-team">Hai máy đang lệch trận (desync) — kết quả có thể khác nhau.</div>}
+        {desync && phase === 'battle' && <div className="panel pointer-events-auto absolute left-1/2 top-20 max-w-[calc(100vw-2rem)] -translate-x-1/2 break-words px-3 py-1 text-center text-sm text-red-team">{t('game.desync')}</div>}
       </div>
 
       {phase === 'result' && result && (
@@ -986,7 +993,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                     startBattle(armiesRef.current, randomSeed(), mode === 'bot' ? botStars : undefined, mode === 'bot' ? ['blue', ...botSides] : TWO_SIDES);
                   }
           }
-          rematchLabel={mode === 'ranked' ? 'Tìm trận mới' : mode === 'online' ? 'Trận mới' : 'Đấu lại'}
+          rematchLabel={mode === 'ranked' ? t('game.findNewMatch') : mode === 'online' ? t('game.newMatch') : t('panels.rematch')}
           onEdit={mode === 'ranked' ? undefined : backToDeploy}
           onMenu={online ? undefined : backToSetup}
         >
@@ -997,7 +1004,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
         <BoxOpening
           bundle={bundle}
           action={{ action: 'bot-win' }}
-          title={`Chiến lợi phẩm: ${bot.name}`}
+          title={`${t('game.loot')}: ${botName(bot.id, bot.name)}`}
           tier={boxTierNum(botBoxTier(bundle.settings.economy, bot.difficulty))}
           thumbs={thumbs}
           onClose={() => setRewardClosed(true)}
@@ -1014,7 +1021,7 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       )}
       {cine && (
         <CinematicBars
-          title={cine === 'victory' && result ? resultTitle(result, resultSide) : undefined}
+          title={cine === 'victory' && result ? resultTitle(result, resultSide, locale) : undefined}
           winner={cine === 'victory' ? result?.winner : undefined}
           onSkip={() => engine?.skipCinematic()}
         />
@@ -1023,10 +1030,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
       {contextLost && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="panel max-w-sm p-4 text-center">
-            <p className="font-bold">Máy đã thu hồi bộ nhớ đồ họa của trận đấu.</p>
-            <p className="mt-1 text-sm">Đang thử khôi phục… Nếu màn hình vẫn đen, hãy tải lại trang.</p>
+            <p className="font-bold">{t('game.graphicsLost')}</p>
+            <p className="mt-1 text-sm">{t('game.graphicsRecovering')}</p>
             <button className="btn btn-gold pointer-events-auto mt-3 px-4 py-1" onClick={() => window.location.reload()}>
-              Tải lại trang
+              {t('game.reload')}
             </button>
           </div>
         </div>

@@ -34,7 +34,7 @@ export default function GameTitle() {
       onMouseLeave={() => setTilt({ rx: '0deg', ry: '0deg' })}
       className="title-scene relative select-none"
       style={{ perspective: '900px' }}
-      aria-label="Mini Battle Simulator"
+      aria-label="Clay Battle - Đại chiến đất sét"
     >
       {/* hào quang sau chữ */}
       <div className="title-glow" aria-hidden />
@@ -54,13 +54,17 @@ export default function GameTitle() {
         style={{ transform: `rotateX(${tilt.rx}) rotateY(${tilt.ry})` }}
       >
         <div className="title-pop" style={{ animationDelay: '0.05s' }}>
-          <span className="title-3d title-3d-white title-float" data-text="MINI BATTLE">
-            MINI BATTLE
+          <span className="title-3d title-3d-white title-float" data-text="CLAY BATTLE">
+            CLAY BATTLE
           </span>
         </div>
-        <div className="title-pop" style={{ animationDelay: '0.22s' }}>
-          <span className="title-3d title-3d-gold title-float-delayed" data-text="SIMULATOR">
-            SIMULATOR
+        <div className="title-pop" style={{ animationDelay: '0.22s', marginTop: '0.4em' }}>
+          <span
+            className="title-3d title-3d-gold title-float-delayed"
+            data-text="ĐẠI CHIẾN ĐẤT SÉT"
+            style={{ fontSize: 'clamp(1.25rem, 6vw, 3.25rem)' }}
+          >
+            ĐẠI CHIẾN ĐẤT SÉT
           </span>
         </div>
       </div>

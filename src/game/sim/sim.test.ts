@@ -5,7 +5,7 @@ import { SEED } from '@/shared/seed';
 import { findRefIssues } from '@/shared/validate';
 import { generateBotArmy } from '../bot/generate';
 import { armies, armyCost, validateArmy, type Armies } from './army';
-import { EDGE_MARGIN, Terrain, type Side } from './terrain';
+import { DEPLOY_BACK_MARGIN, EDGE_MARGIN, Terrain, type Side } from './terrain';
 import { BattleSim, type SimEvent } from './world';
 
 test('seed content passes schemas and reference checks', () => {
@@ -207,9 +207,10 @@ test('2-4 player deployment zones stay within map bounds and never overlap', () 
     for (const sides of layouts) {
       const terrain = new Terrain(map, SEED.assets, null, sides);
       const usable = map.size / 2 - EDGE_MARGIN;
+      const back = map.size / 2 - DEPLOY_BACK_MARGIN;
       const zones = sides.map((s) => terrain.zoneOf(s));
       for (const z of zones) {
-        assert.ok(z.x0 >= -usable - 1e-6 && z.x1 <= usable + 1e-6, `${map.id}/${sides.length}p: zone x out of bounds`);
+        assert.ok(z.x0 >= -back - 1e-6 && z.x1 <= back + 1e-6, `${map.id}/${sides.length}p: zone x out of bounds`);
         assert.ok(z.z0 >= -usable - 1e-6 && z.z1 <= usable + 1e-6, `${map.id}/${sides.length}p: zone z out of bounds`);
       }
       for (let i = 0; i < zones.length; i++) {

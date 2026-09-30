@@ -87,18 +87,18 @@ export default function Home() {
               <Swords />
             </span>
             <span className="min-w-0 leading-none">
-              <span className="block truncate text-base tracking-wide sm:text-lg">MINI BATTLE</span>
-              <span className="block truncate text-sm text-[#b25b00]">SIMULATOR</span>
+              <span className="block truncate text-base tracking-wide sm:text-lg">CLAY BATTLE</span>
+              <span className="block truncate text-sm text-[#b25b00]">ĐẠI CHIẾN ĐẤT SÉT</span>
             </span>
           </Link>
           <nav className="hidden items-center gap-4 md:flex" aria-label={t('nav.navLabel')}>
-            <a href="#choi-ngay" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+            <a href="#play-now" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
               {t('nav.playNow')}
             </a>
-            <a href="#cach-choi" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+            <a href="#how-to-play" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
               {t('nav.howTo')}
             </a>
-            <a href="#tinh-nang" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+            <a href="#features" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
               {t('nav.features')}
             </a>
           </nav>
@@ -120,7 +120,7 @@ export default function Home() {
               {t('home.subtitle')}
             </p>
             <div className="mt-8 flex justify-center">
-              <a href="#choi-ngay" className="btn btn-gold hero-play px-10 py-4 text-2xl sm:px-14 sm:py-5 sm:text-4xl">
+              <a href="#play-now" className="btn btn-gold hero-play px-10 py-4 text-2xl sm:px-14 sm:py-5 sm:text-4xl">
                 <Swords /> {t('home.ctaPlay')}
               </a>
             </div>
@@ -142,7 +142,7 @@ export default function Home() {
       </section>
 
       {/* ===== TICKER ===== */}
-      <div className="overflow-hidden border-y-[3px] border-[#2d3232] bg-[#ffc233] py-2" id="tinh-nang" aria-hidden>
+      <div className="overflow-hidden border-y-[3px] border-[#2d3232] bg-[#ffc233] py-2" id="features" aria-hidden>
         <div className="marquee-track gap-8 pr-8">
           {[...TICKER, ...TICKER].map(([Icon, txt], i) => (
             <span key={i} className="whitespace-nowrap text-base text-[#2d3232] sm:text-xl">
@@ -153,7 +153,7 @@ export default function Home() {
       </div>
 
       {/* ===== MODES ===== */}
-      <section id="choi-ngay" className="relative bg-gradient-to-b from-[#ff8a1e] via-[#ff9d2e] to-[#ffb300] pb-14 pt-10">
+      <section id="play-now" className="relative bg-gradient-to-b from-[#ff8a1e] via-[#ff9d2e] to-[#ffb300] pb-14 pt-10">
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
             <h2 className="text-outline text-center text-3xl sm:text-5xl">{t('home.modesTitle')}</h2>
@@ -195,7 +195,7 @@ export default function Home() {
       {/* ===== HOW TO + CTA: chung một nền gradient liền mạch ===== */}
       <div className="relative overflow-hidden bg-[#3b25b8]">
       <div className="hero-dots absolute inset-0 opacity-40" aria-hidden />
-      <section id="cach-choi" className="relative py-12">
+      <section id="how-to-play" className="relative py-12">
         <div className="mx-auto max-w-6xl px-4">
           <Reveal>
             <h2 className="text-center text-3xl sm:text-4xl">

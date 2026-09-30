@@ -301,7 +301,8 @@ export class RtsCamera {
     const i = this.insets;
     // Room for the points' on-screen box, in normalised device coordinates (the aim point is its centre).
     const roomW = ((2 * (this.width - i.left - i.right)) / this.width) * (1 - FIT_PAD * 2);
-    const roomH = ((2 * (this.height - i.top - i.bottom)) / this.height) * (1 - FIT_PAD * 2);
+    const fullH = (2 * (this.height - i.top - i.bottom)) / this.height;
+    const roomH = fullH * (1 - FIT_PAD * 2);
     const target = new THREE.Vector3();
     for (const p of points) target.add(p);
     target.divideScalar(Math.max(1, points.length));
@@ -322,7 +323,8 @@ export class RtsCamera {
           y0 = Math.min(y0, p.y);
           y1 = Math.max(y1, p.y);
         }
-        const lift = Math.max(0, roomH - (y1 - y0)) / 2;
+        // No padding below: the box rests right on the bottom of the uncovered area.
+        const lift = Math.max(0, fullH - (y1 - y0)) / 2;
         const aim = n < 8 && this.planeHitNdc(cam, (x0 + x1) / 2, (y0 + y1) / 2 + lift, target.y);
         if (!aim) return Math.max((x1 - x0) / roomW, (y1 - y0) / roomH);
         target.copy(aim);

@@ -124,7 +124,7 @@ test('a star uses up cards and coins, up to 5 stars', () => {
 });
 
 test('locked units must be bought before their cards are bought or upgraded', () => {
-  const dragon = unit('dragon');
+  const dragon = { ...unit('dragon'), unlockCost: 5000 };
   const rich: PlayerState = { ...emptyPlayer(), coins: 200_000, cards: { dragon: 100 } };
   assert.equal(isUnlocked(dragon, rich), false);
   assert.throws(() => upgradeUnit(rich, dragon), /mở khóa/);

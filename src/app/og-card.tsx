@@ -35,8 +35,8 @@ export default function OgCard() {
           EPIC BATTLE SIMULATOR
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', marginTop: 28 }}>
-          <span style={{ color: '#fff', fontSize: 108, fontWeight: 900, lineHeight: 1 }}>MINI BATTLE</span>
-          <span style={{ color: GOLD, fontSize: 108, fontWeight: 900, lineHeight: 1 }}>SIMULATOR</span>
+          <span style={{ color: '#fff', fontSize: 108, fontWeight: 900, lineHeight: 1 }}>CLAY BATTLE</span>
+          <span style={{ color: GOLD, fontSize: 64, fontWeight: 900, lineHeight: 1.2, marginTop: 8 }}>ĐẠI CHIẾN ĐẤT SÉT</span>
         </div>
         <div style={{ color: '#fff', fontSize: 34, marginTop: 24, opacity: 0.95 }}>
           Low-poly army deploy • vs AI, 2 players 1 PC or online

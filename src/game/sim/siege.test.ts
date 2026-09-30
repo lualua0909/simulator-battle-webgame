@@ -107,7 +107,7 @@ test('barracks spawn one unit per second up to spawnMax alive', () => {
 });
 
 test('defenders stay inside their zone', () => {
-  const a = siege({ blue: [at('dummy', -20, 0)], red: [at('hoplite', 12, 0), at('hoplite', 14, 4), core] });
+  const a = siege({ blue: [at('dummy', -20, 0)], red: [at('squire', 12, 0), at('squire', 14, 4), core] });
   const zone = a.terrain.zoneOf('red');
   let min = Infinity;
   a.run(15, () => {
@@ -145,13 +145,13 @@ test('watchtower adds range to the units on it', () => {
 test('siege army validation', () => {
   const terrain = new Terrain(ARENA, [], 'red');
   const check = (side: 'blue' | 'red', army: Placement[]) => validateArmy(CONTENT, terrain, side, army, 100000);
-  assert.ok(check('red', [...wallLine(9, -4, 4), core]).ok);
-  assert.match((check('red', [...wallLine(9, -4, 4)]) as { error: string }).error, /Nhà chính/);
-  assert.match((check('red', [...cell('tuong-thanh', 9, 1, 4), core]) as { error: string }).error, /tầng/);
-  assert.match((check('red', [at('tuong-thanh', 9.3, 1), core]) as { error: string }).error, /ô lưới/);
+  assert.ok(check('red', [...wallLine(14, -4, 4), core]).ok);
+  assert.match((check('red', [...wallLine(14, -4, 4)]) as { error: string }).error, /Nhà chính/);
+  assert.match((check('red', [...cell('tuong-thanh', 14, 1, 4), core]) as { error: string }).error, /tầng/);
+  assert.match((check('red', [at('tuong-thanh', 14.3, 1), core]) as { error: string }).error, /ô lưới/);
   assert.match((check('blue', [at('thap-cung', -10, 0)]) as { error: string }).error, /không dùng được/);
   assert.match((check('red', [at('ninja', 20, 0), core]) as { error: string }).error, /không dùng được/);
-  assert.ok(check('blue', [at('ninja', -10, 0), at('nha-linh', -20, 0)]).ok);
+  assert.ok(check('blue', [at('ninja', -14, 0), at('nha-linh', -20, 0)]).ok);
   assert.match((check('red', [...cell('tuong-thanh', 20, 1), { unitId: 'nha-chinh', x: 20.5, z: 1 }]) as { error: string }).error, /đè lên tường/);
   const tower = snapToCell(15, 1);
   assert.match((check('red', [{ unitId: 'test-platform', ...tower }, ...['archer', 'archer', 'archer'].map((id) => ({ unitId: id, ...tower })), core]) as { error: string }).error, /tháp canh/);
@@ -162,7 +162,7 @@ test('siege army validation', () => {
 
 test('sieges with every structure stay deterministic', () => {
   const run = () => {
-    const blue = [at('ninja', -8, 0), at('ninja', -8, 3), at('fire-catapult', -20, 0), at('catapult', -20, 6), at('hoplite', -6, -4), at('nha-linh', -25, -10), at('archer', -10, 8)];
+    const blue = [at('ninja', -8, 0), at('ninja', -8, 3), at('catapult', -20, 0), at('squire', -6, -4), at('nha-linh', -25, -10), at('archer', -10, 8)];
     const red = [...wallLine(10, -12, 12), at('thap-cung', 16, 8), at('thap-sung', 16, -8), at('tru-dien', 18, 0), { unitId: 'test-platform', ...snapToCell(12, 15) }, { unitId: 'musketeer', ...snapToCell(12, 15) }, { unitId: 'archer', ...snapToCell(10, 2) }, at('nha-linh', 26, 12), core];
     const a = siege({ blue, red }, { seed: 3 });
     const sums: number[] = [];
@@ -199,15 +199,15 @@ test('ninja dash leaps onto an archer on the wall', () => {
 test('a deep river is crossed only at the ford', () => {
   const map: MapDef = { ...ARENA, id: 'ford', size: 120, river: { enabled: true, width: 10, meander: 0, ford: 12 } };
   const terrain = new Terrain(map, [], null);
-  const sim = new BattleSim(CONTENT, map, terrain, fullArmies({ blue: [at('hoplite', -30, 30)], red: [at('dummy', 30, 30)] }), 5);
-  const hoplite = sim.units[0];
+  const sim = new BattleSim(CONTENT, map, terrain, fullArmies({ blue: [at('squire', -30, 30)], red: [at('dummy', 30, 30)] }), 5);
+  const squire = sim.units[0];
   let deep = false;
   for (let i = 0; i < 30 * 40; i++) {
     sim.step();
-    deep ||= terrain.deepWater(hoplite.x, hoplite.z);
+    deep ||= terrain.deepWater(squire.x, squire.z);
   }
   assert.ok(!deep, 'walked into deep water');
-  assert.ok(hoplite.x > terrain.riverX(hoplite.z), `still on the near bank at ${hoplite.x.toFixed(1)},${hoplite.z.toFixed(1)}`);
+  assert.ok(squire.x > terrain.riverX(squire.z), `still on the near bank at ${squire.x.toFixed(1)},${squire.z.toFixed(1)}`);
 });
 
 test('a close-range defender placed on a wall jumps down to fight', () => {

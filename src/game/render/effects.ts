@@ -1,5 +1,6 @@
 // Skill effects: lightning bolts, telegraph circles, shockwaves, scorch marks, falling meteors,
-// whirlwinds, cast glows, burning units, light flashes and camera shake.
+// whirlwinds, cast glows, burning units, light flashes and camera shake; flame jets licking the
+// ground, fire blasts, bite marks and earthquakes (ground cracks, rocks hopping, rumble).
 // Driven by sim events plus read-only sim state; purely cosmetic (never feeds the sim).
 import * as THREE from 'three';
 import type { ConfigBundle, ParticleDef, ProjectileDef, WeaponDef } from '@/shared/schema';
@@ -8,6 +9,7 @@ import { createTornadoModel } from '../models/effects';
 import { createProjectileModel } from '../models/projectiles';
 import type { Terrain } from '../sim/terrain';
 import type { BattleSim, SimEvent } from '../sim/world';
+import type { DebrisBurst } from './debris';
 import { GLOW_LAYER } from './glow';
 import { commitInstances } from './instancing';
 import type { ParticleSystem } from './particles';
@@ -20,6 +22,12 @@ export interface EffectHost {
   chest(unitId: number, out: THREE.Vector3): boolean;
   /** Shake the camera by `amount` (0..1) for a blast at (x, z). */
   shake(amount: number, x: number, z: number): void;
+  /** Keep the camera rumbling for `seconds` (earthquake) around a blast at (x, z). */
+  rumble(amount: number, seconds: number, x: number, z: number): void;
+  /** A unit's body size: x = radius, y = height. */
+  unitSize(unitId: number, out: THREE.Vector2): boolean;
+  /** Throw cosmetic rocks that tumble and bounce on the terrain. */
+  debris(burst: DebrisBurst): void;
 }
 
 // ---------------------------------------------------------------- lightning
@@ -50,8 +58,16 @@ interface Bolt {
 
 // ---------------------------------------------------------------- ground decals
 
-const RING_SEG = 40;
-type RingKind = 'telegraph' | 'fill' | 'shock' | 'scorch';
+const RING_SEG = 96;
+/** Ring cross-section: inner, core and outer row brightness. Additive black is invisible, so glowing rings get a thin bright core that fades out. */
+const RING_PROFILE: Record<RingKind, readonly [number, number, number]> = {
+  telegraph: [0, 1, 0.15],
+  fill: [0.1, 0.35, 1],
+  shock: [0, 1, 0],
+  halo: [0, 1, 0.1],
+  scorch: [1, 1, 1],
+};
+type RingKind = 'telegraph' | 'fill' | 'shock' | 'scorch' | 'halo';
 
 interface Ring {
   mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
@@ -64,7 +80,7 @@ interface Ring {
   color: THREE.Color;
   edge: Float32Array;
   active: boolean;
-  /** Static rings (telegraph, scorch) only rebuild their vertices once. */
+  /** Static rings (telegraph, scorch, halo) only rebuild their vertices once. */
   built: boolean;
 }
 
@@ -97,6 +113,50 @@ interface Whirl {
   dustAcc: number;
 }
 
+// ---------------------------------------------------------------- ground cracks
+
+const CRACK_CAP = 1600;
+/** Per crack segment: ax ay az bx by bz width reveal-time. */
+const CRACK_STRIDE = 8;
+/** Seconds a segment takes to split open once the crack front reaches it. */
+const CRACK_OPEN = 0.07;
+
+interface Crack {
+  segs: Float32Array;
+  age: number;
+  life: number;
+  /** Molten (meteor crater): glows, then cools to charred. */
+  hot: boolean;
+}
+
+/** Teeth snapping shut on a bitten unit, or claw rakes slashed across a mauled one. */
+interface Jaw {
+  claw: boolean;
+  x: number;
+  y: number;
+  z: number;
+  fx: number;
+  fz: number;
+  size: number;
+  age: number;
+  life: number;
+}
+
+/** A particle burst waiting for its moment (a flame reaching the ground, smoke after a blast). */
+interface Later {
+  at: number;
+  def: ParticleDef;
+  x: number;
+  y: number;
+  z: number;
+  count: number;
+  size: number;
+  up: boolean;
+}
+
+const ROCKS = ['#8a7d6a', '#6e6254', '#a09280', '#5a4f44', '#7b6a52'] as const;
+const CHARRED = ['#3a2c22', '#2a211b', '#5a3a24', '#6e6254'] as const;
+const UP = { x: 0, y: 1, z: 0 };
 const zAxis = new THREE.Vector3(0, 0, 1);
 
 export class EffectRenderer {
@@ -126,6 +186,17 @@ export class EffectRenderer {
   private readonly whirlTemplates = new Map<string, { template: ModelTemplate; material: THREE.Material }>();
   private frame = 0;
   private time = 0;
+  private readonly cracks: Crack[] = [];
+  private readonly crackMesh: THREE.InstancedMesh;
+  private readonly jaws: Jaw[] = [];
+  private readonly jawPts = Array.from({ length: 9 }, () => new THREE.Vector3());
+  private readonly size2 = new THREE.Vector2();
+  /** Frame of the last bite shake: a cleaving bite hits many units at once but shakes once. */
+  private biteFrame = -1;
+  private readonly later: Later[] = [];
+  /** Hotter, thinner copies of flame particles for the jet's white-hot core. */
+  private readonly coreDefs = new Map<string, ParticleDef>();
+  private readonly dir = { x: 0, y: 0, z: 0 };
 
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
@@ -156,6 +227,16 @@ export class EffectRenderer {
     // Only the coloured halo feeds the bloom: a white core would bloom white and lose the skill's hue.
     this.glow.layers.enable(GLOW_LAYER);
     this.boltColors = [this.core.instanceColor!.array as Float32Array, this.glow.instanceColor!.array as Float32Array];
+    this.crackMesh = new THREE.InstancedMesh(
+      segment,
+      new THREE.MeshBasicMaterial({ toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      CRACK_CAP,
+    );
+    this.crackMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CRACK_CAP * 3), 3);
+    this.crackMesh.count = 0;
+    this.crackMesh.frustumCulled = false;
+    this.crackMesh.renderOrder = 1;
+    this.group.add(this.crackMesh);
     for (let i = 0; i < 4; i++) {
       const light = new THREE.PointLight('#ffffff', 0, 34, 1.6);
       light.visible = true;
@@ -221,6 +302,8 @@ export class EffectRenderer {
         if (!heal) {
           this.addRing('scorch', e.x, e.z, e.radius * 0.3, 7, '#000000');
           host.shake(0.2 + e.radius * 0.03, e.x, e.z);
+          if (w.damageType === 'blunt') this.quake(e.x, e.z, e.radius, host);
+          else if (w.damageType === 'fire') this.fireBlast(e.x, e.y, e.z, e.radius, false, host);
         }
         this.v1.set(e.x, e.y + 1.2, e.z);
         this.flash(this.v1, w.vfxColor, heal ? 3 : 4, 0.3);
@@ -236,8 +319,39 @@ export class EffectRenderer {
       }
       case 'attack': {
         const w = this.weapons.get(e.weaponId);
+        if (w?.attack === 'breath') {
+          this.breath(w, e, host);
+          return;
+        }
         const p = w?.projectileId ? this.projectileDefs.get(w.projectileId) : undefined;
         if (w && (w.castStyle === 'gun' || p?.model === 'bullet') && host.emitPoint(e.unitId, this.v1)) this.flash(this.v1, '#ffc56a', 4, 0.07);
+        return;
+      }
+      case 'hit': {
+        const w = this.weapons.get(e.weaponId);
+        // Claws, horns and jaws tear flesh (their hit particle is the red chunk).
+        if (w && !e.blocked && e.damage > 0 && w.attack === 'melee' && w.hitParticleId === 'hit-chunk') this.tear(w, e, host);
+        return;
+      }
+      case 'heal': {
+        if (!host.unitSize(e.targetId, this.size2)) return;
+        const r = Math.max(0.5, this.size2.x);
+        this.addRing('halo', e.x, e.z, r * 1.3 + 0.3, 0.8, HEAL_HEX);
+        this.v1.set(e.x, e.y, e.z);
+        this.flash(this.v1, HEAL_HEX, 2, 0.35, true);
+        return;
+      }
+      case 'impact': {
+        // Fire pots, fireballs: a small fire blast where they burst (arrows only spark).
+        const p = this.projectileDefs.get(e.defId);
+        const blast = p?.impactParticleId ? this.particleDefs.get(p.impactParticleId) : undefined;
+        if (!p || !blast || p.model === 'arrow' || !isFiery(blast, this.c1)) return;
+        const r = 0.8 + p.scale * 0.9;
+        this.v1.set(e.x, e.y + 0.8, e.z);
+        this.flash(this.v1, '#ff8a3a', 5 + r * 2, 0.3, true);
+        if (e.ground) this.addRing('scorch', e.x, e.z, r * 0.6, 6, '#000000');
+        this.fireBlast(e.x, e.y, e.z, r, false, host);
+        host.shake(0.05 + r * 0.03, e.x, e.z);
         return;
       }
       default:
@@ -275,6 +389,235 @@ export class EffectRenderer {
     this.v1.set(x, y + 2.5, z);
     this.flash(this.v1, meteor ? '#ff8a3a' : w.vfxColor, meteor ? 14 : 12, meteor ? 0.45 : 0.3);
     host.shake(meteor ? 0.75 : 0.4, x, z);
+    if (meteor) this.fireBlast(x, y, z, radius, true, host);
+  }
+
+  // ------------------------------------------------------------------ fire, bites, quakes
+
+  /** One puff of a flame jet: white-hot core, then where it licks the ground, fire, embers, smoke and scorch. */
+  private breath(w: WeaponDef, e: Extract<SimEvent, { type: 'attack' }>, host: EffectHost): void {
+    const def = w.fireParticleId ? this.particleDefs.get(w.fireParticleId) : undefined;
+    if (!def || !host.emitPoint(e.unitId, this.v1)) return;
+    const o = this.v1;
+    this.dir.x = e.dx;
+    this.dir.y = e.dy;
+    this.dir.z = e.dz;
+    host.particles.emit(this.coreDef(def), o.x, o.y, o.z, this.dir, Math.max(2, Math.round(def.count * 0.4)));
+    this.flash(o, w.damageType === 'fire' ? '#ff8a2a' : w.vfxColor, 2.2, 0.16, true);
+    const terrain = this.terrain;
+    if (!terrain) return;
+    // March along the jet: the first point under the ground is where the flames splash.
+    const reach = w.range * 0.95;
+    let hit = -1;
+    for (let i = 1; i <= 10; i++) {
+      const d = (reach * i) / 10;
+      const px = o.x + e.dx * d;
+      const pz = o.z + e.dz * d;
+      if (o.y + e.dy * d <= groundY(terrain, px, pz) + 0.25) {
+        hit = d;
+        break;
+      }
+    }
+    const d = hit < 0 ? reach : hit;
+    const x = o.x + e.dx * d;
+    const z = o.z + e.dz * d;
+    const y = hit < 0 ? o.y + e.dy * d : groundY(terrain, x, z) + 0.1;
+    const at = this.time + d / 14;
+    const smoke = this.particleDefs.get('smoke');
+    if (smoke && Math.random() < (hit < 0 ? 0.3 : 0.45)) this.schedule(at + 0.1, smoke, x, y + 0.4, z, 1, 0.8, false);
+    if (hit < 0) return;
+    const lick = this.burnDef ?? def;
+    this.schedule(at, lick, x, y, z, 2, 1.8, true);
+    const ember = this.particleDefs.get('ember');
+    if (ember && Math.random() < 0.6) this.schedule(at, ember, x, y, z, 2, 1, false);
+    if (Math.random() < 0.2) this.addRing('scorch', x, z, 0.5 + Math.random() * 0.6, 5, '#000000');
+  }
+
+  private coreDef(def: ParticleDef): ParticleDef {
+    let core = this.coreDefs.get(def.id);
+    if (!core) {
+      core = {
+        ...def,
+        id: `${def.id}:core`,
+        colorStart: '#fff4d0',
+        size: [def.size[0] * 0.45, def.size[1] * 0.4],
+        speed: [def.speed[0] * 1.1, def.speed[1] * 1.1],
+        lifetime: [def.lifetime[0] * 0.65, def.lifetime[1] * 0.65],
+        spread: def.spread * 0.6,
+      };
+      this.coreDefs.set(def.id, core);
+    }
+    return core;
+  }
+
+  /** Fireball rising out of a blast, embers, then a smoke column; big ones also crack the ground molten and throw rocks. */
+  private fireBlast(x: number, y: number, z: number, radius: number, big: boolean, host: EffectHost): void {
+    const fire = this.particleDefs.get('fire');
+    const ember = this.particleDefs.get('ember');
+    const smoke = this.particleDefs.get('smoke');
+    if (fire) host.particles.emit(fire, x, y + 0.3, z, UP, Math.round(6 + radius * 3), 0.9 + radius * 0.15);
+    if (ember) host.particles.emit(ember, x, y + 0.4, z, undefined, Math.round(4 + radius * 4));
+    if (smoke) this.schedule(this.time + 0.2, smoke, x, y + 0.6 + radius * 0.2, z, Math.round(4 + radius * 3), 0.9 + radius * 0.25, false);
+    if (!big || !this.terrain) return;
+    this.addCracks(x, z, radius * 1.1, true);
+    host.debris({ x, y: y + 0.3, z, hx: radius * 0.25, hy: 0.2, hz: radius * 0.25, count: Math.round(8 + radius * 3), colors: CHARRED, force: 6 + radius * 0.6, size: [0.1, 0.38] });
+    this.hopStones(x, z, radius * 1.3, Math.round(10 + radius * 4), host);
+    host.rumble(0.3, 0.5, x, z);
+  }
+
+  /** Earthquake: the ground splits outward from the stomp, rocks hop into the air, the view rumbles. */
+  private quake(x: number, z: number, radius: number, host: EffectHost): void {
+    if (!this.terrain) return;
+    this.addCracks(x, z, radius, false);
+    this.hopStones(x, z, radius * 1.15, Math.round(12 + radius * radius * 1.3), host);
+    host.rumble(0.3 + radius * 0.03, 0.8 + radius * 0.08, x, z);
+  }
+
+  /** Pebbles (and a few slabs near the centre) jolted into the air, the far ones as the wave arrives. */
+  private hopStones(x: number, z: number, radius: number, count: number, host: EffectHost): void {
+    const terrain = this.terrain;
+    if (!terrain) return;
+    const n = Math.min(80, count);
+    for (let i = 0; i < n; i++) {
+      const slab = i < 4;
+      const a = Math.random() * Math.PI * 2;
+      const r = radius * (slab ? 0.1 + Math.random() * 0.25 : 0.12 + 0.88 * Math.sqrt(Math.random()));
+      const px = x + Math.cos(a) * r;
+      const pz = z + Math.sin(a) * r;
+      if (terrain.inWater(px, pz)) continue;
+      const near = 1 - r / radius;
+      host.debris({
+        x: px,
+        y: terrain.height(px, pz) + 0.05,
+        z: pz,
+        hx: 0.05,
+        hy: 0.02,
+        hz: 0.05,
+        count: 1,
+        colors: ROCKS,
+        dx: Math.cos(a) * 0.25,
+        dz: Math.sin(a) * 0.25,
+        force: 4 + Math.random() * 4 + near * 5,
+        size: slab ? [0.3, 0.55] : [0.07, 0.24],
+        delay: (r / radius) * 0.28,
+      });
+    }
+  }
+
+  /** Tearing hit: more flesh, a red flash; bites snap jaws shut on the target, slashing claws rake it. */
+  private tear(w: WeaponDef, e: Extract<SimEvent, { type: 'hit' }>, host: EffectHost): void {
+    const size = THREE.MathUtils.clamp(0.5 + e.damage / 120, 0.6, 2);
+    const chunk = this.particleDefs.get('hit-chunk');
+    if (chunk) {
+      this.dir.x = e.dx;
+      this.dir.y = 0.8;
+      this.dir.z = e.dz;
+      host.particles.emit(chunk, e.x, e.y, e.z, this.dir, Math.min(20, Math.round(e.damage / 12)), 0.8 + size * 0.3);
+    }
+    this.v1.set(e.x, e.y, e.z);
+    this.flash(this.v1, '#ff4a3a', 1.5 + size, 0.14, true);
+    const first = this.biteFrame !== this.frame;
+    this.biteFrame = this.frame;
+    if (!first) return;
+    if (e.damage >= 80) host.shake(Math.min(0.3, 0.05 + e.damage / 1500), e.x, e.z);
+    const bite = w.id.includes('bite');
+    if ((!bite && w.damageType !== 'slash') || this.jaws.length >= 24) return;
+    const len = Math.hypot(e.dx, e.dz) || 1;
+    this.jaws.push({ claw: !bite, x: e.x, y: e.y, z: e.z, fx: e.dx / len, fz: e.dz / len, size, age: 0, life: bite ? 0.34 : 0.3 });
+  }
+
+  // ------------------------------------------------------------------ ground cracks
+
+  /** Jagged cracks running out from (x, z), branching; they open as the shock front passes. */
+  private addCracks(x: number, z: number, radius: number, hot: boolean): void {
+    const terrain = this.terrain;
+    if (!terrain) return;
+    if (this.cracks.length >= 20) this.cracks.shift();
+    const segs: number[] = [];
+    const speed = radius / 0.28;
+    const width = THREE.MathUtils.clamp(radius * 0.045, 0.09, 0.3);
+    const dust = this.particleDefs.get(hot ? 'ember' : 'hit-dust');
+    const y = (px: number, pz: number) => groundY(terrain, px, pz) + 0.035;
+    const grow = (sx: number, sz: number, a: number, len: number, w: number, dist: number, branch: boolean): void => {
+      const steps = THREE.MathUtils.clamp(Math.round(len / 0.55), 3, 9);
+      const step = len / steps;
+      let px = sx;
+      let pz = sz;
+      let py = y(px, pz);
+      for (let i = 0; i < steps; i++) {
+        a += (Math.random() - 0.5) * 0.75;
+        const nx = px + Math.cos(a) * step;
+        const nz = pz + Math.sin(a) * step;
+        const ny = y(nx, nz);
+        segs.push(px, py, pz, nx, ny, nz, w * (1 - (i / steps) * 0.75), dist / speed);
+        dist += step;
+        if (branch && i >= 1 && i < steps - 1 && Math.random() < 0.35) {
+          grow(nx, nz, a + (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.5), len * 0.4, w * 0.6, dist, false);
+        }
+        px = nx;
+        pz = nz;
+        py = ny;
+      }
+      // Dust spurts out where the crack stops.
+      if (branch && dust) this.schedule(this.time + dist / speed, dust, px, py, pz, 3, 0.8, false);
+    };
+    const arms = Math.min(11, 5 + Math.round(radius * 0.8));
+    for (let i = 0; i < arms; i++) {
+      const a = (i / arms) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const r0 = radius * 0.08;
+      grow(x + Math.cos(a) * r0, z + Math.sin(a) * r0, a, radius * (0.65 + Math.random() * 0.45), width, r0, true);
+    }
+    this.cracks.push({ segs: new Float32Array(segs), age: 0, life: hot ? 10 : 7, hot });
+  }
+
+  private updateCracks(dt: number): void {
+    let n = 0;
+    for (let c = this.cracks.length - 1; c >= 0; c--) {
+      const k = this.cracks[c];
+      k.age += dt;
+      if (k.age >= k.life) {
+        this.cracks.splice(c, 1);
+        continue;
+      }
+      // Cracks narrow shut as they fade; molten ones cool from glowing orange to charred.
+      const fade = Math.min(1, (k.life - k.age) / 1.5);
+      this.c1.copy(CRACK_DARK);
+      if (k.hot) this.c1.lerp(LAVA, Math.max(0, 1 - k.age / 2.5));
+      const s = k.segs;
+      for (let i = 0; i < s.length && n < CRACK_CAP; i += CRACK_STRIDE) {
+        const g = (k.age - s[i + 7]) / CRACK_OPEN;
+        if (g <= 0) continue;
+        const f = Math.min(1, g);
+        this.v1.set(s[i], s[i + 1], s[i + 2]);
+        this.v2.set(s[i + 3], s[i + 4], s[i + 5]).sub(this.v1).multiplyScalar(f).add(this.v1);
+        const dir = this.v3.subVectors(this.v2, this.v1);
+        const len = dir.length();
+        if (len < 1e-3) continue;
+        this.q.setFromUnitVectors(zAxis, dir.divideScalar(len));
+        const w = s[i + 6] * fade;
+        this.m.compose(this.v1.add(this.v2).multiplyScalar(0.5), this.q, this.s.set(w, 0.03, len + w * 0.5));
+        this.crackMesh.setMatrixAt(n, this.m);
+        this.crackMesh.setColorAt(n, this.c1);
+        n++;
+      }
+    }
+    commitInstances(this.crackMesh, n);
+  }
+
+  // ------------------------------------------------------------------ delayed bursts
+
+  private schedule(at: number, def: ParticleDef, x: number, y: number, z: number, count: number, size: number, up: boolean): void {
+    if (this.later.length < 256) this.later.push({ at, def, x, y, z, count, size, up });
+  }
+
+  private updateLater(host: EffectHost): void {
+    for (let i = this.later.length - 1; i >= 0; i--) {
+      const l = this.later[i];
+      if (l.at > this.time) continue;
+      host.particles.emit(l.def, l.x, l.y, l.z, l.up ? UP : undefined, l.count, l.size);
+      this.later[i] = this.later[this.later.length - 1];
+      this.later.pop();
+    }
   }
 
   // ------------------------------------------------------------------ frame
@@ -286,6 +629,8 @@ export class EffectRenderer {
     this.updateRings(dt);
     this.updateFlashes(dt);
     this.updateMeteors(dt, host);
+    this.updateCracks(dt);
+    this.updateLater(host);
     if (sim) {
       this.updateWhirls(dt, sim, alpha, host);
       if (dt > 0) this.unitEffects(dt, sim, host);
@@ -412,8 +757,59 @@ export class EffectRenderer {
       n = this.drawPolyline(bolt.pts, bolt.width, bolt.color, k, n, colors);
       for (let f = 0; f < bolt.forks; f++) n = this.drawPolyline(bolt.fork[f], bolt.width * 0.5, bolt.color, k * 0.7, n, colors);
     }
+    n = this.drawJaws(dt, n, colors);
     commitInstances(this.core, n);
     commitInstances(this.glow, n);
+  }
+
+  /** Two rows of teeth closing on the bite, drawn as glowing zig-zag arcs across the attack direction. */
+  private drawJaws(dt: number, n: number, colors: Float32Array[]): number {
+    const pts = this.jawPts;
+    const last = pts.length - 1;
+    for (let j = this.jaws.length - 1; j >= 0; j--) {
+      const jaw = this.jaws[j];
+      jaw.age += dt;
+      if (jaw.age >= jaw.life) {
+        this.jaws.splice(j, 1);
+        continue;
+      }
+      const t = jaw.age / jaw.life;
+      const s = jaw.size;
+      // Lateral axis across the target; the marks curve back toward the attacker.
+      const lx = -jaw.fz;
+      const lz = jaw.fx;
+      if (jaw.claw) {
+        // Three parallel rakes swept diagonally, top to bottom, in 0.08 s.
+        const sweep = Math.min(1, jaw.age / 0.08) * 2 - 1;
+        const k = t < 0.3 ? 1 : 1 - (t - 0.3) / 0.7;
+        for (let c = -1; c <= 1; c++) {
+          for (let i = 0; i <= last; i++) {
+            const u = Math.min((i / last) * 2 - 1, sweep);
+            const along = u * s * 0.6;
+            const across = c * s * 0.2;
+            const lat = along * 0.7 + across * 0.7;
+            const up = -along * 0.7 + across * 0.7;
+            const back = -(1 - u * u) * s * 0.15;
+            pts[i].set(jaw.x + lx * lat + jaw.fx * back, jaw.y + up, jaw.z + lz * lat + jaw.fz * back);
+          }
+          n = this.drawPolyline(pts, 0.035 * s * (c === 0 ? 1 : 0.8), CLAW, k, n, colors);
+        }
+        continue;
+      }
+      const open = 1 - Math.min(1, jaw.age / 0.09) * 0.85;
+      const k = t < 0.35 ? 1 : 1 - (t - 0.35) / 0.65;
+      for (const side of [1, -1]) {
+        for (let i = 0; i <= last; i++) {
+          const u = (i / last) * 2 - 1;
+          const tooth = i % 2 === 1 ? s * 0.16 : 0;
+          const h = side * ((s * (0.5 - 0.3 * u * u) - tooth) * open + s * 0.04);
+          const back = -(1 - u * u) * s * 0.3;
+          pts[i].set(jaw.x + lx * u * s * 0.7 + jaw.fx * back, jaw.y + h, jaw.z + lz * u * s * 0.7 + jaw.fz * back);
+        }
+        n = this.drawPolyline(pts, 0.045 * s, JAW, k, n, colors);
+      }
+    }
+    return n;
   }
 
   /** Midpoint displacement between a and b into pts (2^levels + 1 points). */
@@ -491,16 +887,23 @@ export class EffectRenderer {
 
   private createRing(kind: RingKind): Ring {
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((RING_SEG + 1) * 2 * 3), 3));
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((RING_SEG + 1) * 3 * 3), 3));
+    const colors = new Float32Array((RING_SEG + 1) * 3 * 3);
+    const profile = RING_PROFILE[kind];
+    for (let i = 0; i < colors.length; i++) colors[i] = profile[Math.floor(i / 3) % 3];
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     const index: number[] = [];
     for (let i = 0; i < RING_SEG; i++) {
-      const a = i * 2;
-      index.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+      for (let j = 0; j < 2; j++) {
+        const a = i * 3 + j;
+        index.push(a, a + 3, a + 1, a + 1, a + 3, a + 4);
+      }
     }
     geo.setIndex(index);
     const scorch = kind === 'scorch';
     const material = new THREE.MeshBasicMaterial({
       color: scorch ? '#150e09' : '#ffffff',
+      vertexColors: true,
       transparent: true,
       depthWrite: false,
       blending: scorch ? THREE.NormalBlending : THREE.AdditiveBlending,
@@ -532,31 +935,47 @@ export class EffectRenderer {
         continue;
       }
       const R = ring.radius;
+      // Radii of the inner, core (brightest) and outer rows.
       let inner: number;
+      let core: number;
       let outer: number;
       let k: number;
       switch (ring.kind) {
         case 'telegraph': {
-          const w = THREE.MathUtils.clamp(R * 0.08, 0.12, 0.35);
+          const w = THREE.MathUtils.clamp(R * 0.05, 0.1, 0.22);
           outer = R;
+          core = R - w * 0.3;
           inner = R - w;
-          k = (0.5 + 0.35 * Math.sin(ring.age * 22)) * (0.55 + 0.45 * t);
+          k = (0.9 + 0.25 * Math.sin(ring.age * 12)) * (0.7 + 0.5 * t);
           break;
         }
         case 'fill':
           outer = R * t;
+          core = outer * 0.8;
           inner = 0;
-          k = 0.05 + 0.1 * t;
+          k = 0.08 + 0.12 * t;
           break;
         case 'shock': {
           const e = 1 - (1 - t) ** 3;
           outer = R * (0.25 + 0.9 * e);
-          inner = outer - R * 0.35 * (1 - t) - 0.05;
-          k = (1 - t) ** 1.5;
+          const thick = R * 0.25 * (1 - t) + 0.06;
+          core = outer - thick * 0.2;
+          inner = outer - thick;
+          k = 1.4 * (1 - t) ** 1.5;
+          break;
+        }
+        case 'halo': {
+          // Soft static glow under the feet: fades in, then out.
+          const w = THREE.MathUtils.clamp(R * 0.1, 0.08, 0.18);
+          outer = R;
+          core = R - w * 0.35;
+          inner = R - w;
+          k = 0.8 * Math.sin(Math.PI * t);
           break;
         }
         case 'scorch':
           outer = R;
+          core = R * 0.5;
           inner = 0;
           k = t < 0.7 ? 0.48 : 0.48 * (1 - (t - 0.7) / 0.3);
           break;
@@ -564,7 +983,7 @@ export class EffectRenderer {
       if (ring.kind === 'scorch') ring.mesh.material.opacity = k;
       else ring.mesh.material.color.copy(ring.color).multiplyScalar(k);
       if (ring.built) continue;
-      ring.built = ring.kind === 'scorch' || ring.kind === 'telegraph';
+      ring.built = ring.kind === 'scorch' || ring.kind === 'telegraph' || ring.kind === 'halo';
       const pos = ring.mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
       const arr = pos.array as Float32Array;
       const lift = ring.kind === 'scorch' ? 0.05 : 0.09;
@@ -573,11 +992,11 @@ export class EffectRenderer {
         const cx = Math.cos(a);
         const sz = Math.sin(a);
         const e = ring.edge[i];
-        for (let j = 0; j < 2; j++) {
-          const r = (j === 0 ? Math.max(0, inner) : outer) * (j === 1 ? e : 1);
+        for (let j = 0; j < 3; j++) {
+          const r = j === 0 ? Math.max(0, inner) : j === 1 ? Math.max(0, core) : outer * e;
           const px = ring.x + cx * r;
           const pz = ring.z + sz * r;
-          const o = (i * 2 + j) * 3;
+          const o = (i * 3 + j) * 3;
           arr[o] = px;
           arr[o + 1] = groundY(terrain, px, pz) + lift;
           arr[o + 2] = pz;
@@ -602,10 +1021,17 @@ export class EffectRenderer {
 
   // ------------------------------------------------------------------ flashes
 
-  private flash(at: THREE.Vector3, color: string, intensity: number, life: number): void {
+  /** `idleOnly`: frequent small flashes take a free light and never cut short a big one. */
+  private flash(at: THREE.Vector3, color: string, intensity: number, life: number, idleOnly = false): void {
     if (this.flashes.length === 0) return;
-    const f = this.flashes[this.flashNext];
-    this.flashNext = (this.flashNext + 1) % this.flashes.length;
+    let f = this.flashes[this.flashNext];
+    if (idleOnly) {
+      const free = this.flashes.find((l) => l.age >= l.life);
+      if (!free) return;
+      f = free;
+    } else {
+      this.flashNext = (this.flashNext + 1) % this.flashes.length;
+    }
     f.light.position.copy(at);
     f.light.color.set(color).lerp(WHITE, 0.3);
     f.age = 0;
@@ -777,6 +1203,10 @@ export class EffectRenderer {
     while (this.meteors.length) this.removeMeteor(0);
     for (const w of this.whirls.values()) this.group.remove(w.group);
     this.whirls.clear();
+    this.cracks.length = 0;
+    this.crackMesh.count = 0;
+    this.jaws.length = 0;
+    this.later.length = 0;
   }
 
   dispose(): void {
@@ -786,6 +1216,8 @@ export class EffectRenderer {
     (this.glow.material as THREE.Material).dispose();
     this.core.dispose();
     this.glow.dispose();
+    (this.crackMesh.material as THREE.Material).dispose();
+    this.crackMesh.dispose();
     for (const r of this.rings) {
       r.mesh.geometry.dispose();
       r.mesh.material.dispose();
@@ -800,6 +1232,20 @@ export class EffectRenderer {
 }
 
 const WHITE = new THREE.Color('#ffffff');
+const JAW = new THREE.Color('#ff3b2e');
+const CLAW = new THREE.Color('#ff6a3a');
+const HEAL_HEX = '#5dff7a';
+const CRACK_DARK = new THREE.Color('#1c130c');
+const LAVA = new THREE.Color('#ff7a1a').multiplyScalar(1.6);
+
+/** Fire-coloured additive particle burning out to black (flames, blasts). */
+function isFiery(def: ParticleDef, c: THREE.Color): boolean {
+  if (!def.additive) return false;
+  c.set(def.colorStart);
+  if (c.r < 0.8 || c.b > 0.6) return false;
+  c.set(def.colorEnd);
+  return Math.max(c.r, c.g, c.b) < 0.2;
+}
 
 function groundY(terrain: Terrain, x: number, z: number): number {
   const h = terrain.height(x, z);

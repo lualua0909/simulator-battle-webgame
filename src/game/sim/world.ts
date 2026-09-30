@@ -8,7 +8,7 @@ import { starScale } from '@/shared/economy';
 import type { AssetDef, ContentBundle, MapDef, ProjectileDef, UnitDef, WeaponDef } from '@/shared/schema';
 import type { Armies, Side } from './army';
 import { Rng, clamp, dcos, fnv1a } from './rng';
-import { EDGE_MARGIN, WALL_CELL, type Obstacle, Terrain, wallIndex } from './terrain';
+import { DEPLOY_BACK_MARGIN, EDGE_MARGIN, WALL_CELL, type Obstacle, Terrain, wallIndex } from './terrain';
 
 export const SIM_HZ = 30;
 export const SIM_DT = 1 / SIM_HZ;
@@ -875,7 +875,7 @@ export class BattleSim {
   }
 
   private clampBounds(u: SimUnit): void {
-    const lim = this.terrain.half - EDGE_MARGIN * 0.5;
+    const lim = this.terrain.half - DEPLOY_BACK_MARGIN;
     u.x = clamp(u.x, -lim, lim);
     u.z = clamp(u.z, -lim, lim);
     if (this.terrain.island) [u.x, u.z] = this.terrain.clampToLand(u.x, u.z, EDGE_MARGIN * 0.25);
@@ -898,11 +898,12 @@ export class BattleSim {
       for (const v of near) {
         if (v.id <= u.id || !v.alive || v.grid || v.climb) continue;
         if (u.airborne || v.airborne) continue;
-        // A flyer diving below a ground unit's top must not sink into its body.
+        // Every unit keeps its own footprint, so a flyer never visually stacks on a ground unit.
+        // Only structures can still be flown over.
         const mixed = u.flying !== v.flying;
         if (mixed) {
           const g = u.flying ? v : u;
-          if ((u.flying ? u : v).y >= g.y + g.def.height) continue;
+          if (g.structure && (u.flying ? u : v).y >= g.y + g.def.height) continue;
         }
         // On a wall and below it do not push each other.
         if (u.onWall !== v.onWall && (u.y - v.y > 1.2 || v.y - u.y > 1.2)) continue;
@@ -1306,7 +1307,8 @@ export class BattleSim {
 
   private verticalReach(u: SimUnit, t: SimUnit): boolean {
     const dy = t.y + t.def.height * 0.5 - (u.y + u.def.height * 0.5);
-    return (dy < 0 ? -dy : dy) <= Math.max(GROUND_REACH, u.def.height * 0.75);
+    // A tall beast (long-neck dinosaur) reaches flyers hovering up to its full height.
+    return (dy < 0 ? -dy : dy) <= Math.max(GROUND_REACH, u.def.height);
   }
 
   /** One release of an ability: every channel pulse calls this again. */

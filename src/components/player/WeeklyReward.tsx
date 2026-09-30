@@ -68,7 +68,7 @@ export default function WeeklyReward({ bundle, onClose, onClaim }: Props) {
         ))}
       </div>
       <p className="text-outline mt-4 text-center">
-        {status.daily.ready ? <>Hộp hôm nay hết hạn sau {countdown(status.daily.resetAt - now())}</> : <>Hộp mới sau {countdown(status.daily.resetAt - now())}</>}
+        {status.daily.ready ? <>{t('weekly.expiresIn')} {countdown(status.daily.resetAt - now())}</> : <>{t('weekly.nextIn')} {countdown(status.daily.resetAt - now())}</>}
       </p>
     </div>,
     document.body,

@@ -41,7 +41,8 @@ export function sideBudget(settings: Pick<Settings, 'siege'>, base: number, side
 export const isGridStructure = (u: Pick<UnitDef, 'structure'>): boolean => u.structure === 'wall' || u.structure === 'platform';
 
 /** Whether a unit may be fielded by `side` in this mode (open battles have no structures). */
-export function canField(u: Pick<UnitDef, 'structure' | 'siegeSide'>, side: Side, defense: Side | null): boolean {
+export function canField(u: Pick<UnitDef, 'structure' | 'siegeSide'> & { hidden?: boolean }, side: Side, defense: Side | null): boolean {
+  if (u.hidden) return false;
   if (!defense) return u.structure === 'none';
   return u.siegeSide === 'any' || u.siegeSide === (side === defense ? 'defense' : 'attack');
 }

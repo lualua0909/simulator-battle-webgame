@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Mini Battle Simulator',
-    short_name: 'Mini Battle',
+    name: 'Clay Battle - Đại chiến đất sét',
+    short_name: 'Clay Battle',
     description: 'Low-poly epic battles: fight AI, 2 players on 1 PC or online.',
     start_url: '/',
     display: 'standalone',

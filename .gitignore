@@ -13,3 +13,8 @@ data/*.db-*
 # Firebase service account keys
 *-firebase-adminsdk-*.json
 publish-app.log
+# one-off Firestore migration scripts (local only)
+/scripts/*
+!/scripts/db-reset.ts
+!/scripts/screenshots.ts
+!/scripts/make-icons.mjs

@@ -21,16 +21,20 @@ interface Props {
   /** Fixed camera yaw in degrees; undefined = slow auto-rotate. */
   yaw?: number;
   className?: string;
+  transparent?: boolean;
+  showGround?: boolean;
+  /** Camera distance factor; below 1 frames tighter (the card lets the model fill the frame). */
+  fit?: number;
 }
 
 const NONE: EquipItem[] = [];
 
 const toSkinState = (anim: PreviewAnim): SkinState => (anim === 'attack' ? 'attack' : anim === 'walk' ? 'walk' : 'idle');
 
-export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipment = NONE, anim = 'idle', yaw, className }: Props) {
+export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipment = NONE, anim = 'idle', yaw, className, transparent = false, showGround = true, fit = 1.25 }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const state = useRef({ url, scale, tint, hide, equipment, anim, yaw });
-  state.current = { url, scale, tint, hide, equipment, anim, yaw };
+  const state = useRef({ url, scale, tint, hide, equipment, anim, yaw, fit });
+  state.current = { url, scale, tint, hide, equipment, anim, yaw, fit };
 
   useEffect(() => {
     const el = host.current;
@@ -40,7 +44,7 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
     let equipped = '';
     let raf = 0;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: transparent, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -48,7 +52,7 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
     el.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#dfeaf2');
+    if (!transparent) scene.background = new THREE.Color('#dfeaf2');
     scene.add(new THREE.HemisphereLight('#eaf4ff', '#6b5a3a', 1.6));
     const sun = new THREE.DirectionalLight('#fff4de', 2.6);
     sun.castShadow = true;
@@ -56,10 +60,12 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
     scene.add(sun, sun.target);
     const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 200);
 
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(6, 32), new THREE.MeshStandardMaterial({ color: '#9cc47a', roughness: 1 }));
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    const ground = showGround ? new THREE.Mesh(new THREE.CircleGeometry(6, 32), new THREE.MeshStandardMaterial({ color: '#9cc47a', roughness: 1 })) : null;
+    if (ground) {
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+    }
 
     let orbitYaw = 35;
     let orbitPitch = 18;
@@ -105,11 +111,24 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
     resize();
 
     // Frame the model once its file has loaded (normalised height ≈ 2 m at scale 1).
+    // Bounds of the visible, skinned pose: hidden meshes and bind-pose boxes would shrink the model.
     const frame = (group: THREE.Group) => {
-      const box = new THREE.Box3().setFromObject(group);
+      group.updateMatrixWorld(true);
+      const box = new THREE.Box3();
+      group.traverseVisible((o) => {
+        const mesh = o as THREE.SkinnedMesh;
+        if (!mesh.isMesh) return;
+        if (mesh.isSkinnedMesh) mesh.skeleton.update();
+        const part = new THREE.Box3();
+        const v = new THREE.Vector3();
+        const count = mesh.geometry.attributes.position?.count ?? 0;
+        for (let i = 0; i < count; i++) part.expandByPoint(mesh.getVertexPosition(i, v).applyMatrix4(mesh.matrixWorld));
+        box.union(part);
+      });
+      if (box.isEmpty()) box.setFromObject(group);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      const radius = Math.max(size.x, size.y, size.z) * 0.5 + 0.2;
+      const radius = Math.max(size.x, size.y, size.z) * 0.55;
       const shadowCam = sun.shadow.camera;
       shadowCam.left = shadowCam.bottom = -radius * 2;
       shadowCam.right = shadowCam.top = radius * 2;
@@ -117,7 +136,7 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
       sun.position.set(radius * 2, radius * 4, radius * 3).add(center);
       sun.target.position.copy(center);
       shadowCam.updateProjectionMatrix();
-      ground.scale.setScalar(Math.max(1, radius * 1.2));
+      ground?.scale.setScalar(Math.max(1, radius * 1.2));
       return { center, radius };
     };
     let framing: { center: THREE.Vector3; radius: number } | null = null;
@@ -136,6 +155,8 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
           equipped = equipmentKey(s.equipment);
           next.group.scale.setScalar(s.scale);
           scene.add(next.group);
+          setSkinState(next, toSkinState(s.anim));
+          stepSkin(next, 0);
           framing = frame(next.group);
           inst = next;
           (window as unknown as { __viewerReady?: boolean }).__viewerReady = true;
@@ -154,6 +175,7 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
         }
         setSkinState(inst, toSkinState(s.anim));
         stepSkin(inst, dt);
+        inst.group.position.y = Math.sin(timer.getElapsed() * 2.2) * 0.035;
       }
       if (!framing) {
         renderer.render(scene, camera);
@@ -162,7 +184,7 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
       const { center, radius } = framing;
       if (s.yaw === undefined && !dragging) orbitYaw += dt * 12;
       const yawDeg = s.yaw ?? orbitYaw;
-      const dist = (radius / Math.tan((camera.fov * Math.PI) / 360)) * 1.25 * zoom;
+      const dist = (radius / Math.tan((camera.fov * Math.PI) / 360)) * s.fit * zoom;
       const yr = (yawDeg * Math.PI) / 180;
       const pr = (orbitPitch * Math.PI) / 180;
       camera.position.set(center.x + Math.sin(yr) * Math.cos(pr) * dist, center.y + Math.sin(pr) * dist, center.z + Math.cos(yr) * Math.cos(pr) * dist);
@@ -182,7 +204,7 @@ export default function SkinnedModelViewer({ url, scale = 1, tint, hide, equipme
       window.removeEventListener('pointerup', onUp);
       renderer.dispose();
       renderer.domElement.remove();
-      ground.geometry.dispose();
+      ground?.geometry.dispose();
       (window as unknown as { __viewerReady?: boolean }).__viewerReady = false;
     };
   }, [url]);

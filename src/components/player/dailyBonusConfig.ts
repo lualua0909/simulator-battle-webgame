@@ -9,8 +9,8 @@
 //   trigger callbacks; closeModalPrizeClaim fires alongside a slot tap.
 // - Reveal (box_prize_reveal_modal_v25.riv): root VM BoxPrizeRevealModal with
 //   tierNum, numOfPrize and boxPrize1..6 (BoxPrize VMs: currencyPrize,
-//   prizeImage, titleText, prizeContent{amount, contentText}). Chest tap
-//   arrives as the root boxClick trigger callback.
+//   prizeImage, titleText, prizeContent{amount, contentText}). The first chest
+//   tap (root boxClick) opens the chest; the sequence ends with boxOut.
 // - WZ_DB_* Rive events are audio cues (mp3s in public/audio/daily-bonus).
 //
 // The file's top-right X / bottom CTA / info buttons emit nothing observable,

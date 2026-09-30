@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createAssetModel } from '@/game/models';
 import { bakeModel } from '@/game/models/bake';
-import { groundLift, mountSeatFor, pickClipName, repaintPixels, skinnedBounds, walkSpeedFor, yawCorrectionFor, NORMALIZED_HEIGHT } from '@/game/models/glbSkinned';
+import { groundLift, mountSeatFor, pickClipName, repaintPixels, skinnedBounds, stripRisingDeath, walkSpeedFor, yawCorrectionFor, NORMALIZED_HEIGHT } from '@/game/models/glbSkinned';
 import { assetSchema, unitSchema, weaponSchema } from '@/shared/schema';
 import { SEED } from '@/shared/seed';
 
@@ -138,47 +138,47 @@ test('seed m-eagle asset references /models/ca-duoi-bay.glb and validates', () =
   assert.equal(createAssetModel({ ...asset, glb: null }).children.length, 0);
 });
 
-test('committed rong-xanh.glb parses with a full clip set', async () => {
-  const file = path.join(process.cwd(), 'public', 'models', 'rong-xanh.glb');
-  assert.ok(existsSync(file), 'public/models/rong-xanh.glb is committed');
+// khung-long-bay.glb (Rồng Xanh): textured single-material file, same clip layout as
+// rong lua.glb (minus Walk/Run) plus Attack_Breath, which wins the attack state (the unit's weapon is breath).
+const KHUNG_LONG_BAY_CLIPS = ['Idle', 'Fly', 'Attack_Bite', 'Attack_Breath', 'Hit', 'Death'];
+
+test('committed khung-long-bay.glb ships the six baby-dragon clips', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'khung-long-bay.glb');
+  assert.ok(existsSync(file), 'public/models/khung-long-bay.glb is committed');
   const buf = readFileSync(file);
-  const gltf = await new GLTFLoader().parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, '');
-  const names = gltf.animations.map((a) => a.name);
-  for (const state of ['idle', 'walk', 'run', 'attack', 'death', 'jump'] as const) {
-    assert.ok(pickClipName(names, state), `rong-xanh.glb: no clip for ${state} in ${names.join(', ')}`);
-  }
-  const box = skinnedBounds(gltf.scene);
-  assert.ok(box, 'rong-xanh.glb: no skinned bounds');
-  assert.ok(Math.abs(box.min.y) < 0.5, `rong-xanh.glb: rendered min.y ${box.min.y}`);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.deepEqual([...names].sort(), [...KHUNG_LONG_BAY_CLIPS].sort());
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Breath');
+  assert.equal(pickClipName(names, 'fly'), 'Fly');
+  assert.equal(pickClipName(names, 'idle'), 'Idle');
+  assert.equal(pickClipName(names, 'death'), 'Death');
 });
 
-test('seed m-baby-dragon asset references /models/rong-xanh.glb with a green tint and validates', () => {
+test('seed m-baby-dragon asset references /models/khung-long-bay.glb untinted and validates', () => {
   const asset = SEED.assets.find((a) => a.id === 'm-baby-dragon')!;
   assert.ok(asset, 'seed has m-baby-dragon');
   assert.equal(asset.kind, 'dragon');
-  assert.equal(asset.glb?.url, '/models/rong-xanh.glb');
-  assert.deepEqual(asset.glb?.tint?.['Main'], '#8cc540');
+  assert.equal(asset.glb?.url, '/models/khung-long-bay.glb');
+  assert.deepEqual(asset.glb?.tint, {});
   assert.deepEqual(assetSchema.parse(asset), asset);
 });
 
-// rong-lua.glb (Rồng lửa): Idle = Đứng yên, Fly = Bay, Attack_Bite = Cắn,
-// Attack_BiteShake = Cắn lắc, Hit = Trúng đòn, Death = Chết. No Run/Jump/Walk:
-// locomotion falls back to Fly so the flyer never glides in the idle pose.
-const RONG_LUA_CLIPS = ['Idle', 'Fly', 'Attack_Bite', 'Attack_BiteShake', 'Hit', 'Death'];
+// rong lua.glb (Rồng lửa): Idle = Đứng yên, Walk = Đi, Run = Chạy, Fly = Bay,
+// Attack_Bite = Cắn, Hit = Trúng đòn, Death = Chết. The flyer always plays the
+// 'fly' state (units.ts), so Walk/Run stay unused in battle.
+const RONG_LUA_CLIPS = ['Idle', 'Walk', 'Run', 'Fly', 'Attack_Bite', 'Hit', 'Death'];
 
-test('rong-lua clips map to battle states (locomotion falls back to Fly)', () => {
+test('rong lua clips map to battle states', () => {
   assert.equal(pickClipName(RONG_LUA_CLIPS, 'idle'), 'Idle');
   assert.equal(pickClipName(RONG_LUA_CLIPS, 'fly'), 'Fly');
-  assert.equal(pickClipName(RONG_LUA_CLIPS, 'walk'), 'Fly');
-  assert.equal(pickClipName(RONG_LUA_CLIPS, 'run'), 'Fly');
   assert.equal(pickClipName(RONG_LUA_CLIPS, 'attack'), 'Attack_Bite');
   assert.equal(pickClipName(RONG_LUA_CLIPS, 'death'), 'Death');
-  assert.equal(pickClipName(RONG_LUA_CLIPS, 'jump'), 'Fly');
 });
 
-test('committed rong-lua.glb ships the six fire-dragon clips', async () => {
-  const file = path.join(process.cwd(), 'public', 'models', 'rong-lua.glb');
-  assert.ok(existsSync(file), 'public/models/rong-lua.glb is committed');
+test('committed rong lua.glb ships the seven fire-dragon clips', async () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'rong lua.glb');
+  assert.ok(existsSync(file), 'public/models/rong lua.glb is committed');
   // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
   const buf = readFileSync(file);
   const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
@@ -189,11 +189,11 @@ test('committed rong-lua.glb ships the six fire-dragon clips', async () => {
   assert.equal(pickClipName(names, 'death'), 'Death');
 });
 
-test('seed m-dragon asset references /models/rong-lua.glb and validates', () => {
+test('seed m-dragon asset references /models/rong lua.glb and validates', () => {
   const asset = SEED.assets.find((a) => a.id === 'm-dragon')!;
   assert.ok(asset, 'seed has m-dragon');
   assert.equal(asset.kind, 'dragon');
-  assert.equal(asset.glb?.url, '/models/rong-lua.glb');
+  assert.equal(asset.glb?.url, '/models/rong%20lua.glb');
   assert.equal(asset.scale, 1.5);
   assert.deepEqual(assetSchema.parse(asset), asset);
   const unit = SEED.units.find((u) => u.id === 'dragon')!;
@@ -347,66 +347,19 @@ test('shoot clips win the attack state over punch', () => {
   assert.equal(pickClipName(names, 'attack'), 'CharacterArmature|Idle_Shoot');
 });
 
-test('committed hoa-tien-thu.glb parses with shoot/walk/run/death clips', async () => {
-  const file = path.join(process.cwd(), 'public', 'models', 'hoa-tien-thu.glb');
-  assert.ok(existsSync(file), 'public/models/hoa-tien-thu.glb is committed');
-  const buf = readFileSync(file);
-  const gltf = await new GLTFLoader().parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, '');
-  const names = gltf.animations.map((a) => a.name);
-  for (const state of ['idle', 'walk', 'run', 'attack', 'death', 'jump'] as const) {
-    assert.ok(pickClipName(names, state), `hoa-tien-thu.glb: no clip for ${state} in ${names.join(', ')}`);
-  }
-  assert.match(pickClipName(names, 'attack')!, /shoot/i, 'fire archer should aim, not punch');
-  const box = skinnedBounds(gltf.scene);
-  assert.ok(box, 'hoa-tien-thu.glb: no skinned bounds');
-  assert.ok(Math.abs(box.min.y) < 0.5, `hoa-tien-thu.glb: rendered min.y ${box.min.y}`);
-  const height = box.max.y - box.min.y;
-  assert.ok(height > 1 && height < 30, `hoa-tien-thu.glb: rendered height ${height}`);
-});
-
-test('seed fire-archer weapon, asset and unit validate, arsenal hidden', async () => {  const weapon = SEED.weapons.find((w) => w.id === 'fire-bow');
-  const asset = SEED.assets.find((a) => a.id === 'm-fire-archer');
-  const unit = SEED.units.find((u) => u.id === 'fire-archer');
-  assert.ok(weapon && asset && unit, 'seed has fire-bow, m-fire-archer and fire-archer');
-  assert.deepEqual(weaponSchema.parse(weapon), weapon);
-  assert.deepEqual(assetSchema.parse(asset), asset);
-  assert.deepEqual(unitSchema.parse(unit), unit);
-  assert.equal(asset.kind, 'humanoid');
-  assert.equal(asset.glb?.url, '/models/hoa-tien-thu.glb');
-  assert.equal(unit.modelId, 'm-fire-archer');
-  assert.equal(unit.weaponId, 'fire-bow');
-  // Every rigid attachment in the file (the pack's spare weapon arsenal) must be on the hide
-  // list, except the RocketLauncher the Hỏa tiễn thủ actually holds.
-  const file = path.join(process.cwd(), 'public', 'models', 'hoa-tien-thu.glb');
-  const buf = readFileSync(file);
-  const gltf = await new GLTFLoader().parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, '');
-  const hidden = new Set(asset.glb?.hide ?? []);
-  const rigid: string[] = [];
-  gltf.parser.json.nodes?.forEach((n: { mesh?: number; skin?: number; name?: string }) => {
-    if (n.mesh !== undefined && n.skin === undefined && n.name) rigid.push(n.name);
-  });
-  assert.ok(rigid.length > 0, 'expected rigid attachments in hoa-tien-thu.glb');
-  assert.ok(rigid.includes('RocketLauncher'), 'expected RocketLauncher in hoa-tien-thu.glb');
-  assert.ok(!hidden.has('RocketLauncher'), 'RocketLauncher is the held weapon and must stay visible');
-  for (const name of rigid) {
-    if (name === 'RocketLauncher') continue;
-    assert.ok(hidden.has(name), `rigid mesh ${name} not hidden`);
-  }
-});
-
 // voi-mamut.glb (Voi ma mút) and voi-trang.glb (Chiến tượng / tượng binh) share
-// the same battle clip names: Idle = Đứng yên, Walk = Đi bộ, Attack_Bite = Cắn,
-// Attack_Stomp = Dậm chân, Hit = Trúng đòn, Death = Chết, Scale_Pulse = Nhập phong.
+// the same battle clip names: Idle = Đứng yên, Walk = Đi bộ, Attack_Stomp = Dậm chân,
+// Attack_TrunkSweep = Quét vòi, Attack_TrunkToss = Hất vòi, Hit = Trúng đòn, Death = Chết.
 // voi-trang.glb ships Idle / Walk / Attack_Stomp / Attack_TrunkSweep / Hit / Death. No Run/Jump:
 // run falls back to Walk so a charging elephant never glides in the idle pose.
-const VOI_MAMUT_CLIPS = ['Idle', 'Walk', 'Attack_Bite', 'Attack_Stomp', 'Hit', 'Death', 'Scale_Pulse'];
+const VOI_MAMUT_CLIPS = ['Idle', 'Walk', 'Attack_Stomp', 'Attack_TrunkSweep', 'Attack_TrunkToss', 'Hit', 'Death'];
 const VOI_TRANG_CLIPS = ['Idle', 'Walk', 'Attack_Stomp', 'Attack_TrunkSweep', 'Hit', 'Death'];
 
 test('voi-mamut clips map to battle states (Run falls back to Walk)', () => {
   assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'idle'), 'Idle');
   assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'walk'), 'Walk');
   assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'run'), 'Walk');
-  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'attack'), 'Attack_Stomp');
   assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'death'), 'Death');
   assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'jump'), null);
 });
@@ -417,8 +370,8 @@ test('elephant skill clips: stomp / trunk sweep / trunk toss; run never picks th
   assert.equal(pickClipName(VOI_TRANG_CLIPS, 'sweep'), 'Attack_TrunkSweep');
   assert.equal(pickClipName(VOI_TRANG_CLIPS, 'toss'), 'Attack_TrunkSweep');
   assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'stomp'), 'Attack_Stomp');
-  // No trunk clip in voi-mamut.glb: the instance falls back to its attack clip.
-  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'sweep'), null);
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'sweep'), 'Attack_TrunkSweep');
+  assert.equal(pickClipName(VOI_MAMUT_CLIPS, 'toss'), 'Attack_TrunkToss');
   for (const unit of ['mammoth', 'war-elephant']) {
     const ids = SEED.units.find((u) => u.id === unit)!.skillIds;
     for (const id of ['voi-dam-chan', 'voi-quet-voi', 'voi-hat-voi']) assert.ok(ids.includes(id), `${unit} has ${id}`);
@@ -438,7 +391,7 @@ test('committed voi-mamut.glb parses with the seven clips', async () => {
     // fall back to the known clip list above
   }
   assert.deepEqual([...names].sort(), [...VOI_MAMUT_CLIPS].sort());
-  assert.equal(pickClipName(names, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Stomp');
   assert.equal(pickClipName(names, 'run'), 'Walk');
   assert.equal(pickClipName(names, 'death'), 'Death');
 });
@@ -485,6 +438,9 @@ test('elephant yaw corrections map the snout onto engine forward +Z', () => {
   const cases: Array<[string, number, number]> = [
     ['/models/voi-mamut.glb', -1, Math.PI / 2],
     ['/models/voi-trang.glb', 1, -Math.PI / 2],
+    ['/models/khunng%20long%20co%20dai.glb', -1, Math.PI / 2],
+    ['/models/khung-long-bay.glb', -1, Math.PI / 2],
+    ['/models/rong%20lua.glb', -1, Math.PI / 2],
   ];
   for (const [url, headX, corr] of cases) {
     assert.equal(yawCorrectionFor(url), corr, url);
@@ -512,9 +468,9 @@ test('groundLift scales the lift so feet land exactly on y = 0', () => {
   assert.ok(groundLift(0, 2) === 0);
 });
 
-test('giant-golem.glb: hammer is the attack clip, leap the dash clip', () => {
-  const file = path.join(process.cwd(), 'public', 'models', 'giant-golem.glb');
-  assert.ok(existsSync(file), 'public/models/giant-golem.glb is committed');
+test('giant golem.glb: hammer is the attack clip, leap the dash clip', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'giant golem.glb');
+  assert.ok(existsSync(file), 'public/models/giant golem.glb is committed');
   // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
   const buf = readFileSync(file);
   const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
@@ -524,7 +480,7 @@ test('giant-golem.glb: hammer is the attack clip, leap the dash clip', () => {
   assert.equal(pickClipName(names, 'death'), 'Death');
   assert.equal(pickClipName(names, 'walk'), 'Walk');
   const asset = SEED.assets.find((a) => a.id === 'm-giant')!;
-  assert.equal(asset.glb?.url, '/models/giant-golem.glb');
+  assert.equal(asset.glb?.url, '/models/giant%20golem.glb');
   assert.deepEqual(SEED.units.find((u) => u.id === 'giant')!.skillIds, ['golem-nhay']);
 });
 
@@ -542,7 +498,7 @@ test('walk clip speed is known for the elephants (clip is sped up to the real gr
 
 const LINH_MELEE_CLIPS = ['Idle', 'Run', 'Attack_Punch', 'Attack_Slash', 'Attack_Palm', 'Hit', 'Death'];
 
-test('linh-melee.glb: punch attack, palm skill, slash doubles as the stone throw', () => {
+test('linh-melee.glb: punch attack, palm skill, slash doubles as toss', () => {
   assert.equal(pickClipName(LINH_MELEE_CLIPS, 'run'), 'Run');
   assert.equal(pickClipName(LINH_MELEE_CLIPS, 'attack'), 'Attack_Punch');
   assert.equal(pickClipName(LINH_MELEE_CLIPS, 'palm'), 'Attack_Palm');
@@ -553,7 +509,14 @@ test('linh-melee.glb: punch attack, palm skill, slash doubles as the stone throw
   const weapon = (id: string) => SEED.weapons.find((w) => w.id === id)!;
   assert.deepEqual(unit('clubber').skillIds, ['chuong']);
   assert.equal(weapon('chuong').castStyle, 'palm');
-  assert.equal(weapon(unit('stoner').weaponId).castStyle, 'throw');
-  for (const id of ['m-clubber', 'm-stoner']) assert.equal(SEED.assets.find((a) => a.id === id)!.glb?.url, '/models/linh-melee.glb');
+  assert.equal(SEED.assets.find((a) => a.id === 'm-clubber')!.glb?.url, '/models/linh-melee.glb');
   assert.ok(existsSync(path.join(process.cwd(), 'public/models/linh-melee.glb')));
+});
+
+test('death clips that lift the root lose it; slumping ones keep it', () => {
+  const clip = (name: string, y0: number, y1: number) =>
+    new THREE.AnimationClip(name, 1, [new THREE.VectorKeyframeTrack('Root.position', [0, 1], [0, y0, 0, 0, y1, 0]), new THREE.QuaternionKeyframeTrack('Root.quaternion', [0, 1], [0, 0, 0, 1, 0, 0, 0, 1])]);
+  assert.deepEqual(stripRisingDeath(clip('Death', -0.316, 0.407)).tracks.map((t) => t.name), ['Root.quaternion']);
+  assert.equal(stripRisingDeath(clip('Death', 0.5, 0)).tracks.length, 2);
+  assert.equal(stripRisingDeath(clip('Swim', -0.3, 0.4)).tracks.length, 2);
 });

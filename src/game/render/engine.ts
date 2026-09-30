@@ -18,17 +18,19 @@ import { Cinematic, type Shot } from './cinematic';
 import { CameraDirector } from './director';
 import { EffectRenderer, type EffectHost } from './effects';
 import { Fireworks } from './fireworks';
+import { Snowfall } from './snowfall';
 import { HeightField } from './heightField';
 import { Glow } from './glow';
 import { ParticleSystem } from './particles';
 import { ProjectileRenderer } from './projectiles';
 import { FrameRateGovernor, LOWER_TIER, QUALITY, type QualityTier } from './quality';
 import { loadRapier, RagdollWorld } from './ragdoll';
-import { createDiorama } from './diorama';
 import { createIsland, createPlateau } from './island';
 import { createScenery } from './scenery';
+import type { AnimatedTrees } from './animatedTrees';
 import { DebrisSystem } from './debris';
 import { WallRenderer } from './walls';
+import { HealthBars } from './healthBars';
 import { createWater, createZoneOverlay, type Water } from './terrainMesh';
 import { UnitRenderer } from './units';
 import { angleDiff, followsUnit, UnitView, VIEW_MODES, type ViewMode } from './unitView';
@@ -85,7 +87,7 @@ interface ActiveCinematic {
 
 const DUSK_TOP = new THREE.Color('#27305e');
 const DUSK_BOTTOM = new THREE.Color('#f39a5b');
-const SUN_DAY = new THREE.Color('#fff1d8');
+const SUN_DAY = new THREE.Color('#fff4e2');
 const SUN_DUSK = new THREE.Color('#ffb070');
 const FIREWORK_COLORS: Record<Side, string[]> = {
   blue: ['#4fb3ff', '#7cf0ff', '#ffd23f', '#ffffff', '#b98cff'],
@@ -131,8 +133,11 @@ export class BattleEngine {
   private readonly mapGroup = new THREE.Group();
   private zones: Partial<Record<Side, THREE.Group>> | null = null;
   private water: Water | null = null;
+  private trees: AnimatedTrees[] = [];
+  private snow: Snowfall | null = null;
   private readonly units: UnitRenderer;
   private readonly walls: WallRenderer;
+  private readonly healthBars = new HealthBars();
   private readonly debris = new DebrisSystem();
   private readonly projectiles: ProjectileRenderer;
   private readonly particles = new ParticleSystem();
@@ -144,6 +149,10 @@ export class BattleEngine {
   private readonly audio: AudioEngine;
   /** Camera shake energy (0..1), decays every frame. */
   private shakeAmount = 0;
+  /** Earthquake rumble: keeps the shake from dying down until it runs out (s). */
+  private rumbleLeft = 0;
+  private rumbleTime = 1;
+  private rumbleAmount = 0;
   /** Interpolation factor of the last rendered sim frame. */
   private alpha = 1;
   private readonly fireworks = new Fireworks();
@@ -154,8 +163,8 @@ export class BattleEngine {
   private readonly daySky = { top: new THREE.Color(), bottom: new THREE.Color() };
   private ragdolls: RagdollWorld | null = null;
   private ragdollToken = 0;
-  private readonly sun = new THREE.DirectionalLight('#fff1d8', 2.6);
-  private readonly hemi = new THREE.HemisphereLight('#dcecff', '#5a4a30', 1.25);
+  private readonly sun = new THREE.DirectionalLight('#fff4e2', 2.1);
+  private readonly hemi = new THREE.HemisphereLight('#e6f0ff', '#b7a48c', 1.6);
   private readonly sky: THREE.Mesh<THREE.SphereGeometry, THREE.Material>;
   private readonly skyTop = new THREE.Color();
   private readonly skyBottom = new THREE.Color();
@@ -235,7 +244,7 @@ export class BattleEngine {
     this.renderer = gpu ? gpu.createRenderer(!coarse) : new THREE.WebGLRenderer({ antialias: !coarse });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.xr.enabled = true;
     this.timer.connect(document);
@@ -270,6 +279,8 @@ export class BattleEngine {
     this.sky.frustumCulled = false;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
+    // Soft toy-diorama shadow edges.
+    this.sun.shadow.radius = 3;
     this.units = new UnitRenderer(bundle);
     this.walls = new WallRenderer(bundle);
     this.projectiles = new ProjectileRenderer(bundle);
@@ -293,8 +304,23 @@ export class BattleEngine {
         const near = THREE.MathUtils.clamp(1 - Math.hypot(this.rts.target.x - x, this.rts.target.z - z) / 90, 0, 1);
         this.shakeAmount = Math.min(1, this.shakeAmount + amount * near);
       },
+      rumble: (amount, seconds, x, z) => {
+        if (!this.bundle.settings.cameraShake) return;
+        const near = THREE.MathUtils.clamp(1 - Math.hypot(this.rts.target.x - x, this.rts.target.z - z) / 90, 0, 1);
+        const now = this.rumbleLeft > 0 ? (this.rumbleAmount * this.rumbleLeft) / this.rumbleTime : 0;
+        if (amount * near <= now) return;
+        this.rumbleAmount = Math.min(1, amount * near);
+        this.rumbleLeft = this.rumbleTime = seconds;
+      },
+      unitSize: (id, out) => {
+        const u = this.sim?.units[id];
+        if (!u) return false;
+        out.set(u.def.radius, u.def.height);
+        return true;
+      },
+      debris: (b) => this.debris.burst(b),
     };
-    this.scene.add(this.sky, this.hemi, this.sun, this.sun.target, this.mapGroup, this.units.group, this.walls.group, this.debris.group, this.projectiles.group, this.effects.group, this.particles.group, this.fireworks.group);
+    this.scene.add(this.sky, this.hemi, this.sun, this.sun.target, this.mapGroup, this.units.group, this.healthBars.group, this.walls.group, this.debris.group, this.projectiles.group, this.effects.group, this.particles.group, this.fireworks.group);
 
     this.xr = new XrControls(this.renderer, {
       select: (origin, direction) => this.xrSelect(origin, direction),
@@ -320,7 +346,7 @@ export class BattleEngine {
       this.xrTurn = 0;
       this.tablePlaced = false;
       this.tableScale = 0;
-      this.shakeAmount = 0;
+      this.shakeAmount = this.rumbleLeft = 0;
       this.governor.hold();
     });
     xrEvents.addEventListener('sessionend', () => {
@@ -351,15 +377,15 @@ export class BattleEngine {
     this.terrain = terrain;
     this.heights = new HeightField(terrain);
     this.governor.hold();
-    if (terrain.diorama) {
-      // Hex tiles carry their own water and scenery.
-      this.water = null;
-      this.mapGroup.add(createDiorama(terrain));
-    } else {
-      this.mapGroup.add(terrain.island ? createIsland(terrain) : createPlateau(terrain));
-      this.water = createWater(terrain, this.gpu?.waterMaterial);
-      if (this.water) this.mapGroup.add(this.water.mesh);
-      this.mapGroup.add(createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a]))));
+    this.mapGroup.add(terrain.island ? createIsland(terrain) : createPlateau(terrain));
+    this.water = createWater(terrain, this.gpu?.waterMaterial);
+    if (this.water) this.mapGroup.add(this.water.mesh);
+    const scenery = createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a])));
+    this.trees = scenery.trees;
+    this.mapGroup.add(scenery);
+    if (map.id === 'thanh-tuyet') {
+      this.snow = new Snowfall(terrain);
+      this.mapGroup.add(this.snow.mesh);
     }
     this.zones = {};
     for (const side of terrain.activeSides) {
@@ -394,6 +420,7 @@ export class BattleEngine {
     this.sim = null;
     this.mode = 'deploy';
     this.units.clear();
+    this.healthBars.clear();
     this.walls.clear();
     this.debris.clear();
     this.projectiles.clear();
@@ -465,7 +492,7 @@ export class BattleEngine {
     this.projectiles.clear();
     this.particles.clear();
     this.effects.clear();
-    this.shakeAmount = 0;
+    this.shakeAmount = this.rumbleLeft = 0;
     this.mode = 'battle';
     this.acc = 0;
     this.governor.hold();
@@ -883,11 +910,20 @@ export class BattleEngine {
     if (!t) return null;
     const zone = t.zoneOf(side);
     const m = DEPLOY_MARGIN;
+    const yaw = this.yawOf(side);
+    // Ground direction the camera looks along: no margin behind the zone, so it sits right on the bottom UI.
+    const fx = -Math.cos(yaw);
+    const fz = -Math.sin(yaw);
     const points: THREE.Vector3[] = [];
-    for (const x of [zone.x0 - m, zone.x1 + m]) for (const z of [zone.z0 - m, zone.z1 + m]) points.push(this.ground(x, z));
+    for (const [x, sx] of [[zone.x0, -m], [zone.x1, m]]) {
+      for (const [z, sz] of [[zone.z0, -m], [zone.z1, m]]) {
+        const back = Math.min(0, sx * fx + sz * fz);
+        points.push(this.ground(x + sx - back * fx, z + sz - back * fz));
+      }
+    }
     // Distance at which a metre at the aim point spans DEPLOY_MIN_PX pixels.
     const maxDistance = (this.host.clientHeight || 600) / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * DEPLOY_MIN_PX);
-    return this.rts.fit(points, this.yawOf(side), DEPLOY_PITCH, maxDistance);
+    return this.rts.fit(points, yaw, DEPLOY_PITCH, maxDistance);
   }
 
   private zoneCenter(side: Side): { x: number; z: number } {
@@ -942,12 +978,15 @@ export class BattleEngine {
     this.skyBottom.copy(this.daySky.bottom).lerp(DUSK_BOTTOM, k * 0.7);
     if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.copy(this.skyBottom);
     this.sun.color.copy(SUN_DAY).lerp(SUN_DUSK, k);
-    this.sun.intensity = 2.6 * (1 - 0.45 * k);
-    this.hemi.intensity = 1.25 * (1 - 0.4 * k);
+    this.sun.intensity = 2.1 * (1 - 0.45 * k);
+    this.hemi.intensity = 1.6 * (1 - 0.4 * k);
   }
 
   /** Removes the map and frees what it owned on the GPU (scenery geometry and material are shared caches). */
   private clearMap(): void {
+    for (const t of this.trees) t.dispose();
+    this.trees = [];
+    this.snow = null;
     for (const child of [...this.mapGroup.children]) {
       this.mapGroup.remove(child);
       child.traverse((o) => {
@@ -1325,6 +1364,7 @@ export class BattleEngine {
       this.units.manage(simDt, this.unitSettings);
       this.units.update(sim, this.mode === 'battle' ? this.alpha : 1, animDt, this.hidden, this.camera);
       this.walls.update(animDt, this.hidden);
+      this.healthBars.update(sim, this.mode === 'battle' ? this.alpha : 1, this.director.side, this.hidden, this.camera);
       this.projectiles.update(sim, this.alpha, simDt, this.particles);
     }
     this.effects.update(animDt, this.mode === 'battle' ? sim : null, this.alpha, this.effectHost);
@@ -1334,8 +1374,14 @@ export class BattleEngine {
     this.fireworks.update(dt);
     this.updateDusk(dt);
     this.water?.update(this.time);
+    for (const t of this.trees) t.update(animDt, this.mode === 'battle' ? sim : null);
+    this.snow?.update(dt, this.time);
     this.sky.position.setFromMatrixPosition(this.camera.matrixWorld);
-    if (vr) this.shakeAmount = 0;
+    if (vr) this.shakeAmount = this.rumbleLeft = 0;
+    if (this.rumbleLeft > 0) {
+      this.rumbleLeft = Math.max(0, this.rumbleLeft - dt);
+      this.shakeAmount = Math.max(this.shakeAmount, (this.rumbleAmount * this.rumbleLeft) / this.rumbleTime);
+    }
     if (this.shakeAmount > 0.002) {
       const s = this.shakeAmount * this.shakeAmount * (0.15 + this.camera.position.distanceTo(this.rts.target) * 0.01);
       this.camera.position.x += (Math.random() * 2 - 1) * s;
@@ -1399,6 +1445,7 @@ export class BattleEngine {
             break;
           }
           this.emit(e.blocked ? 'spark' : w?.hitParticleId, e.x, e.y, e.z, { x: e.dx, y: 0.6, z: e.dz });
+          this.effects.onEvent(e, this.effectHost);
           this.units.onHit(e);
           break;
         }
@@ -1451,11 +1498,13 @@ export class BattleEngine {
           const wet = terrain.inWater(e.x, e.z) && e.y <= terrain.waterLevel + 0.4;
           this.emit(wet ? settings.splashParticleId : def.impactParticleId, e.x, e.y + 0.1, e.z, { x: -e.dx, y: 0.8, z: -e.dz });
           if (e.stuck && e.ground && !wet) this.projectiles.stick(e.defId, e.x, e.y, e.z, e.dx, e.dy, e.dz);
+          if (!wet) this.effects.onEvent(e, this.effectHost);
           break;
         }
         case 'heal': {
           const w = this.weapons.get(e.weaponId);
           this.emit(w?.hitParticleId, e.x, e.y, e.z);
+          this.effects.onEvent(e, this.effectHost);
           break;
         }
         case 'land': {

@@ -30,6 +30,8 @@ export interface BotArmyOptions {
   budget: number;
   enemy?: readonly Placement[];
   seed: number;
+  /** Pack the formation against the zone's back edge instead of the front line. */
+  fromBack?: boolean;
 }
 
 /** Rough damage (or healing) per second of one ability, counting the targets an area usually reaches. */
@@ -113,7 +115,7 @@ export function generateBotArmy(opts: BotArmyOptions): Placement[] {
     remaining -= unit.cost;
   }
 
-  return layout(picked, bot.formation, terrain, side, rng);
+  return layout(picked, bot.formation, terrain, side, rng, opts.fromBack);
 }
 
 function weightedPick(group: Rated[], randomness: number, rng: Rng): UnitDef {
@@ -188,7 +190,7 @@ function counterPlan(opts: BotArmyOptions): { shares: Record<Role, number>; bonu
 
 const ROLE_RANK: Record<Role, number> = { melee: 0, support: 1, ranged: 2, siege: 3 };
 
-function layout(units: UnitDef[], formation: BotDef['formation'], terrain: Terrain, side: Side, rng: Rng): Placement[] {
+function layout(units: UnitDef[], formation: BotDef['formation'], terrain: Terrain, side: Side, rng: Rng, fromBack = false): Placement[] {
   const zone = terrain.zoneOf(side);
   const dir = side === 'blue' ? -1 : 1; // from the front line back into the zone
   const front = side === 'blue' ? zone.x1 - 1.5 : zone.x0 + 1.5;
@@ -199,20 +201,27 @@ function layout(units: UnitDef[], formation: BotDef['formation'], terrain: Terra
   const out: Placement[] = [];
   const cx = (zone.x0 + zone.x1) / 2;
   const cz = (zone.z0 + zone.z1) / 2;
-  const put = (u: UnitDef, x: number, z: number) => {
-    x = clamp(x, Math.min(front, back), Math.max(front, back));
-    z = clamp(z, zMin, zMax);
-    // Island: the zone's corners are off the coast; slide toward the zone centre until on land.
-    for (let i = 0; i < 30 && !terrain.onLand(x, z, 1.5); i++) {
-      x = cx + (x - cx) * 0.9;
-      z = cz + (z - cz) * 0.9;
+  const put = (u: UnitDef, x: number, z: number) => out.push({ unitId: u.id, x, z });
+  const finish = () => {
+    // Slide the whole formation back so its rearmost unit sits on the back edge.
+    const shift = fromBack && out.length > 0 ? back - (dir < 0 ? Math.min(...out.map((p) => p.x)) : Math.max(...out.map((p) => p.x))) : 0;
+    for (const p of out) {
+      let x = clamp(p.x + shift, Math.min(front, back), Math.max(front, back));
+      let z = clamp(p.z, zMin, zMax);
+      // Island: the zone's corners are off the coast; slide toward the zone centre until on land.
+      for (let i = 0; i < 30 && !terrain.onLand(x, z, 1.5); i++) {
+        x = cx + (x - cx) * 0.9;
+        z = cz + (z - cz) * 0.9;
+      }
+      p.x = x;
+      p.z = z;
     }
-    out.push({ unitId: u.id, x, z });
+    return out;
   };
 
   if (formation === 'scatter') {
     for (const u of units) put(u, rng.range(zone.x0 + 1, zone.x1 - 1), rng.range(zMin, zMax));
-    return out;
+    return finish();
   }
   if (formation === 'blob') {
     const cz = rng.range(-width * 0.15, width * 0.15);
@@ -223,7 +232,7 @@ function layout(units: UnitDef[], formation: BotDef['formation'], terrain: Terra
       const depth = (i / Math.max(1, sorted.length)) * radius * 1.4;
       put(u, front + dir * (depth + Math.abs(dx) * 2), cz + dz * radius);
     });
-    return out;
+    return finish();
   }
 
   const groups = new Map<number, UnitDef[]>();
@@ -254,5 +263,5 @@ function layout(units: UnitDef[], formation: BotDef['formation'], terrain: Terra
     const rows = Math.ceil(group.length / perRow);
     depth += rows * spacing + 1.5;
   }
-  return out;
+  return finish();
 }

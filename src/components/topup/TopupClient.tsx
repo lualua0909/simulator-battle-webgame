@@ -133,19 +133,19 @@ export default function TopupClient() {
               <Swords />
             </span>
             <span className="min-w-0 leading-none">
-              <span className="block truncate text-base tracking-wide sm:text-lg">MINI BATTLE</span>
-              <span className="block truncate text-sm text-[#b25b00]">NẠP XU</span>
+              <span className="block truncate text-base tracking-wide sm:text-lg">CLAY BATTLE</span>
+              <span className="block truncate text-sm text-[#b25b00]">{t('topup.navTitle')}</span>
             </span>
           </Link>
-          <nav className="hidden items-center gap-4 md:flex" aria-label="Điều hướng">
-            <Link href="/#choi-ngay" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
-              Chơi ngay
+          <nav className="hidden items-center gap-4 md:flex" aria-label={t('nav.navLabel')}>
+            <Link href="/#play-now" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+              {t('nav.playNow')}
             </Link>
-            <Link href="/#cach-choi" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
-              Cách chơi
+            <Link href="/#how-to-play" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+              {t('nav.howTo')}
             </Link>
-            <Link href="/#tinh-nang" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
-              Tính năng
+            <Link href="/#features" className="rounded-lg px-2 py-1 transition hover:bg-[#ffe9b8]">
+              {t('nav.features')}
             </Link>
           </nav>
           <PlayerHud />
@@ -157,7 +157,7 @@ export default function TopupClient() {
         <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 lg:grid-cols-2">
         {/* ---------------- trái: gói + đơn ---------------- */}
         <section className="glass-card p-5">
-          <h2 className="break-words text-sm font-bold tracking-[0.1em] text-[#c99a4b] sm:tracking-[0.2em]">GÓI NẠP</h2>
+          <h2 className="break-words text-sm font-bold tracking-[0.1em] text-[#c99a4b] sm:tracking-[0.2em]">{t('topup.packages')}</h2>
           <div className="mt-3 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             {packages.map((p, i) => (
               <button
@@ -168,39 +168,39 @@ export default function TopupClient() {
                 <span className="break-words text-base text-white">{formatVnd(p.vnd)} = {p.coins} xu</span>
               </button>
             ))}
-            {packages.length === 0 && <p className="col-span-2 text-white/70">Đang tải gói nạp…</p>}
+            {packages.length === 0 && <p className="col-span-2 text-white/70">{t('topup.loadingPackages')}</p>}
           </div>
 
-          <h2 className="mt-6 break-words text-sm font-bold tracking-[0.1em] text-[#c99a4b] sm:tracking-[0.2em]">TẠO ĐƠN & QUÉT MÃ QR</h2>
-          <p className="mt-1 text-white/75">Giữ nguyên số tiền và nội dung chuyển khoản để hệ thống khớp lệnh nhanh.</p>
+          <h2 className="mt-6 break-words text-sm font-bold tracking-[0.1em] text-[#c99a4b] sm:tracking-[0.2em]">{t('topup.createAndScan')}</h2>
+          <p className="mt-1 text-white/75">{t('topup.exactTransfer')}</p>
 
           {bank && (
             <div className="mt-4 rounded-xl bg-white/[0.05] p-4">
               <dl className="flex flex-col gap-2 text-[15px]">
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="shrink-0 text-white/70">Ngân hàng</dt>
+                  <dt className="shrink-0 text-white/70">{t('topup.bank')}</dt>
                   <dd className="min-w-0 break-words text-right font-bold text-white">{bank.bankName}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="shrink-0 text-white/70">Chủ tài khoản</dt>
+                  <dt className="shrink-0 text-white/70">{t('topup.accountHolder')}</dt>
                   <dd className="min-w-0 break-words text-right font-bold text-white">{bank.accountName}</dd>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <dt className="shrink-0 text-white/70">Số tài khoản</dt>
+                  <dt className="shrink-0 text-white/70">{t('topup.accountNumber')}</dt>
                   <dd className="flex min-w-0 flex-1 items-center justify-end gap-2 break-all text-right font-bold tracking-wider text-white">
                     {bank.accountNo}
                     <button onClick={() => void onCopy('stk', bank.accountNo)} className="min-h-[36px] shrink-0 rounded-md border border-white/15 px-1.5 py-0.5 text-sm text-white/70 hover:bg-white/10" title="Sao chép STK">
-                      {copied === 'stk' ? <><Check /> Đã chép</> : 'Chép'}
+                      {copied === 'stk' ? <><Check /> {t('topup.copied')}</> : t('topup.copy')}
                     </button>
                   </dd>
                 </div>
                 {order && (
                   <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-2">
-                    <dt className="shrink-0 text-white/70">Nội dung CK</dt>
+                    <dt className="shrink-0 text-white/70">{t('topup.transferContent')}</dt>
                     <dd className="flex min-w-0 flex-1 items-center justify-end gap-2 break-all text-right font-bold tracking-widest text-[#ffd76a]">
                       {order.content}
                       <button onClick={() => void onCopy('content', order.content)} className="min-h-[36px] shrink-0 rounded-md border border-[#e8b34a]/40 px-1.5 py-0.5 text-sm text-[#ffd76a] hover:bg-[#e8b34a]/10" title="Sao chép nội dung">
-                        {copied === 'content' ? <><Check /> Đã chép</> : 'Chép'}
+                        {copied === 'content' ? <><Check /> {t('topup.copied')}</> : t('topup.copy')}
                       </button>
                     </dd>
                   </div>
@@ -211,11 +211,11 @@ export default function TopupClient() {
 
           <div className="mt-3 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 sm:px-4">
-              <div className="text-sm text-white/70">Số tiền</div>
+              <div className="text-sm text-white/70">{t('topup.amount')}</div>
               <div className="break-words text-right text-lg text-white">{selected ? formatVnd(selected.vnd) : '—'}</div>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 sm:px-4">
-              <div className="text-sm text-white/70">Xu nhận được</div>
+              <div className="text-sm text-white/70">{t('topup.coinsReceived')}</div>
               <div className="break-words text-right text-lg text-white">{selected ? formatTopupCoins(selected.coins) : '—'}</div>
             </div>
           </div>
@@ -224,17 +224,17 @@ export default function TopupClient() {
 
           {!user && !authLoading && (
             <button onClick={() => openAuth('signin')} className="mt-4 w-full rounded-xl bg-gradient-to-b from-[#f5c86a] to-[#d99a2b] px-4 py-3 font-bold text-[#3a2500]">
-              Đăng nhập để nạp xu
+              {t('topup.signin')}
             </button>
           )}
 
           <Link href="/" className="mt-4 block text-center font-bold text-[#d9a441] hover:underline">
-            Quay lại trang chính
+            {t('topup.backHome')}
           </Link>
 
           {cfg && cfg.orders.length > 0 && (
             <div className="mt-4">
-              <h3 className="text-sm font-bold tracking-wider text-white/75">ĐƠN GẦN ĐÂY</h3>
+              <h3 className="text-sm font-bold tracking-wider text-white/75">{t('topup.recentOrders')}</h3>
               <ul className="mt-2 flex flex-col gap-1.5">
                 {cfg.orders.slice(0, 5).map((o) => (
                   <li key={o.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
@@ -251,12 +251,12 @@ export default function TopupClient() {
 
         {/* ---------------- phải: hướng dẫn + QR ---------------- */}
         <section className="glass-card flex flex-col p-5">
-          <h2 className="break-words text-sm font-bold tracking-[0.1em] text-[#c99a4b] sm:tracking-[0.2em]">HƯỚNG DẪN NHANH</h2>
+          <h2 className="break-words text-sm font-bold tracking-[0.1em] text-[#c99a4b] sm:tracking-[0.2em]">{t('topup.quickGuide')}</h2>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-white/75">
-            <li>Nhấn “Tạo đơn”, mở app ngân hàng và quét QR.</li>
-            <li>Hệ thống đối chiếu & admin duyệt chỉ vài phút.</li>
+            <li>{t('topup.guide1')}</li>
+            <li>{t('topup.guide2')}</li>
           </ol>
-          <p className="mt-2 text-white/70">Bạn có thể tải QR hoặc chuyển khoản thủ công, miễn giữ đúng nội dung.</p>
+          <p className="mt-2 text-white/70">{t('topup.manualHint')}</p>
 
           <div className="mt-4 flex-1 rounded-xl bg-[#f2f2f4] p-3 text-center text-[#222]">
             {order && qr ? (
@@ -271,7 +271,7 @@ export default function TopupClient() {
                   <img src={qr} alt={`QR nạp ${order.content}`} onError={() => setQrOk(false)} className="mx-auto mt-2 max-h-80 w-full max-w-80 rounded-lg border border-[#1e3a8a]/40 bg-white object-contain" />
                 ) : (
                   <div className="mx-auto mt-2 max-w-80 rounded-lg border border-dashed border-[#1e3a8a]/40 bg-white p-6 text-sm">
-                    Không tải được ảnh QR tự động. Hãy chuyển khoản thủ công theo thông tin bên trái, giữ đúng số tiền và nội dung <b>{order.content}</b>.
+                    {t('topup.qrError')} <b>{order.content}</b>.
                   </div>
                 )}
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-2 break-words text-sm font-bold">
@@ -281,10 +281,10 @@ export default function TopupClient() {
                 </div>
                 <div className="mt-1 break-words text-sm font-bold uppercase">{order.bank.accountName}</div>
                 <div className="break-words text-sm tracking-widest">{order.bank.accountNo}</div>
-                <div className="break-words text-sm">Số tiền: {formatVnd(order.amountVnd).replace(' đ', '')} VND</div>
-                <div className="break-words text-sm font-bold">Nội dung: {order.content}</div>
+                <div className="break-words text-sm">{t('topup.amount')}: {formatVnd(order.amountVnd).replace(' đ', '')} VND</div>
+                <div className="break-words text-sm font-bold">{t('topup.transferContent')}: {order.content}</div>
                 <button onClick={() => void downloadQr()} className="mx-auto mt-2 min-h-[44px] rounded-lg border border-[#d9a441]/60 bg-white px-4 py-1.5 text-sm font-bold text-[#8a5a00] hover:bg-[#fff7e6]">
-                  Tải QR
+                  {t('topup.downloadQr')}
                 </button>
               </div>
             ) : (
@@ -294,7 +294,7 @@ export default function TopupClient() {
                   <span className="text-[#d11f2d]">IET</span>
                   <span className="text-[#1e3a8a]">QR</span>
                 </div>
-                <p className="w-full max-w-full break-words text-sm sm:max-w-72">Chưa có đơn nạp. Chọn gói bên trái rồi nhấn “Tạo đơn và hiển thị QR” — mã QR động theo đúng số tiền và nội dung của bạn sẽ hiện ở đây.</p>
+                <p className="w-full max-w-full break-words text-sm sm:max-w-72">{t('topup.noOrder')}</p>
               </div>
             )}
           </div>
@@ -304,9 +304,9 @@ export default function TopupClient() {
             disabled={busy || (!user && !!authLoading)}
             className="mt-4 w-full rounded-xl bg-gradient-to-b from-[#f5c86a] to-[#d99a2b] px-4 py-3 font-bold text-[#3a2500] shadow-[0_4px_0_0_#7a5200] transition active:translate-y-[2px] active:shadow-none disabled:opacity-60"
           >
-            {busy ? 'Đang tạo đơn…' : order ? 'Tạo đơn mới và hiển thị QR' : 'Tạo đơn và hiển thị QR'}
+            {busy ? t('topup.creating') : order ? t('topup.createNew') : t('topup.create')}
           </button>
-          {order && <p className="mt-2 break-words text-center text-sm text-white/70">Đơn {order.content} đang chờ duyệt — sau khi chuyển khoản, admin sẽ cộng {formatTopupCoins(order.coins)} trong vài phút.</p>}
+          {order && <p className="mt-2 break-words text-center text-sm text-white/70">{t('topup.pendingPrefix')} {order.content} {t('topup.pendingSuffix')} {formatTopupCoins(order.coins)}.</p>}
         </section>
         </div>
       </section>

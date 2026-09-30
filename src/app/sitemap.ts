@@ -8,6 +8,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE}/`, lastModified: now, changeFrequency: 'daily', priority: 1 },
     { url: `${SITE}/play`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
     { url: `${SITE}/models`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${SITE}/nap-xu`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${SITE}/collection`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
+    { url: `${SITE}/topup`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
   ];
 }

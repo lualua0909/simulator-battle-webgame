@@ -170,7 +170,7 @@ export default function ModelsGallery(props: Props) {
       <aside className="max-h-[28dvh] w-full shrink-0 overflow-y-auto overscroll-contain border-b-2 border-ink bg-parch p-3 lg:h-auto lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r-2">
         <div className="flex items-baseline justify-between gap-2">
           <Link href="/" className="font-display text-lg">
-            <ArrowLeft /> Mini Battle Simulator
+            <ArrowLeft /> Clay Battle
           </Link>
           {admin && (
             <Link href="/admin" className="text-xs underline">
@@ -189,7 +189,7 @@ export default function ModelsGallery(props: Props) {
         <ul className="mt-1 space-y-0.5 text-sm">
           {creating && <li>{item(true, () => undefined, <><Pencil /> Lính mới</>)}</li>}
           {bundle.units.map((u) => (
-            <li key={u.id}>{item(!creating && savedUnit?.id === u.id && !asset && !skill, () => select({ unit: u.id }), u.name)}</li>
+            <li key={u.id}>{item(!creating && savedUnit?.id === u.id && !asset && !skill, () => select({ unit: u.id }), u.hidden ? `${u.name} (ẩn)` : u.name)}</li>
           ))}
         </ul>
         <h2 className="mt-3 font-display text-sm">Kỹ năng & đòn đánh</h2>

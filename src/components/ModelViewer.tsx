@@ -19,20 +19,24 @@ interface Props {
   explode?: boolean;
   onPick?: (part: string | null) => void;
   className?: string;
+  transparent?: boolean;
+  showGround?: boolean;
+  /** Camera distance factor; below 1 frames tighter (the card lets the model fill the frame). */
+  fit?: number;
 }
 
 const partMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
 const smoothPartMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 });
 
-export default function ModelViewer({ template, weapon, anim = 'idle', yaw, explode = false, onPick, className }: Props) {
+export default function ModelViewer({ template, weapon, anim = 'idle', yaw, explode = false, onPick, className, transparent = false, showGround = true, fit = 1.25 }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const state = useRef({ anim, yaw, explode, onPick, weapon });
-  state.current = { anim, yaw, explode, onPick, weapon };
+  const state = useRef({ anim, yaw, explode, onPick, weapon, fit });
+  state.current = { anim, yaw, explode, onPick, weapon, fit };
 
   useEffect(() => {
     const el = host.current;
     if (!el || !template) return;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: transparent, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -40,7 +44,7 @@ export default function ModelViewer({ template, weapon, anim = 'idle', yaw, expl
     el.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#dfeaf2');
+    if (!transparent) scene.background = new THREE.Color('#dfeaf2');
     scene.add(new THREE.HemisphereLight('#eaf4ff', '#6b5a3a', 1.6));
     const sun = new THREE.DirectionalLight('#fff4de', 2.6);
     sun.castShadow = true;
@@ -50,7 +54,7 @@ export default function ModelViewer({ template, weapon, anim = 'idle', yaw, expl
     const bounds = template.bounds.clone();
     const size = bounds.getSize(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
-    const radius = Math.max(size.x, size.y, size.z) * 0.5 + 0.2;
+    const radius = Math.max(size.x, size.y, size.z) * 0.55;
     const shadowCam = sun.shadow.camera;
     shadowCam.left = shadowCam.bottom = -radius * 2;
     shadowCam.right = shadowCam.top = radius * 2;
@@ -59,10 +63,12 @@ export default function ModelViewer({ template, weapon, anim = 'idle', yaw, expl
     sun.target.position.copy(center);
     shadowCam.updateProjectionMatrix();
 
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(radius * 2.4, 32), new THREE.MeshStandardMaterial({ color: '#9cc47a', roughness: 1 }));
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    const ground = showGround ? new THREE.Mesh(new THREE.CircleGeometry(radius * 2.4, 32), new THREE.MeshStandardMaterial({ color: '#9cc47a', roughness: 1 })) : null;
+    if (ground) {
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+    }
 
     const camera = new THREE.PerspectiveCamera(35, 1, 0.05, radius * 40);
     const meshes: THREE.Mesh[] = template.parts.map((p) => {
@@ -149,6 +155,7 @@ export default function ModelViewer({ template, weapon, anim = 'idle', yaw, expl
       for (let i = 0; i < meshes.length; i++) {
         const m = meshes[i];
         m.matrix.copy(poses[i]);
+        m.matrix.elements[13] += Math.sin(time * 2.2) * 0.035;
         if (s.explode) {
           tmp.setFromMatrixPosition(poses[i]).sub(center);
           const push = tmp.clone().multiplyScalar(0.9).add(tmp.clone().normalize().multiplyScalar(radius * 0.15));
@@ -159,7 +166,7 @@ export default function ModelViewer({ template, weapon, anim = 'idle', yaw, expl
       }
       if (s.yaw === undefined && !dragging) orbitYaw += dt * 12;
       const yawDeg = s.yaw ?? orbitYaw;
-      const dist = (radius / Math.tan((camera.fov * Math.PI) / 360)) * 1.25 * zoom;
+      const dist = (radius / Math.tan((camera.fov * Math.PI) / 360)) * s.fit * zoom;
       const yr = (yawDeg * Math.PI) / 180;
       const pr = (orbitPitch * Math.PI) / 180;
       camera.position.set(center.x + Math.sin(yr) * Math.cos(pr) * dist, center.y + Math.sin(pr) * dist, center.z + Math.cos(yr) * Math.cos(pr) * dist);
@@ -176,7 +183,7 @@ export default function ModelViewer({ template, weapon, anim = 'idle', yaw, expl
       window.removeEventListener('pointerup', onUp);
       renderer.dispose();
       renderer.domElement.remove();
-      ground.geometry.dispose();
+      ground?.geometry.dispose();
       (window as unknown as { __viewerReady?: boolean }).__viewerReady = false;
     };
   }, [template]);

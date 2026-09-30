@@ -1,5 +1,5 @@
 // Rồng Xanh (baby dragon) procedural model. Rồng lửa (western/fire dragon) is GLB-only
-// (public/models/rong-lua.glb): its old procedural builder was deleted, so there is no
+// (public/models/rong lua.glb): its old procedural builder was deleted, so there is no
 // fallback — see createAssetModel in ./index.ts. The baby keeps its procedural model as
 // the fallback for m-baby-dragon.
 import * as THREE from 'three';
@@ -7,7 +7,7 @@ import type { DragonParams } from '@/shared/schema';
 import { detail, implicit, mesh, modelRoot, part, sdCapsule, sdEllipsoid, shade, smoothUnion, socket, subtract, triangles, type Sdf, type Vec3 } from './common';
 
 export function createDragonModel(p: DragonParams): THREE.Group {
-  if (p.type !== 'baby') throw new Error('procedural fire dragon removed: Rồng lửa is GLB-only (public/models/rong-lua.glb)');
+  if (p.type !== 'baby') throw new Error('procedural fire dragon removed: Rồng lửa is GLB-only (public/models/rong lua.glb)');
   return createBabyDragonModel(p);
 }
 

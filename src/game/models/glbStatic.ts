@@ -20,6 +20,7 @@ interface Baked {
 }
 
 const cache = new Map<string, Baked>();
+const animated = new Map<string, AnimatedGlb>();
 const pending = new Map<string, Promise<void>>();
 
 interface SampledMap {
@@ -160,8 +161,44 @@ function ground(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   return geo;
 }
 
+/** A skinned scenery file with clips (cay-thong-animation.glb): kept live for render/animatedTrees.ts. */
+export interface AnimatedGlb {
+  scene: THREE.Object3D;
+  clips: THREE.AnimationClip[];
+  /** The skinned mesh's bind-pose geometry with the diffuse map sampled into a `color` attribute. */
+  geometry: THREE.BufferGeometry;
+}
+
+/** Samples the diffuse map (× base colour) per vertex, keeping the skinned geometry indexed. */
+function colorSkinned(m: THREE.SkinnedMesh): THREE.BufferGeometry {
+  const g = m.geometry.clone();
+  const material = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial;
+  const base = material.color ?? new THREE.Color('#ffffff');
+  const sampled = sampleMap(material.map ?? null);
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute | undefined;
+  const count = g.getAttribute('position').count;
+  const col = new Float32Array(count * 3);
+  const c = new THREE.Color();
+  for (let i = 0; i < count; i++) {
+    if (sampled && uv) c.copy(base).multiply(sampleColor(sampled, uv.getX(i), uv.getY(i), c.clone()));
+    else c.copy(base);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  // Flat shading derives face normals itself; the attribute only has to exist.
+  if (!g.getAttribute('normal')) g.computeVertexNormals();
+  return g;
+}
+
 async function loadOne(loader: GLTFLoader, url: string): Promise<void> {
   const gltf = await loader.loadAsync(url);
+  let skinned: THREE.SkinnedMesh | undefined;
+  gltf.scene.traverse((o) => {
+    if (!skinned && (o as THREE.SkinnedMesh).isSkinnedMesh) skinned = o as THREE.SkinnedMesh;
+  });
+  if (skinned && gltf.animations.length) {
+    animated.set(url, { scene: gltf.scene, clips: gltf.animations, geometry: colorSkinned(skinned) });
+  }
   const geometry = ground(bakeStatic(gltf.scene));
   geometry.computeBoundingBox();
   const box = geometry.boundingBox!;
@@ -192,6 +229,11 @@ export function preloadCustomGlbs(assets: ReadonlyArray<Pick<AssetDef, 'glb' | '
       .filter((u): u is string => !!u),
   );
   return Promise.all([...urls].map(ensureLoading)).then(() => undefined);
+}
+
+/** The live skinned source of an animated scenery glb, or undefined (static file / not loaded yet). */
+export function getAnimatedGlb(url: string): AnimatedGlb | undefined {
+  return animated.get(url);
 }
 
 /** A fresh Group wrapping the baked override geometry, or undefined before it has loaded. */

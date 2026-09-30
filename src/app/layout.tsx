@@ -10,19 +10,20 @@ import './globals.css';
 const paytone = Paytone_One({ weight: '400', subsets: ['latin', 'vietnamese'], variable: '--font-paytone' });
 
 const SITE_URL = 'https://mini-game-01.vercel.app';
-const SITE_NAME = 'Mini Battle Simulator';
+const SITE_NAME = 'Clay Battle - Đại chiến đất sét';
 const DESCRIPTION =
   'Low-poly epic battles: deploy your army, fight AI, 2 players on 1 PC or online. Watch joyful wobbly ragdoll chaos — free in your browser.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Mini Battle Simulator — Low-poly epic battle sandbox',
-    template: '%s — Mini Battle Simulator',
+    default: SITE_NAME,
+    template: '%s — Clay Battle',
   },
   description: DESCRIPTION,
   keywords: [
-    'mini battle simulator',
+    'clay battle',
+    'đại chiến đất sét',
     'battle simulator game',
     'army placement tactics game',
     'low-poly game',
@@ -31,9 +32,9 @@ export const metadata: Metadata = {
     'online battle game',
     'free browser game',
   ],
-  authors: [{ name: 'Mini Battle Simulator' }],
-  creator: 'Mini Battle Simulator',
-  publisher: 'Mini Battle Simulator',
+  authors: [{ name: SITE_NAME }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
   category: 'games',
   alternates: { canonical: '/' },
   robots: { index: true, follow: true },
@@ -53,13 +54,13 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: '/',
     siteName: SITE_NAME,
-    title: 'Mini Battle Simulator — Low-poly epic battle sandbox',
+    title: SITE_NAME,
     description: DESCRIPTION,
-    images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: 'Mini Battle Simulator — low-poly epic battle sandbox' }],
+    images: [{ url: '/opengraph-image', width: 1200, height: 630, alt: SITE_NAME }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Mini Battle Simulator — Low-poly epic battle sandbox',
+    title: SITE_NAME,
     description: DESCRIPTION,
     images: ['/twitter-image'],
   },

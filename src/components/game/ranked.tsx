@@ -11,6 +11,7 @@ import type { AckResult, RoomState } from '@/shared/net';
 import { rankLabel, rankScore, seasonName, type RankResult, type RankView, type StandingRow } from '@/shared/ranked';
 import { RANK_TIERS, type ConfigBundle, type RankTier } from '@/shared/schema';
 import { useCountdown } from './panels';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 // ---------------------------------------------------------------- badges
 
@@ -72,8 +73,9 @@ export function RankBadge({ tier, size = 64, dim = false }: { tier: RankTier; si
 }
 
 export function Diamonds({ filled, total, size = 14 }: { filled: number; total: number; size?: number }) {
+  const { t } = useLanguage();
   return (
-    <span className="inline-flex gap-0.5" aria-label={`${filled}/${total} kim cương`}>
+    <span className="inline-flex gap-0.5" aria-label={`${filled}/${total} ${t('ranked.diamonds')}`}>
       {Array.from({ length: total }, (_, i) => (
         <svg key={i} viewBox="0 0 10 12" width={size} height={size * 1.2} aria-hidden>
           <path d="M5 0.8 L9.2 6 L5 11.2 L0.8 6 Z" fill={i < filled ? '#ffc233' : '#ffffff'} stroke="#2d3232" strokeWidth="1.2" strokeLinejoin="round" />
@@ -96,9 +98,9 @@ export function RankLine({ bundle, rank, size = 14 }: { bundle: ConfigBundle; ra
 
 // ---------------------------------------------------------------- lobby
 
-function timeLeft(ms: number): string {
+function timeLeft(ms: number, locale: 'en' | 'vi'): string {
   const h = Math.max(0, Math.floor(ms / 3_600_000));
-  return h >= 48 ? `${Math.floor(h / 24)} ngày` : h >= 1 ? `${h} giờ` : `${Math.max(1, Math.ceil(ms / 60_000))} phút`;
+  return h >= 48 ? `${Math.floor(h / 24)} ${locale === 'vi' ? 'ngày' : 'days'}` : h >= 1 ? `${h} ${locale === 'vi' ? 'giờ' : 'hours'}` : `${Math.max(1, Math.ceil(ms / 60_000))} ${locale === 'vi' ? 'phút' : 'minutes'}`;
 }
 
 export function RankedLobby(props: {
@@ -114,6 +116,7 @@ export function RankedLobby(props: {
   cancel(): void;
   flash(msg: string): void;
 }) {
+  const { t, locale } = useLanguage();
   const { bundle } = props;
   const cfg = bundle.settings.ranked;
   const [view, setView] = useState<RankView | null>(null);
@@ -155,10 +158,10 @@ export function RankedLobby(props: {
   if (!signedIn) {
     return (
       <div className="panel pointer-events-auto m-auto flex w-[min(460px,94vw)] flex-col gap-3 p-4">
-        <h2 className="font-display text-2xl">Đấu xếp hạng</h2>
-        <p className="text-sm">Cần đăng nhập để đánh xếp hạng. Bậc, kim cương và phần thưởng lưu theo tài khoản.</p>
+        <h2 className="font-display text-2xl">{t('ranked.title')}</h2>
+        <p className="text-sm">{t('ranked.signinHint')}</p>
         <button className="btn btn-gold" disabled={props.authLoading} onClick={props.onSignIn}>
-          <User /> Đăng nhập
+          <User /> {t('auth.signin')}
         </button>
         <Link href="/" className="text-sm underline">
           <ArrowLeft /> Menu
@@ -183,16 +186,16 @@ export function RankedLobby(props: {
   return (
     <div className="panel pointer-events-auto m-auto flex w-[min(640px,94vw)] flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-display text-2xl">Đấu xếp hạng</h2>
+        <h2 className="font-display text-2xl">{t('ranked.title')}</h2>
         {view?.season && (
           <span className="text-sm font-bold">
-            {view.season.name} · còn {timeLeft(view.season.endsAt - (Date.now() + offset))}
+            {view.season.name} · {t('ranked.remaining')} {timeLeft(view.season.endsAt - (Date.now() + offset), locale)}
           </span>
         )}
       </div>
 
       {loadError && <p className="text-sm text-red-team">{loadError}</p>}
-      {!view && !loadError && <p className="text-sm opacity-70">Đang tải…</p>}
+      {!view && !loadError && <p className="text-sm opacity-70">{t('common.loading')}</p>}
 
       {view && (
         <>
@@ -212,9 +215,9 @@ export function RankedLobby(props: {
               <div className="flex min-w-0 flex-col gap-1">
                 <RankLine bundle={bundle} rank={rank} size={16} />
                 <span className="text-sm">
-                  {rank.wins} thắng · {rank.losses} thua{rank.draws > 0 ? ` · ${rank.draws} hòa` : ''}
+                  {rank.wins} {t('ranked.wins')} · {rank.losses} {t('ranked.losses')}{rank.draws > 0 ? ` · ${rank.draws} ${t('ranked.draws')}` : ''}
                 </span>
-                <span className="text-xs opacity-70">Thắng +1 <Gem />, thua −1 <Gem /> (bậc {cfg.tiers.beginner.name} không mất <Gem />). Đủ <Gem /> thắng thêm 1 trận để lên hạng.</span>
+                <span className="text-xs opacity-70">{t('ranked.rules')}</span>
               </div>
             </div>
           )}
@@ -223,26 +226,26 @@ export function RankedLobby(props: {
             <div className="flex flex-wrap items-center gap-2 rounded-xl border-2 border-gold bg-[#fff6d6] p-2">
               <RankBadge tier={view.pending.tier} size={40} />
               <span className="flex-1 text-sm">
-                {seasonName(view.pending.season)} đã kết thúc ở bậc <b>{cfg.tiers[view.pending.tier].name}</b>.
+                {seasonName(view.pending.season)} {t('ranked.seasonEnded')} <b>{cfg.tiers[view.pending.tier].name}</b>.
               </span>
               <button className="btn btn-gold" onClick={() => setClaiming(true)}>
-                <Gift /> Nhận thưởng mùa
+                <Gift /> {t('ranked.claimSeason')}
               </button>
             </div>
           )}
 
           {view.gate && !view.pending && <p className="rounded-lg bg-ink/5 p-2 text-sm"><Lock /> {view.gate}</p>}
 
-          <p className={`text-xs ${props.error ? 'text-red-team' : 'opacity-60'}`}>{props.connected ? 'Đã kết nối máy chủ.' : (props.error ?? 'Đang kết nối máy chủ…')}</p>
+          <p className={`text-xs ${props.error ? 'text-red-team' : 'opacity-60'}`}>{props.connected ? t('panels.connected') : (props.error ?? t('panels.connecting'))}</p>
 
           {searching === null ? (
             <button className="btn btn-gold text-lg" disabled={!props.connected || !!view.gate || !view.season} onClick={() => void find()}>
-              <Swords /> Tìm trận
+              <Swords /> {t('ranked.find')}
             </button>
           ) : (
             <div className="flex items-center gap-2">
               <span className="flex-1 font-display text-lg">
-                Đang tìm đối thủ… {Math.floor((Date.now() - searching) / 1000)}s
+                {t('ranked.searching')} {Math.floor((Date.now() - searching) / 1000)}s
               </span>
               <button
                 className="btn"
@@ -251,7 +254,7 @@ export function RankedLobby(props: {
                   setSearching(null);
                 }}
               >
-                Hủy
+                {t('common.cancel')}
               </button>
             </div>
           )}
@@ -262,7 +265,7 @@ export function RankedLobby(props: {
             </Link>
             {view.season && (
               <button className="btn" onClick={() => setBoard(true)}>
-                <Trophy /> Bảng xếp hạng
+                <Trophy /> {t('ranked.leaderboard')}
               </button>
             )}
           </div>
@@ -273,7 +276,7 @@ export function RankedLobby(props: {
         <BoxOpening
           bundle={bundle}
           action={{ action: 'rank-claim' }}
-          title={`Thưởng ${seasonName(view.pending.season)}: ${cfg.tiers[view.pending.tier].name}`}
+          title={`${t('ranked.seasonReward')} ${seasonName(view.pending.season)}: ${cfg.tiers[view.pending.tier].name}`}
           tier={boxTierNum(cfg.tiers[view.pending.tier].seasonBox)}
           thumbs={props.thumbs}
           onClose={() => {
@@ -288,6 +291,7 @@ export function RankedLobby(props: {
 }
 
 function Leaderboard({ bundle, season, onClose }: { bundle: ConfigBundle; season: string; onClose(): void }) {
+  const { t } = useLanguage();
   const [data, setData] = useState<{ rows: StandingRow[]; me: StandingRow | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -316,14 +320,14 @@ function Leaderboard({ bundle, season, onClose }: { bundle: ConfigBundle; season
     <div className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-3" onClick={onClose}>
       <div className="panel flex max-h-[86vh] w-[min(560px,94vw)] flex-col gap-2 p-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl">Bảng xếp hạng · {seasonName(season)}</h3>
-          <button className="btn px-2 py-0.5" onClick={onClose} aria-label="Đóng">
+          <h3 className="font-display text-xl">{t('ranked.leaderboard')} · {seasonName(season)}</h3>
+          <button className="btn px-2 py-0.5" onClick={onClose} aria-label={t('common.close')}>
             <X />
           </button>
         </div>
         {error && <p className="text-sm text-red-team">{error}</p>}
-        {!data && !error && <p className="text-sm opacity-70">Đang tải…</p>}
-        {data && data.rows.length === 0 && <p className="text-sm opacity-70">Chưa ai đánh xếp hạng mùa này.</p>}
+        {!data && !error && <p className="text-sm opacity-70">{t('common.loading')}</p>}
+        {data && data.rows.length === 0 && <p className="text-sm opacity-70">{t('ranked.emptyLeaderboard')}</p>}
         {data && (
           <ol className="flex min-h-0 flex-col gap-0.5 overflow-y-auto overscroll-contain text-sm">
             {data.rows.map(line)}
@@ -344,49 +348,51 @@ function Leaderboard({ bundle, season, onClose }: { bundle: ConfigBundle; season
 
 /** Ranked deploy panel: season, opponent and the start countdown (settings are fixed). */
 export function RankedBar({ bundle, room, opponent, mySide }: { bundle: ConfigBundle; room: RoomState; opponent: { name: string; rank: RankState | null } | null; mySide: string }) {
+  const { t, mapName } = useLanguage();
   const secondsLeft = useCountdown(room.deadline);
   const map = bundle.maps.find((m) => m.id === room.mapId);
   const other = Object.entries(room.players).find(([s]) => s !== mySide)?.[1];
   return (
     <div className="panel pointer-events-auto flex w-44 max-w-[calc(100vw-1.5rem)] flex-col gap-1.5 p-2 text-sm sm:w-64">
-      <div className="font-display"><Trophy /> Xếp hạng · {room.ranked ? seasonName(room.ranked) : ''}</div>
-      {secondsLeft !== null && <div className={`text-center font-display text-lg ${secondsLeft <= 10 ? 'text-red-team' : ''}`}>Bắt đầu sau {secondsLeft}s</div>}
+      <div className="font-display"><Trophy /> {t('ranked.title')} · {room.ranked ? seasonName(room.ranked) : ''}</div>
+      {secondsLeft !== null && <div className={`text-center font-display text-lg ${secondsLeft <= 10 ? 'text-red-team' : ''}`}>{t('panels.startsIn')} {secondsLeft}s</div>}
       <div className="flex items-center gap-2">
         {opponent?.rank ? <RankBadge tier={opponent.rank.tier} size={36} /> : <RankBadge tier="beginner" size={36} />}
         <div className="min-w-0">
-          <div className="truncate font-bold">Đối thủ: {opponent?.name ?? other?.name ?? '?'}</div>
+          <div className="truncate font-bold">{t('ranked.opponent')}: {opponent?.name ?? other?.name ?? '?'}</div>
           {opponent?.rank && (
             <div className="text-xs">
               <RankLine bundle={bundle} rank={opponent.rank} size={9} />
             </div>
           )}
-          {other && !other.connected && <div className="text-xs text-red-team">mất kết nối</div>}
-          {other?.ready && <span className="rounded bg-green-600 px-1.5 text-xs font-bold text-white">SẴN SÀNG</span>}
+          {other && !other.connected && <div className="text-xs text-red-team">{t('panels.disconnected')}</div>}
+          {other?.ready && <span className="rounded bg-green-600 px-1.5 text-xs font-bold text-white">{t('panels.ready')}</span>}
         </div>
       </div>
       <div className="text-xs opacity-70">
-        {map?.name ?? room.mapId} · ngân sách {room.budget} · <Star /> tính sao
+        {map ? mapName(map.id, map.name) : room.mapId} · {t('ranked.budget')} {room.budget} · <Star /> {t('ranked.starsOn')}
       </div>
     </div>
   );
 }
 
-function holdReason(r: RankResult, cfg: ConfigBundle['settings']['ranked']): string | null {
-  if (r.verdict.outcome === 'void') return 'Hai máy báo kết quả khác nhau — trận không tính, đã ghi nhận để kiểm tra.';
+function holdReason(r: RankResult, cfg: ConfigBundle['settings']['ranked'], locale: 'en' | 'vi'): string | null {
+  if (r.verdict.outcome === 'void') return locale === 'vi' ? 'Hai máy báo kết quả khác nhau — trận không tính, đã ghi nhận để kiểm tra.' : 'The clients reported different results — the match is void and has been flagged for review.';
   if (r.verdict.move || r.verdict.outcome === 'draw') return null;
-  if (r.flags.includes('repeat-pair')) return `Hai tài khoản này đã đấu đủ ${cfg.pairDailyLimit} trận xếp hạng hôm nay — trận này không tính kim cương.`;
-  if (r.flags.includes('early-end')) return 'Đối thủ bỏ trận quá sớm — thắng nhưng không cộng kim cương.';
-  if (r.flags.includes('weak-army')) return 'Đội hình đối thủ quá mỏng so với ngân sách — thắng nhưng không cộng kim cương.';
+  if (r.flags.includes('repeat-pair')) return locale === 'vi' ? `Hai tài khoản này đã đấu đủ ${cfg.pairDailyLimit} trận xếp hạng hôm nay — trận này không tính kim cương.` : `These accounts have already played ${cfg.pairDailyLimit} ranked matches today — no diamonds are awarded.`;
+  if (r.flags.includes('early-end')) return locale === 'vi' ? 'Đối thủ bỏ trận quá sớm — thắng nhưng không cộng kim cương.' : 'The opponent left too early — the win counts, but no diamond is awarded.';
+  if (r.flags.includes('weak-army')) return locale === 'vi' ? 'Đội hình đối thủ quá mỏng so với ngân sách — thắng nhưng không cộng kim cương.' : 'The opponent fielded too little of their budget — the win counts, but no diamond is awarded.';
   return null;
 }
 
 /** Standing before → after of the battle that just ended, and the win box it paid. */
 export function RankResultPanel({ bundle, res }: { bundle: ConfigBundle; res: AckResult<RankResult> | null }) {
-  if (!res) return <p className="text-sm opacity-70">Đang cập nhật xếp hạng…</p>;
+  const { t, locale } = useLanguage();
+  if (!res) return <p className="text-sm opacity-70">{t('ranked.updating')}</p>;
   if (!res.ok) return <p className="text-sm text-red-team">{res.error}</p>;
   const cfg = bundle.settings.ranked;
   const diff = rankScore(res.after, cfg) - rankScore(res.before, cfg);
-  const reason = holdReason(res, cfg);
+  const reason = holdReason(res, cfg, locale);
   const cards = res.reward?.cards.reduce((n, c) => n + c.count, 0) ?? 0;
   return (
     <div className="flex w-full flex-col items-center gap-1 rounded-xl bg-ink/5 p-2 text-sm">
@@ -396,11 +402,11 @@ export function RankResultPanel({ bundle, res }: { bundle: ConfigBundle; res: Ac
         <RankBadge tier={res.after.tier} size={52} />
       </div>
       <RankLine bundle={bundle} rank={res.after} />
-      {res.before.tier !== res.after.tier && <b className="text-base">{RANK_TIERS.indexOf(res.after.tier) > RANK_TIERS.indexOf(res.before.tier) ? `Lên bậc ${cfg.tiers[res.after.tier].name}!` : `Rớt xuống ${cfg.tiers[res.after.tier].name}`}</b>}
+      {res.before.tier !== res.after.tier && <b className="text-base">{RANK_TIERS.indexOf(res.after.tier) > RANK_TIERS.indexOf(res.before.tier) ? `${t('ranked.promoted')} ${cfg.tiers[res.after.tier].name}!` : `${t('ranked.demoted')} ${cfg.tiers[res.after.tier].name}`}</b>}
       {reason && <p className="text-xs opacity-80">{reason}</p>}
       {res.reward && (
         <p className="font-bold">
-          <Gift /> +{formatCoins(res.reward.coins)} xu{cards > 0 ? ` · +${cards} thẻ` : ''}
+          <Gift /> +{formatCoins(res.reward.coins)} {t('ranked.coins')}{cards > 0 ? ` · +${cards} ${t('ranked.cards')}` : ''}
         </p>
       )}
     </div>

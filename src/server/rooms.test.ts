@@ -232,8 +232,32 @@ test('a unit missing from the player collection cannot be readied', async () => 
   const room = await create(carol);
   assert.ok(room.ok);
   await join(bob, room.code);
-  assert.deepEqual(await ready(bob, 'red', 'raptor'), { ok: false, error: 'Chưa mở khóa lính Khủng long Raptor' });
-  assert.deepEqual(await ready(carol, 'blue', 'raptor'), { ok: true });
+  // Every seed unit is free; price the raptor for this test (the server serves SEED without Firestore).
+  const raptor = SEED.units.find((u) => u.id === 'raptor')!;
+  raptor.unlockCost = 5000;
+  try {
+    assert.deepEqual(await ready(bob, 'red', 'raptor'), { ok: false, error: 'Chưa mở khóa lính Khủng long Raptor' });
+    assert.deepEqual(await ready(carol, 'blue', 'raptor'), { ok: true });
+  } finally {
+    raptor.unlockCost = 0;
+  }
+  close(bob, carol);
+});
+
+test('a hidden unit cannot be readied', async () => {
+  const bob = open('cookie-bob');
+  const carol = open('cookie-carol');
+  await Promise.all([connected(bob), connected(carol)]);
+  const room = await create(carol);
+  assert.ok(room.ok);
+  await join(bob, room.code);
+  const raptor = SEED.units.find((u) => u.id === 'raptor')!;
+  raptor.hidden = true;
+  try {
+    assert.equal((await ready(carol, 'blue', 'raptor')).ok, false);
+  } finally {
+    raptor.hidden = false;
+  }
   close(bob, carol);
 });
 

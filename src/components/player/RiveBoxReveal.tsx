@@ -5,11 +5,11 @@
 // The .riv file IS the whole UI — React renders nothing but the canvas: the
 // already-rolled server reward is fed into boxPrize1..6 (coins as the currency
 // slot, unit cards with the game's own thumbnails), then openModal plays the
-// reveal. Chest tap (boxClick), the end of the sequence (boxOut) or Escape closes.
+// reveal. The end of the sequence (boxOut), the CTA or Escape closes.
 //
 // Verified at runtime: tierNum selects the chest (6 = LB 0 … 10), numOfPrize
-// sets the visible slot count, openModal starts the sequence, and a chest tap
-// arrives as the root boxClick trigger callback.
+// sets the visible slot count, openModal starts the sequence, and the first chest
+// tap (root boxClick) is what opens the chest and plays the prize reveals.
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { EventType, useRive } from '@rive-app/react-webgl2';
@@ -128,12 +128,11 @@ export default function RiveBoxReveal({ bundle, thumbs, tier, reward, label, onC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vmi, tier, reward, thumbs, thumbWaitOver]);
 
-  // Chest tap / CTA tap / end of sequence from the file → close.
+  // CTA tap / end of sequence from the file → close. Not boxClick: that tap starts the reveal.
   useEffect(() => {
     if (!vmi) return;
     let closeTimer: ReturnType<typeof setTimeout> | undefined;
     const cleanups = [
-      onVmTrigger(vmi, 'boxClick', () => closeRef.current()),
       // The sequence ends with boxOut and leaves an empty canvas: close once the chest has left.
       onVmTrigger(vmi, 'boxOut', () => {
         closeTimer = setTimeout(() => closeRef.current(), BOX_OUT_CLOSE_MS);

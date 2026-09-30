@@ -234,10 +234,10 @@ function mergeRewards(boxes: BoxReward[]): BoxReward {
 export type Random = () => number;
 
 /** Coins in [min, max]; `cards` shared between `kinds` different units, cheap units more likely (weight 1/√cost). */
-export function rollBox(units: readonly Pick<UnitDef, 'id' | 'cost'>[], box: BoxConfig, random: Random): BoxReward {
+export function rollBox(units: readonly (Pick<UnitDef, 'id' | 'cost'> & { hidden?: boolean })[], box: BoxConfig, random: Random): BoxReward {
   const [lo, hi] = box.coins;
   const coins = lo + Math.floor(random() * (hi - lo + 1));
-  const pool = units.map((u) => ({ id: u.id, weight: 1 / Math.sqrt(Math.max(1, u.cost)) }));
+  const pool = units.filter((u) => !u.hidden).map((u) => ({ id: u.id, weight: 1 / Math.sqrt(Math.max(1, u.cost)) }));
   const picked: string[] = [];
   while (picked.length < Math.min(box.kinds, box.cards) && pool.length > 0) {
     let r = random() * pool.reduce((sum, p) => sum + p.weight, 0);

@@ -6,6 +6,7 @@ import { SKINNED_GLB_KINDS } from '@/shared/schema';
 import { preloadCustomGlbs } from '@/game/models/glbStatic';
 import { preloadSkinnedGlbs } from '@/game/models/glbSkinned';
 import { preloadBarracksGlbs, BARRACKS_GLB_URL } from '@/game/models/barracksGlb';
+import { preloadGrass } from '@/game/render/scenery';
 
 /** `enabled: false` skips the fetch and GLB preload entirely — for a caller that already has a bundle from elsewhere. */
 export function useConfig(enabled = true) {
@@ -24,6 +25,7 @@ export function useConfig(enabled = true) {
       ]);
       await preloadSkinnedGlbs(next.assets.filter((a) => (SKINNED_GLB_KINDS as readonly string[]).includes(a.kind)).map((a) => (a.glb ? { url: a.glb.url, tint: a.glb.tint, hide: a.glb.hide } : null)));
       await preloadBarracksGlbs([BARRACKS_GLB_URL]);
+      await preloadGrass();
       setBundle(next);
       setError(null);
     } catch (e) {

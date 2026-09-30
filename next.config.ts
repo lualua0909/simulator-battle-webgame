@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
   turbopack: { root: process.cwd() },
   // Native module: must stay a runtime require, never bundled.
   serverExternalPackages: ['better-sqlite3'],
+  // Page routes are English; keep the old Vietnamese top-up URL working for shared links.
+  redirects: async () => [{ source: '/nap-xu', destination: '/topup', permanent: true }],
   // One value per build (per start in dev): client caches keyed by it drop what older code produced.
   // HERO_BANNER: hero image slot filled? Checked per build/start so a missing file never hits the image optimizer.
   env: {

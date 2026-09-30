@@ -23,17 +23,22 @@ export const NORMALIZED_HEIGHT = 2;
  * `rotation.y = yaw`).
  *
  * voi-mamut.glb is authored with forward -X (head at -X, tail at +X) and needs +90°;
- * voi-trang.glb is authored with forward +X and needs -90°. Without it they walk sideways. Matched by URL suffix so tint/hide
+ * voi-trang.glb is authored with forward +X and needs -90°; khunng long co dai.glb (long-neck)
+ * has its neck along -X and needs +90°; khung-long-bay.glb (Rồng Xanh) has its head at -X and
+ * needs +90°; rong lua.glb (Rồng lửa) likewise has its head at -X and needs +90°. Without it they walk sideways. Matched by URL suffix so tint/hide
  * variants and re-uploads under a new path with the same file name keep the fix.
  */
 const YAW_CORRECTIONS: Array<[string, number]> = [
   ['voi-mamut.glb', Math.PI / 2],
   ['voi-trang.glb', -Math.PI / 2],
+  ['khunng long co dai.glb', Math.PI / 2],
+  ['khung-long-bay.glb', Math.PI / 2],
+  ['rong lua.glb', Math.PI / 2],
 ];
 
 /** Yaw correction for `url` in radians (0 when the file already faces +Z). Pure — unit-tested. */
 export function yawCorrectionFor(url: string): number {
-  const file = url.split('?')[0].split('#')[0].split('/').pop() ?? url;
+  const file = decodeURIComponent(url.split('?')[0].split('#')[0].split('/').pop() ?? url);
   for (const [suffix, yaw] of YAW_CORRECTIONS) if (file === suffix) return yaw;
   return 0;
 }
@@ -107,9 +112,10 @@ const KEYWORDS: Record<SkinState, string[]> = {
   // Flying units (bird/dragon kinds, e.g. Cá đuối bay): locomotion is always the
   // flight clip (Swim/Flying/Hover), never a walk/run cycle.
   fly: ['fly', 'swim', 'hover', 'glide'],
-  // 'hammer' before 'attack': giant-golem.glb ships Attack_Leap ahead of Attack_Hammer.
-  attack: ['spell', 'cast', 'staff_attack', 'hammer', 'attack', 'shoot', 'bite', 'strike', 'punch', 'slash', 'kick', 'hit'],
-  // Dash/leap skill (giant-golem.glb Attack_Leap); packs without one reuse the attack clip.
+  // 'attack_breath' first: khung-long-bay.glb (Rồng Xanh, breath weapon) ships Attack_Bite ahead of it.
+  // 'hammer' before 'attack': giant golem.glb ships Attack_Leap ahead of Attack_Hammer.
+  attack: ['attack_breath', 'spell', 'cast', 'staff_attack', 'hammer', 'attack', 'shoot', 'bite', 'strike', 'punch', 'slash', 'kick', 'hit'],
+  // Dash/leap skill (giant golem.glb Attack_Leap); packs without one reuse the attack clip.
   leap: ['attack_leap', 'leap', 'spell', 'cast', 'staff_attack', 'attack', 'bite', 'strike', 'slash'],
   death: ['death', 'die', 'dead'],
   jump: ['jump', 'leap', 'fly', 'swim'],
@@ -295,11 +301,11 @@ function bake(url: string, tint: SkinTint, hide: readonly string[], gltf: { scen
       m.frustumCulled = false;
     }
   });
-  cache.set(cacheKey(url, tint, hide), { scene: root, clips: gltf.animations.map(stripLeapRootMotion) });
+  cache.set(cacheKey(url, tint, hide), { scene: root, clips: gltf.animations.map(stripLeapRootMotion).map(stripRisingDeath) });
 }
 
 /**
- * Leap/jump clips that lift the skeleton root (giant-golem.glb Attack_Leap raises Root) would
+ * Leap/jump clips that lift the skeleton root (giant golem.glb Attack_Leap raises Root) would
  * stack on the sim's own ballistic arc and leave the unit hanging in the air at touchdown:
  * drop the root bone's translation so the sim alone moves the body.
  */
@@ -307,6 +313,19 @@ function stripLeapRootMotion(clip: THREE.AnimationClip): THREE.AnimationClip {
   if (!/leap|jump/i.test(clip.name)) return clip;
   const tracks = clip.tracks.filter((t) => !/^root\.position$/i.test(t.name));
   return tracks.length === clip.tracks.length ? clip : new THREE.AnimationClip(clip.name, clip.duration, tracks);
+}
+
+/**
+ * Death clips that raise the skeleton root (ca-duoi-bay.glb Death lifts Root ~0.7) leave the
+ * corpse hovering once it has dropped to the ground: drop the root translation. Clips that
+ * lower the root (a body slumping down) keep it.
+ */
+export function stripRisingDeath(clip: THREE.AnimationClip): THREE.AnimationClip {
+  if (!/death|die|dead/i.test(clip.name)) return clip;
+  const root = clip.tracks.find((t) => /^root\.position$/i.test(t.name));
+  if (!root || root.values.length < 6) return clip;
+  if (root.values[root.values.length - 2] <= root.values[1]) return clip;
+  return new THREE.AnimationClip(clip.name, clip.duration, clip.tracks.filter((t) => t !== root));
 }
 
 /** Rendered bounds of every skinned mesh at bind pose (bindMatrix-aware), or null without skinning. */

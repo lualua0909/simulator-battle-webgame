@@ -14,6 +14,6 @@ firebase.initializeApp({
 firebase.messaging().onBackgroundMessage((payload) => {
   // Messages with a `notification` block are shown by the browser already.
   if (payload.notification) return;
-  const { title = 'Đại Chiến Lô Nhô', body = '' } = payload.data || {};
+  const { title = 'Clay Battle - Đại chiến đất sét', body = '' } = payload.data || {};
   self.registration.showNotification(title, { body, icon: '/icon.svg' });
 });

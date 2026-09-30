@@ -2,40 +2,46 @@
 
 // Card collection: every unit as a card with its stars and cards; unlock, upgrade and buy cards
 // with coins. Buttons only send the request: the wallet shown afterwards is the server's answer.
-import { ArrowRight, ArrowUp, LockOpen, User, X } from 'lucide-react';
+import { ArrowRight, ArrowUp, LockOpen, RotateCw, User, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { formatCoins, isUnlocked, nextStar, starScale, type PlayerAction } from '@/shared/economy';
 import { STAR_MAX, type ConfigBundle, type UnitDef } from '@/shared/schema';
 import { unitPower } from '@/game/bot/generate';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { CoinIcon, Stars } from './icons';
+import { CoinIcon, StarIcon, Stars } from './icons';
 import { CoinBar } from './PlayerHud';
 import { usePlayer } from './PlayerProvider';
 import UnitCard from './UnitCard';
+import UnitCardModel from './UnitCardModel';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface Props {
   bundle: ConfigBundle;
   thumbs: Record<string, string>;
+  /** Selected unit id; the page keeps it in the URL (?card=). */
+  selectedId: string | null;
+  onSelect(id: string | null): void;
   onClose(): void;
 }
 
-export default function Collection({ bundle, thumbs, onClose }: Props) {
+export default function Collection({ bundle, thumbs, selectedId, onSelect: setSelectedId, onClose }: Props) {
   const { t, locale, factionName } = useLanguage();
   const ROLE_LABEL: Record<UnitDef['role'], string> = { melee: t('palette.melee'), ranged: t('palette.ranged'), support: t('palette.support'), siege: t('palette.siege') };
   const { user, openAuth } = useAuth();
   const { player } = usePlayer();
-  const factions = useMemo(() => [...bundle.factions].sort((a, b) => a.order - b.order), [bundle]);
+  const factions = useMemo(
+    () => bundle.factions.filter((f) => bundle.units.some((u) => !u.hidden && u.factionId === f.id)).sort((a, b) => a.order - b.order),
+    [bundle],
+  );
   const [tab, setTab] = useState('all');
   const units = useMemo(
     () =>
       bundle.units
-        .filter((u) => tab === 'all' || u.factionId === tab)
+        .filter((u) => !u.hidden && (tab === 'all' || u.factionId === tab))
         .sort((a, b) => Number(isUnlocked(b, player)) - Number(isUnlocked(a, player)) || a.cost - b.cost),
     [bundle, tab, player],
   );
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = bundle.units.find((u) => u.id === selectedId) ?? null;
   // Desktop keeps a persistent side panel; mobile only shows a popup after a tap.
   const desktopSelected = selected ?? units[0] ?? null;
@@ -48,7 +54,7 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, selectedId]);
+  }, [onClose, selectedId, setSelectedId]);
 
   // Lock the page behind the full-screen modal so only the collection scrolls on mobile.
   useEffect(() => {
@@ -79,7 +85,7 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
           </div>
         </header>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-3 sm:p-4 md:flex-row md:overflow-hidden">
-          <div className="grid w-full flex-none auto-rows-auto grid-cols-2 justify-items-center gap-x-3 gap-y-5 p-2 min-[480px]:grid-cols-3 md:min-h-0 md:flex-1 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:overflow-y-auto">
+          <div className="grid w-full flex-none auto-rows-auto grid-cols-2 content-start justify-items-center gap-x-3 gap-y-5 p-2 min-[480px]:grid-cols-3 md:min-h-0 md:flex-1 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] md:overflow-y-auto">
             {units.map((u) => {
               const star = player?.stars[u.id] ?? 0;
               const next = nextStar(u, star);
@@ -99,28 +105,28 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
             })}
           </div>
           {desktopSelected && (
-            <aside className="panel glass-popup hidden w-full flex-none p-4 md:block md:w-[24rem] md:shrink-0 md:overflow-y-auto">
+            <aside className="panel glass-popup unit-detail-sheet hidden w-full flex-none p-4 md:block md:w-[24rem] md:shrink-0 md:overflow-y-auto">
               {user ? <UnitDetail key={desktopSelected.id} bundle={bundle} unit={desktopSelected} thumb={thumbs[desktopSelected.id]} /> : <GuestDetail unit={desktopSelected} onSignIn={() => openAuth('signin')} />}
             </aside>
           )}
         </div>
       </div>
       {selected && (
-        <div className="game-ui fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label={`Chi tiết ${selected.name}`}>
-          <button className="absolute inset-0 h-full w-full bg-black/60" onClick={() => setSelectedId(null)} aria-label="Đóng chi tiết" />
+        <div className="game-ui fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label={`${t('collection.details')} ${selected.name}`}>
+          <button className="absolute inset-0 h-full w-full bg-black/60" onClick={() => setSelectedId(null)} aria-label={t('common.close')} />
           <div className="pointer-events-none absolute inset-0 flex flex-col justify-end">
             <div
-              className="panel glass-popup sheet-in pointer-events-auto relative mx-0 flex min-h-0 w-full max-w-full max-h-[85vh] flex-col overflow-hidden rounded-b-none p-4 pt-2"
+              className="panel glass-popup unit-detail-sheet sheet-in pointer-events-auto relative mx-0 flex min-h-0 w-full max-w-full max-h-[85vh] flex-col overflow-hidden rounded-b-none p-4 pt-2"
               style={{ maxHeight: '85dvh' }}
             >
               <div className="relative flex shrink-0 items-center justify-center pb-2">
                 <span className="h-1.5 w-12 rounded-full bg-ink/20" />
-                <button className="btn absolute right-0 top-0 px-2.5 py-1 text-xl" onClick={() => setSelectedId(null)} aria-label="Đóng">
+                <button className="btn absolute right-0 top-0 px-2.5 py-1 text-xl" onClick={() => setSelectedId(null)} aria-label={t('common.close')}>
                   <X />
                 </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
-                {user ? <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} /> : <GuestDetail unit={selected} onSignIn={() => openAuth('signin')} />}
+                {true ? <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} /> : <GuestDetail unit={selected} onSignIn={() => openAuth('signin')} />}
               </div>
             </div>
           </div>
@@ -132,13 +138,14 @@ export default function Collection({ bundle, thumbs, onClose }: Props) {
 }
 
 function GuestDetail({ unit, onSignIn }: { unit: UnitDef; onSignIn(): void }) {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col gap-3">
       <h3 className="text-2xl">{unit.name}</h3>
-      <p>{unit.unlockCost === 0 ? 'Lính miễn phí: ai cũng dùng được.' : `Mở khóa với ${formatCoins(unit.unlockCost)} coin.`}</p>
-      <p>Đăng nhập để nhận hộp quà, sưu tầm thẻ, mở khóa và nâng sao cho lính.</p>
+      <p>{unit.unlockCost === 0 ? t('collection.freeUnit') : `${t('collection.unlockWith')} ${formatCoins(unit.unlockCost)} coin.`}</p>
+      <p>{t('collection.signinHint')}</p>
       <button className="btn btn-gold" onClick={onSignIn}>
-        <User /> Đăng nhập
+        <User /> {t('auth.signin')}
       </button>
     </div>
   );
@@ -160,6 +167,7 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
   const power = unitPower(unit, bundle);
   const scale = starScale(star, bonus);
   const nextScale = next ? starScale(next.star, bonus) : scale;
+  const [flipped, setFlipped] = useState(false);
 
   useEffect(() => {
     if (!confirm) return;
@@ -183,38 +191,46 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
     }
   };
 
-  const spendButton = (key: string, label: ReactNode, price: number, action: PlayerAction, done: string, blocked?: string) => (
-    <button className={`btn w-full flex-col gap-0 ${confirm === key ? 'btn-red' : 'btn-gold'}`} disabled={busy || !!blocked || coins < price} onClick={() => void run(key, action, done)}>
-      <span className="max-w-full break-words text-center">{confirm === key ? `Xác nhận trừ ${formatCoins(price)} coin?` : label}</span>
-      <span className="flex items-center gap-1">
-        {blocked ??
-          (coins < price ? (
-            `Thiếu ${formatCoins(price - coins)} coin`
-          ) : (
-            <>
-              <CoinIcon size={20} /> {formatCoins(price)}
-            </>
-          ))}
-      </span>
-    </button>
-  );
+  const spendButton = (key: string, label: ReactNode, price: number, action: PlayerAction, done: string, blocked?: string) =>
+    blocked ? (
+      <button className="btn btn-muted w-full" disabled>
+        {blocked}
+      </button>
+    ) : (
+      <button className={`btn w-full flex-col gap-1 ${coins < price ? 'btn-muted' : confirm === key ? 'btn-red' : 'btn-gold'}`} disabled={busy || coins < price} onClick={() => void run(key, action, done)}>
+        <span className="flex max-w-full items-center justify-center gap-1.5 break-words text-center">{confirm === key ? (locale === 'vi' ? 'Chạm lần nữa để xác nhận' : 'Tap again to confirm') : label}</span>
+        <span className="unit-detail-price">
+          <CoinIcon size={16} /> {formatCoins(price)}
+        </span>
+      </button>
+    );
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex gap-3">
-        <UnitCard unit={unit} thumb={thumb} faction={bundle.factions.find((f) => f.id === unit.factionId)} star={star} locked={!unlocked} width={112} className="shrink-0" />
-        <div className="flex min-w-0 flex-col gap-1">
-          <h3 className="break-words text-2xl leading-tight">{unitName(unit.id, unit.name)}</h3>
-          <span className="opacity-75">{ROLE_LABEL[unit.role]}</span>
-          <Stars value={star} size={22} />
-          <span>
-            {locale === 'vi' ? 'Thẻ' : 'Cards'}: <b>{cards}</b>
-            {next ? ` / ${next.cards}` : ''}
-          </span>
+    <div className="unit-detail flex flex-col gap-3">
+      <UnitCard unit={unit} thumb={thumb} faction={bundle.factions.find((f) => f.id === unit.factionId)} star={star} locked={!unlocked} width="100%" className="unit-card-detail" artwork={<UnitCardModel unit={unit} bundle={bundle} />} flipped={flipped} onFlip={() => setFlipped((value) => !value)} back={<dl className="unit-card-back-stats"><div><dt>{t('collection.hp')}</dt><dd>{Math.round(unit.hp * scale)}{next && <> → {Math.round(unit.hp * nextScale)}</>}</dd></div><div><dt>{t('collection.dps')}</dt><dd>{Math.round(power.dps * scale)}{next && <> → {Math.round(power.dps * nextScale)}</>}</dd></div><div><dt>{locale === 'vi' ? 'Mỗi sao' : 'Per star'}</dt><dd>+{Math.round(bonus * 100)}% {locale === 'vi' ? 'máu, sát thương' : 'HP, damage'}</dd></div></dl>} />
+      <p className="unit-detail-hint">
+        <RotateCw size={14} /> {locale === 'vi' ? 'Chạm thẻ để xem thông số' : 'Tap card for stats'}
+      </p>
+      <section className="unit-detail-info">
+        <div className="flex items-center justify-between gap-2">
+          <span className="unit-detail-role">{ROLE_LABEL[unit.role]}</span>
+          <Stars value={star} size={20} />
         </div>
-      </div>
-      {unitDesc(unit.id, unit.description) && <p className="opacity-80">{unitDesc(unit.id, unit.description)}</p>}
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 rounded-xl bg-white/70 p-2">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-baseline justify-between text-sm">
+            <span className="unit-detail-muted">{locale === 'vi' ? 'Thẻ' : 'Cards'}</span>
+            <span>
+              <b>{cards}</b>
+              {next && <span className="unit-detail-muted"> / {next.cards}</span>}
+            </span>
+          </div>
+          <div className={`unit-detail-bar ${next && cards >= next.cards ? 'unit-detail-bar-ready' : ''}`}>
+            <span style={{ width: `${next ? Math.min(100, (cards / Math.max(1, next.cards)) * 100) : 100}%` }} />
+          </div>
+        </div>
+        {unitDesc(unit.id, unit.description) && <p className="unit-detail-desc">{unitDesc(unit.id, unit.description)}</p>}
+      </section>
+      <dl className="hidden grid-cols-[auto_1fr] gap-x-3 rounded-xl bg-white/70 p-2">
         <dt>{t('collection.hp')}</dt>
         <dd className="text-right">
           {Math.round(unit.hp * scale)}
@@ -231,9 +247,9 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
       {!unlocked ? (
         spendButton('unlock', <><LockOpen /> {t('collection.unlock')} {unitName(unit.id, unit.name)}</>, unit.unlockCost, { action: 'unlock', unitId: unit.id }, `${unitName(unit.id, unit.name)} ${locale === 'vi' ? 'đã mở khóa!' : 'unlocked!'}`)
       ) : next ? (
-        spendButton('upgrade', <><ArrowUp /> {t('collection.upgrade')} {next.star} {t('collection.stars')} ({next.cards} {locale === 'vi' ? 'thẻ' : 'cards'})</>, next.coins, { action: 'upgrade', unitId: unit.id }, `${unitName(unit.id, unit.name)} ${locale === 'vi' ? 'đã lên' : 'reached'} ${next.star} ${t('collection.stars')}!`, cards < next.cards ? `${locale === 'vi' ? 'Cần thêm' : 'Need'} ${next.cards - cards} ${locale === 'vi' ? 'thẻ' : 'cards'}` : undefined)
+        spendButton('upgrade', <><ArrowUp /> {t('collection.upgrade')} {next.star} <StarIcon size={20} /></>, next.coins, { action: 'upgrade', unitId: unit.id }, `${unitName(unit.id, unit.name)} ${locale === 'vi' ? 'đã lên' : 'reached'} ${next.star} ${t('collection.stars')}!`, cards < next.cards ? locale === 'vi' ? `Cần thêm ${next.cards - cards} thẻ để nâng sao` : `${next.cards - cards} more cards to upgrade` : undefined)
       ) : (
-        <p className="rounded-xl bg-gold/60 p-2 text-center">{locale === 'vi' ? `Đã đạt ${STAR_MAX} sao` : `Max ${STAR_MAX} stars`}</p>
+        <p className="unit-detail-note text-center">{locale === 'vi' ? `Đã đạt ${STAR_MAX} sao` : `Max ${STAR_MAX} stars`}</p>
       )}
       {unlocked && unit.cardPrice > 0 && (
         <div className="grid grid-cols-2 gap-2">
@@ -242,7 +258,7 @@ function UnitDetail({ bundle, unit, thumb }: { bundle: ConfigBundle; unit: UnitD
           ))}
         </div>
       )}
-      {!unlocked && <p className="opacity-75">{locale === 'vi' ? 'Thẻ rơi từ hộp quà vẫn được cộng dồn; mở khóa để dùng lính trong trận và nâng sao.' : 'Cards from boxes still accumulate; unlock to use this unit in battle and upgrade stars.'}</p>}
+      {!unlocked && <p className="unit-detail-note">{locale === 'vi' ? 'Thẻ rơi từ hộp quà vẫn được cộng dồn; mở khóa để dùng lính trong trận và nâng sao.' : 'Cards from boxes still accumulate; unlock to use this unit in battle and upgrade stars.'}</p>}
       {message && <p className={`rounded-lg px-2 py-1 ${message.ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-team'}`}>{message.text}</p>}
     </div>
   );

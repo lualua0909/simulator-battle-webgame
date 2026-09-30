@@ -1,4 +1,4 @@
-# Mini Battle Simulator — mô phỏng đại chiến low-poly trên web
+# Clay Battle - Đại chiến đất sét — mô phỏng đại chiến low-poly trên web
 
 Game mô phỏng đại chiến kiểu *Totally Accurate Battle Simulator*: xếp quân trong vùng triển khai, bấm bắt đầu, xem hai đạo quân lắc lư lao vào nhau, bay người, ragdoll, mưa tên.
 

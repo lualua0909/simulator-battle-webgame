@@ -1,6 +1,6 @@
 'use client';
 
-// Top nav bar: coin bar, card collection, the reward slot (today's box — daily calendar first,
+// Top nav bar: coin bar, card collection link (/collection), the reward slot (today's box — daily calendar first,
 // then the x-hour box once the daily box is claimed) and the avatar/account menu. `bundle` is
 // optional: pass the caller's own already-loaded bundle (GameClient) to skip a redundant
 // /api/config fetch, or omit it (the home page) to have this component load its own.
@@ -17,7 +17,6 @@ import { useConfig } from '@/game/useConfig';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import LanguageToggle from '@/lib/i18n/LanguageToggle';
 import BoxOpening from './BoxOpening';
-import Collection from './Collection';
 import { CoinIcon } from './icons';
 import PlayerAvatar from './PlayerAvatar';
 import { usePlayer, useTick } from './PlayerProvider';
@@ -26,7 +25,7 @@ import RiveDailyBonus from './RiveDailyBonus';
 export function CoinBar({ value, loading }: { value: number; loading?: boolean }) {
   const { t } = useLanguage();
   return (
-    <Link href="/nap-xu" className="coin-bar w-28 min-w-28" title={t('hud.topupTitle')}>
+    <Link href="/topup" className="coin-bar w-28 min-w-28" title={t('hud.topupTitle')}>
       <span className="text-outline ml-auto truncate text-xl leading-none tabular-nums">{loading ? '…' : formatCoins(value)}</span>
       <CoinIcon size={42} className="absolute -right-4 top-1/2 -translate-y-1/2 shrink-0 drop-shadow" />
     </Link>
@@ -64,7 +63,6 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
   const [menu, setMenu] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const [opening, setOpening] = useState<BoxKind | null>(null);
-  const [collection, setCollection] = useState(false);
   const [weekly, setWeekly] = useState(false);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   // undefined (home page: no prop passed) = load our own; a value (GameClient's own bundle,
@@ -82,8 +80,8 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
   }, [menu]);
 
   useEffect(() => {
-    if (bundle && (opening || collection || weekly)) void unitThumbnails(bundle).then(setThumbs);
-  }, [bundle, opening, collection, weekly]);
+    if (bundle && (opening || weekly)) void unitThumbnails(bundle).then(setThumbs);
+  }, [bundle, opening, weekly]);
 
   if (loading) return <div className="coin-bar opacity-60" />;
 
@@ -91,15 +89,14 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
     return (
       <div className="pointer-events-auto flex max-w-full min-w-0 items-center gap-2">
         <LanguageToggle compact />
-        <button className="reward-slot" onClick={() => setCollection(true)} title={t('hud.collection')} aria-label={t('hud.collection')}>
+        <Link href="/collection" className="reward-slot" title={t('hud.collection')} aria-label={t('hud.collection')}>
           <span className="text-2xl">
             <WalletCards />
           </span>
-        </button>
+        </Link>
         <button className="btn btn-gold min-h-[40px] whitespace-nowrap" onClick={() => openAuth('signin')}>
           <User /> {t('hud.signin')}
         </button>
-        {bundle && collection && <Collection bundle={bundle} thumbs={thumbs} onClose={() => setCollection(false)} />}
       </div>
     );
   }
@@ -114,11 +111,11 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
       <div className="mr-0 min-w-0 shrink sm:mr-4">
         <CoinBar value={player?.coins ?? 0} loading={walletLoading && !player} />
       </div>
-      <button className="reward-slot" onClick={() => setCollection(true)} title={t('hud.collection')} aria-label={t('hud.collection')}>
+      <Link href="/collection" className="reward-slot" title={t('hud.collection')} aria-label={t('hud.collection')}>
         <span className="text-2xl">
             <WalletCards />
           </span>
-      </button>
+      </Link>
       {economy &&
         status &&
         (status.daily.ready ? (
@@ -154,7 +151,6 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
           </button>
         </div>
       )}
-      {bundle && collection && <Collection bundle={bundle} thumbs={thumbs} onClose={() => setCollection(false)} />}
       {bundle && weekly && <RiveDailyBonus bundle={bundle} thumbs={thumbs} onClose={() => setWeekly(false)} />}
       {bundle && economy && opening && (
         <BoxOpening

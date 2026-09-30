@@ -1,4 +1,4 @@
-# Kế hoạch kiếm tiền và nạp tiền — Mini Battle Simulator
+# Kế hoạch kiếm tiền và nạp tiền — Clay Battle - Đại chiến đất sét
 
 Tài liệu kế hoạch (Phase 2). Phần **đã làm** nằm ở mục 3; phần nạp tiền thật (cổng thanh toán, pháp lý) là **kế hoạch, chưa có code**. Thông tin pháp lý tổng hợp từ nguồn công khai tại thời điểm viết (09/2026), không thay cho tư vấn luật sư.
 

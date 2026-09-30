@@ -4,6 +4,8 @@ import type { AssetDef, MapDef } from '@/shared/schema';
 import { Rng, clamp, smooth01, valueNoise, valueNoise1 } from './rng';
 
 export const EDGE_MARGIN = 6;
+/** 2-side strips: gap between a zone's back edge and the map edge (m) — also the unit movement clamp. */
+export const DEPLOY_BACK_MARGIN = EDGE_MARGIN * 0.25;
 /** Every map plays at the mini-map's size (m); larger maps shrink proportionally. */
 export const MAP_SIZE = 60;
 
@@ -33,27 +35,6 @@ export function wallIndex(v: number): number {
 /** Centre of a grid index. */
 export function wallCenter(i: number): number {
   return (i + 0.5) * WALL_CELL;
-}
-
-/** Diorama maps: hex tile width across flats (m), circumradius and terrace step. Pointy-top hexes, rows along z. */
-export const HEX_WIDTH = 4;
-export const HEX_RADIUS = HEX_WIDTH / 1.7320508075688772;
-export const HEX_STEP = 0.75;
-
-/** Centre of the diorama hex cell holding (x, z) (cube rounding; no trig so every engine agrees). */
-export function hexCenter(x: number, z: number): [number, number] {
-  const q = (x * 0.5773502691896258 - z / 3) / HEX_RADIUS;
-  const r = ((z * 2) / 3) / HEX_RADIUS;
-  const s = -q - r;
-  let rq = Math.round(q);
-  let rr = Math.round(r);
-  const rs = Math.round(s);
-  const dq = Math.abs(rq - q);
-  const dr = Math.abs(rr - r);
-  const ds = Math.abs(rs - s);
-  if (dq > dr && dq > ds) rq = -rr - rs;
-  else if (dr > ds) rr = -rq - rs;
-  return [HEX_WIDTH * (rq + rr / 2), HEX_RADIUS * 1.5 * rr];
 }
 
 export type Side = 'blue' | 'red' | 'green' | 'yellow';
@@ -99,8 +80,6 @@ export class Terrain {
   readonly island: boolean;
   /** Mean coast radius (island only). */
   readonly islandRadius: number;
-  /** Diorama map: square field of flat-topped hex tiles on stepped terraces (KayKit hexagon look). */
-  readonly diorama: boolean;
   /** Ground height past the map's edge / the island's coast: the sea at the foot of the cliffs. */
   readonly islandFloor = -9;
 
@@ -128,7 +107,6 @@ export class Terrain {
     this.heightScale = map.heightScale;
     this.freq = 0.018 * map.hilliness;
     this.island = map.shape === 'island';
-    this.diorama = map.shape === 'diorama';
     this.islandRadius = this.half - 2;
 
     const usable = this.half - EDGE_MARGIN;
@@ -136,17 +114,18 @@ export class Terrain {
     this.zones = {};
     let inner: number;
     if (activeSides.length <= 2) {
+      const back = this.half - DEPLOY_BACK_MARGIN;
       const depthOf = (side: Side) => {
         if (side !== defense || map.defenseDepth <= 0) return base;
         // The defenders' zone may reach past the middle, leaving a 16 m gap to the attackers.
-        return Math.min(map.defenseDepth, usable * 2 - base - 16);
+        return Math.min(map.defenseDepth, back * 2 - base - 16);
       };
       const [a, b] = activeSides;
       const aDepth = depthOf(a);
       const bDepth = depthOf(b);
-      this.zones[a] = { x0: -usable, x1: -usable + aDepth, z0: -usable, z1: usable };
-      this.zones[b] = { x0: usable - bDepth, x1: usable, z0: -usable, z1: usable };
-      inner = Math.min(usable - aDepth, usable - bDepth);
+      this.zones[a] = { x0: -back, x1: -back + aDepth, z0: -usable, z1: usable };
+      this.zones[b] = { x0: back - bDepth, x1: back, z0: -usable, z1: usable };
+      inner = Math.min(back - aDepth, back - bDepth);
     } else {
       // Corner deployment (open battle only): squares spaced evenly around the map centre,
       // sized off the same deployDepth setting. Positions are hardcoded unit vectors, not
@@ -182,7 +161,7 @@ export class Terrain {
     this.riverDepth = 1.4 + map.river.width * 0.06;
     this.waterLevel = this.riverBase - 0.35;
     this.meander = map.river.meander;
-    this.ford = map.river.enabled ? map.river.ford : 0;
+    this.ford = this.riverEnabled ? map.river.ford : 0;
     // Keep the river valley out of both deployment zones.
     this.riverLimit = Math.max(0, inner - this.riverHalfWidth * 3.5 - 2);
 
@@ -208,11 +187,6 @@ export class Terrain {
   }
 
   inWater(x: number, z: number): boolean {
-    if (this.diorama) {
-      // Whole hex tiles are water or land.
-      const [cx, cz] = hexCenter(x, z);
-      return this.riverDistance(cx, cz) < this.riverHalfWidth;
-    }
     return this.riverDistance(x, z) < this.riverHalfWidth;
   }
 
@@ -261,11 +235,6 @@ export class Terrain {
     // Both shapes are raised land: past the edge (square) or the coast (island) the ground drops to the sea.
     const lim = this.half + 1e-6;
     if ((x < 0 ? -x : x) > lim || (z < 0 ? -z : z) > lim || !this.onLand(x, z)) return this.islandFloor;
-    if (this.diorama) {
-      // Flat hex tops: the field height at the tile's centre, snapped to terrace steps.
-      const [cx, cz] = hexCenter(x, z);
-      return Math.round(this.fieldHeight(cx, cz) / HEX_STEP) * HEX_STEP;
-    }
     return this.fieldHeight(x, z);
   }
 
@@ -312,6 +281,9 @@ export class Terrain {
     const rng = new Rng(Math.imul(this.seed, 7919) + 13);
     const hectares = (this.size * this.size) / 10000;
     const solid: Obstacle[] = [];
+    // Blue/red deploy from the left/right x-edges and face each other along x.
+    // Therefore the player's left/right tree banks are the z sides; keep the z centre open.
+    const pineRoadHalfWidth = this.map.id === 'rung-thong' || this.map.id === 'thanh-tuyet' ? Math.max(7, this.half * 0.18) : 0;
 
     const place = (kind: ObstacleKind, perHectare: number, kinds: readonly string[]) => {
       const usable = kinds.filter((id) => byId.get(id)?.kind === kind);
@@ -326,6 +298,7 @@ export class Terrain {
         const variant = rng.int(3);
         const yaw = rng.next();
         const jitter = rng.next();
+        if (kind === 'tree' && pineRoadHalfWidth > 0 && Math.abs(z) < pineRoadHalfWidth) continue;
         if (this.activeSides.some((s) => this.inZone(s, x, z)) && roll > 0.12) continue;
         if (this.riverDistance(x, z) < this.riverHalfWidth + 1.5) continue;
         if (!this.onLand(x, z, 1.2)) continue;

@@ -41,7 +41,6 @@ test('unit loadouts: explicit slots win, empty slots fall back to the legacy bui
   // Non-equipment ids in a slot are ignored.
   assert.deepEqual(unitEquipment({ ...unit('squire'), equipment: { ...unit('squire').equipment, back: 'm-warhorse' } }, assets).model.length, 2);
   assert.ok(swungWeapon(unitEquipment(unit('clubber'), assets).model));
-  assert.ok(!swungWeapon(unitEquipment(unit('stoner'), assets).model));
   assert.ok(!swungWeapon([item('e-kite-shield', 'handL')]));
 });
 
