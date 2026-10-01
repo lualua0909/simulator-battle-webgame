@@ -33,6 +33,7 @@ export function AdminNav() {
       {COLLECTIONS.filter((c) => c !== 'units').map((c) => item(`/admin/c/${c}`, <NamedIcon name={COLLECTION_SPECS[c].icon} />, COLLECTION_SPECS[c].label))}
       {item('/admin/settings', <Settings />, 'Cài đặt & khắc chế')}
       {item('/admin/users', <Users />, 'Người dùng')}
+      {item('/admin/unit-requests', <Users />, 'Yêu cầu lính mới')}
       {item('/admin/topups', <CreditCard />, 'Nạp xu')}
       {!IS_VERCEL && item('/admin/ranked', <Trophy />, 'Xếp hạng & gian lận')}
       <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>

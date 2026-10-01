@@ -1,4 +1,4 @@
-// User gửi yêu cầu lính mới (ảnh 2D đã nén + mô tả) → email thẳng cho admin.
+// User gửi yêu cầu lính mới (ảnh 2D đã nén + mô tả) → Firestore.
 import { createUnitRequestSchema, UNIT_REQUEST_DAILY_LIMIT } from '@/shared/unitRequest';
 import { jsonError, readJson } from '@/server/admin';
 import { sendUnitRequest, UnitRequestError } from '@/server/unitRequests';
@@ -18,7 +18,6 @@ export async function POST(req: Request) {
     return Response.json({ ok: true }, { status: 201 });
   } catch (e) {
     if (e instanceof UnitRequestError && e.message === 'limit') return jsonError(429, `Tối đa ${UNIT_REQUEST_DAILY_LIMIT} yêu cầu mỗi 24 giờ`);
-    if (e instanceof UnitRequestError) return jsonError(503, 'Máy chủ chưa cấu hình email');
     console.error('unit-requests POST:', e);
     return jsonError(503, 'Chưa gửi được yêu cầu, thử lại sau');
   }

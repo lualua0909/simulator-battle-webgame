@@ -1,6 +1,6 @@
 'use client';
 
-// Footer "Request new unit": user tải 1 ảnh 2D + viết mô tả → POST /api/unit-requests → email cho admin.
+// Footer "Request new unit": user tải 1 ảnh 2D + viết mô tả → POST /api/unit-requests → Firestore.
 // Ảnh được thu nhỏ + nén ngay trên trình duyệt để request nhỏ gọn.
 import { Check, ImagePlus, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -69,6 +69,10 @@ export default function UnitRequestModal({ onClose }: { onClose: () => void }) {
     setError(null);
     try {
       const res = await fetch('/api/unit-requests', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image, description }) });
+      if (res.status === 401) {
+        openAuth('signin');
+        throw new Error(t('unitRequest.signin'));
+      }
       if (res.status === 429) throw new Error(t('unitRequest.errLimit'));
       if (!res.ok) throw new Error(t('unitRequest.errSend'));
       setSent(true);

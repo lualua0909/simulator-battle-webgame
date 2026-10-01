@@ -1,4 +1,4 @@
-// Yêu cầu lính mới: user gửi 1 ảnh 2D + mô tả → server email thẳng cho admin (ảnh đính kèm).
+// Yêu cầu lính mới: user gửi 1 ảnh 2D + mô tả → server lưu Firestore để admin xem.
 // Ảnh được client thu nhỏ + nén thành data URL trước khi gửi, nên giới hạn dung lượng chặt.
 import { z } from 'zod';
 
@@ -8,7 +8,7 @@ export const UNIT_REQUESTS_COLLECTION = 'unitRequests';
 export const UNIT_REQUEST_IMAGE_MAX_SIDE = 1024;
 /** Độ dài tối đa của data URL gửi lên. */
 export const UNIT_REQUEST_IMAGE_MAX_CHARS = 700_000;
-/** Số yêu cầu tối đa của một user trong 24 giờ (chống spam hộp thư admin). */
+/** Số yêu cầu tối đa của một user trong 24 giờ. */
 export const UNIT_REQUEST_DAILY_LIMIT = 3;
 
 export const createUnitRequestSchema = z.object({
