@@ -39,7 +39,7 @@ export function abilityDps(w: WeaponDef): number {
   let targets = w.attack === 'breath' ? 3 : w.cleaveArc > 0 ? Math.min(w.maxTargets, 1 + w.cleaveArc / 60) : 1;
   if (w.splashRadius > 0) targets *= 1 + w.splashRadius / 2;
   if (w.attack === 'chain') for (let j = 1, f = w.chainFalloff; j <= w.chainCount; j++, f *= w.chainFalloff) targets += f;
-  let perCast = w.damage * w.volley * targets;
+  let perCast = (w.damageMax > w.damage ? (w.damage + w.damageMax) / 2 : w.damage) * w.volley * targets;
   if (w.attack === 'strike') perCast *= w.strikeCount;
   if (w.attack === 'vortex') perCast *= w.duration;
   else if (w.duration > 0) perCast *= 1 + w.duration / w.interval;

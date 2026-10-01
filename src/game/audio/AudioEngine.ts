@@ -398,11 +398,16 @@ export class AudioEngine {
         this.tone(dest, 0.18, { type: 'sine', freq: 700, freqEnd: 260, peak: 0.5, attack: 0.005 });
         break;
       case 'slam':
+      case 'headbutt':
         this.tone(dest, 0.2, { type: 'sine', freq: 90, freqEnd: 40, peak: 0.7, attack: 0.002 });
         this.noise(dest, 0.14, { type: 'lowpass', freq: 400, q: 0.7, peak: 0.6, attack: 0.002 });
         break;
       case 'cast':
         this.tone(dest, 0.16, { type: 'sine', freq: 1200, freqEnd: 1800, peak: 0.35, attack: 0.004 });
+        break;
+      case 'eat':
+        this.noise(dest, 0.18, { type: 'lowpass', freq: 600, freqEnd: 200, q: 1.5, peak: 0.7, attack: 0.01 });
+        this.tone(dest, 0.22, { type: 'sawtooth', freq: 110, freqEnd: 70, peak: 0.3, attack: 0.02 });
         break;
       default:
         break;

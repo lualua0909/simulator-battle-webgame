@@ -92,6 +92,8 @@ export class SimUnit {
   windupTotal = 0;
   channelLeft = 0;
   channelNext = 0;
+  /** Random pause left before the next skill may start (unit `skillDelay`). */
+  skillGap = 0;
   lastAttackTick = -1000;
   chargeSpeed = 0;
   stun = 0;
@@ -399,7 +401,7 @@ export class BattleSim {
     const powered = <T extends object>(def: T, patch: (d: T) => Partial<T>): T => (scale === 1 ? def : { ...def, ...patch(def) });
     let def = powered(base, (u) => ({ hp: u.hp * scale, trampleDamage: u.trampleDamage * scale }));
     if (shape) def = shape(def);
-    const strong = (w: WeaponDef) => powered(w, (x) => ({ damage: x.damage * scale, burnDps: x.burnDps * scale }));
+    const strong = (w: WeaponDef) => powered(w, (x) => ({ damage: x.damage * scale, damageMax: x.damageMax * scale, burnDps: x.burnDps * scale }));
     const id = this.units.length;
     // Stagger first attacks so a line does not swing in perfect unison.
     const abilities = [new SimAbility(strong(weapon), projectileOf(weapon), false, def.attackSpeed, (id % 7) * 0.05)];
@@ -883,6 +885,7 @@ export class BattleSim {
 
   private scratch: SimUnit[] = [];
   private scratch2: SimUnit[] = [];
+  private readonly scratchSkills: SimAbility[] = [];
   /** Own lists for the area loops below, so they never alias scratch/scratch2 held by a caller. */
   private readonly areaScratch: SimUnit[] = [];
   private readonly blastScratch: SimUnit[] = [];
@@ -1136,16 +1139,25 @@ export class BattleSim {
       if (u.windupLeft <= 0) this.execute(u, act);
       return;
     }
-    for (let i = 1; i < u.abilities.length; i++) {
-      const a = u.abilities[i];
-      if (a.cooldown > 0) continue;
-      const target = this.skillTarget(u, a);
-      if (target < 0) {
-        a.cooldown = SKILL_RETRY;
-        continue;
+    if (u.skillGap > 0) u.skillGap -= SIM_DT;
+    else {
+      // Ready skills are tried in random order, so a unit mixes its set (rock, rock, stomp, ...).
+      const ready = this.scratchSkills;
+      ready.length = 0;
+      for (let i = 1; i < u.abilities.length; i++) if (u.abilities[i].cooldown <= 0) ready.push(u.abilities[i]);
+      while (ready.length > 0) {
+        const k = ready.length > 1 ? this.rng.int(ready.length) : 0;
+        const a = ready[k];
+        ready[k] = ready[ready.length - 1];
+        ready.pop();
+        const target = this.skillTarget(u, a);
+        if (target < 0) {
+          a.cooldown = SKILL_RETRY;
+          continue;
+        }
+        this.begin(u, a, target);
+        return;
       }
-      this.begin(u, a, target);
-      return;
     }
     const base = u.abilities[0];
     const t = this.units[u.targetId];
@@ -1171,6 +1183,10 @@ export class BattleSim {
   private execute(u: SimUnit, a: SimAbility): void {
     u.windupLeft = -1;
     a.cooldown = a.def.cooldown / a.rate;
+    if (a.skill) {
+      const [lo, hi] = u.def.skillDelay;
+      u.skillGap = hi > lo ? this.rng.range(lo, hi) : lo;
+    }
     u.lastAttackTick = this.tick;
     u.lastAction = a;
     if (a.def.duration > 0 && a.def.attack !== 'vortex') {
@@ -1702,6 +1718,8 @@ export class BattleSim {
 
   private damage(v: SimUnit, amount: number, w: WeaponDef, nx: number, nz: number, falloff: number): void {
     if (!v.alive) return;
+    // Random damage per hit in [damage, damageMax]; `amount` already carries falloff, charge and stars.
+    if (w.damageMax > w.damage && w.damage > 0) amount *= this.rng.range(1, w.damageMax / w.damage);
     const dmg = amount * this.multiplier(w.damageType, v);
     v.hp -= dmg;
     this.events.push({ type: 'hit', x: v.x, y: v.y + v.def.height * 0.6, z: v.z, dx: nx, dz: nz, weaponId: w.id, targetId: v.id, blocked: false, damage: dmg });

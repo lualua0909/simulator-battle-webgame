@@ -108,7 +108,7 @@ interface UnitVis {
   atkT: number;
   /** Last attack was a dash skill: skeletal files play their leap clip. */
   atkLeap: boolean;
-  /** Skinned clip for the current attack (castStyle slam/swing/throw/palm pick stomp/sweep/toss/palm). */
+  /** Skinned clip for the current attack (castStyle slam/swing/throw/palm/eat/headbutt pick stomp/sweep/toss/palm/eat/headbutt). */
   atkClip: SkinState;
   radius: number;
   height: number;
@@ -125,8 +125,8 @@ const COLLAPSE_TIME = 2.4;
 type HitEvent = Extract<SimEvent, { type: 'hit' }>;
 type DeathEvent = Extract<SimEvent, { type: 'death' }>;
 
-/** Skill castStyle → skinned clip state (stomp / trunk sweep / trunk toss / palm); others use 'attack'. */
-const SKIN_CAST_STATES: Partial<Record<WeaponDef['castStyle'], SkinState>> = { slam: 'stomp', swing: 'sweep', throw: 'toss', palm: 'palm' };
+/** Skill castStyle → skinned clip state (stomp / trunk sweep / trunk toss / palm / eat / headbutt); others use 'attack'. */
+const SKIN_CAST_STATES: Partial<Record<WeaponDef['castStyle'], SkinState>> = { slam: 'stomp', swing: 'sweep', throw: 'toss', palm: 'palm', eat: 'eat', headbutt: 'headbutt' };
 
 export class UnitRenderer {
   readonly group = new THREE.Group();

@@ -68,9 +68,9 @@ const NOOP: WeaponDef = { ...SEED.weapons.find((w) => w.id === 'club')!, id: 'no
 const DUMMY: UnitDef = { ...SEED.units.find((u) => u.id === 'clubber')!, id: 'dummy', hp: 5000, speed: 0, weaponId: 'noop', skillIds: [] };
 
 /** One caster (blue) against a tight block of passive dummies (red). */
-function skillArena(caster: Partial<UnitDef>, opts: { dummies?: number; gap?: number; seed?: number } = {}) {
+function skillArena(caster: Partial<UnitDef>, opts: { dummies?: number; gap?: number; seed?: number; weapons?: WeaponDef[] } = {}) {
   const unit: UnitDef = { ...DUMMY, id: 'caster', hp: 100000, speed: 0, ...caster };
-  const content = { ...SEED, units: [...SEED.units, DUMMY, unit], weapons: [...SEED.weapons, NOOP] };
+  const content = { ...SEED, units: [...SEED.units, DUMMY, unit], weapons: [...SEED.weapons, NOOP, ...(opts.weapons ?? [])] };
   const terrain = new Terrain(ARENA, []);
   const red = Array.from({ length: opts.dummies ?? 9 }, (_, i) => ({ unitId: 'dummy', x: (opts.gap ?? 10) + (i % 3) * 1.1, z: (Math.floor(i / 3) - 1) * 1.1 }));
   const sim = new BattleSim(content, ARENA, terrain, armies({ blue: [{ unitId: 'caster', x: 0, z: 0 }], red }), opts.seed ?? 99);
@@ -161,6 +161,44 @@ test('attack speed and cast speed scale how often abilities fire', () => {
   const cast = count({ weaponId: 'noop', skillIds: ['set-chuoi'], speed: 0 }, 'set-chuoi');
   const quick = count({ weaponId: 'noop', skillIds: ['set-chuoi'], speed: 0, castSpeed: 2 }, 'set-chuoi');
   assert.ok(cast >= 2 && quick >= cast * 1.6, `chain ${cast} vs ${quick}`);
+});
+
+/** Single-target zap skill that never stuns or knocks back, so dummies stay put. */
+const ZAP = (id: string, patch: Partial<WeaponDef> = {}): WeaponDef => ({ ...SEED.weapons.find((w) => w.id === 'set-chuoi')!, id, damage: 5, chainCount: 0, cooldown: 0.5, windup: 0.1, stunDuration: 0, knockback: 0, minTargets: 1, initialCooldown: 0, ...patch });
+
+test('ready skills are cast in random order, repeats included', () => {
+  // Pause (1 s) longer than both cooldowns (0.5 s): every time both are ready and one is picked at random.
+  const a = skillArena({ weaponId: 'noop', skillIds: ['zap-a', 'zap-b'], skillDelay: [1, 1] }, { weapons: [ZAP('zap-a'), ZAP('zap-b')] });
+  a.run(30);
+  const casts = a.events.flatMap((e) => (e.type === 'cast' ? [e.weaponId] : []));
+  assert.ok(casts.includes('zap-a') && casts.includes('zap-b'), `casts ${casts.join(',')}`);
+  assert.ok(casts.some((id, i) => i > 0 && casts[i - 1] === id), `never repeated: ${casts.join(',')}`);
+  assert.ok(casts.some((id, i) => i > 0 && casts[i - 1] !== id), `never switched: ${casts.join(',')}`);
+});
+
+test('skillDelay spaces skills by a random pause in range', () => {
+  const a = skillArena({ weaponId: 'noop', skillIds: ['zap-a', 'zap-b'], skillDelay: [1, 2] }, { weapons: [ZAP('zap-a'), ZAP('zap-b')] });
+  const at: number[] = [];
+  a.run(30, () => a.sim.events.some((e) => e.type === 'cast') && at.push(a.sim.tick));
+  const gaps = at.slice(1).map((t, i) => (t - at[i]) / 30);
+  assert.ok(gaps.length >= 8, `casts ${at.length}`);
+  // gap = windup 0.1 + pause in [1, 2]
+  assert.ok(gaps.every((g) => g >= 1.05 && g <= 2.2), `gaps ${gaps.join(',')}`);
+  assert.ok(Math.max(...gaps) - Math.min(...gaps) > 0.3, `pauses not random: ${gaps.join(',')}`);
+});
+
+test('damageMax rolls each hit between damage and damageMax', () => {
+  const run = (w: WeaponDef) => {
+    const a = skillArena({ weaponId: 'noop', skillIds: [w.id] }, { weapons: [w] });
+    a.run(15);
+    return a.events.flatMap((e) => (e.type === 'hit' && e.weaponId === w.id ? [e.damage] : []));
+  };
+  const fixed = run(ZAP('zap-fixed', { damage: 10 }));
+  const rolled = run(ZAP('zap-rolled', { damage: 10, damageMax: 30 }));
+  const unit = fixed[0];
+  assert.ok(fixed.every((d) => d === unit), 'no damageMax = fixed damage');
+  assert.ok(rolled.length >= 10 && rolled.every((d) => d >= unit - 1e-9 && d <= unit * 3 + 1e-9), `rolled ${rolled.join(',')}`);
+  assert.ok(Math.max(...rolled) - Math.min(...rolled) > unit * 0.5, `not spread: ${rolled.join(',')}`);
 });
 
 test('battles with every skill stay deterministic', () => {
@@ -323,7 +361,9 @@ test('artillery shoots an enemy it can hit instead of backing away from one insi
 test('a trampling war platform closes to melee while its riders keep shooting', () => {
   const duel = (blueId: string) => {
     const terrain = new Terrain(OPEN);
-    const sim = new BattleSim(SEED, OPEN, terrain, armies({ blue: [{ unitId: blueId, x: -15, z: 0 }], red: [{ unitId: 'archer', x: 15, z: 0 }] }), 1);
+    // A sturdy target, so the duel measures movement rather than who dies first.
+    const content = { ...SEED, units: SEED.units.map((u) => (u.id === 'archer' && blueId !== 'archer' ? { ...u, hp: 5000 } : u)) };
+    const sim = new BattleSim(content, OPEN, terrain, armies({ blue: [{ unitId: blueId, x: -15, z: 0 }], red: [{ unitId: 'archer', x: 15, z: 0 }] }), 1);
     let min = Infinity;
     for (let i = 0; i < 30 * 25; i++) {
       sim.step();

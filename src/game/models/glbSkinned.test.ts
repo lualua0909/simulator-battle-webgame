@@ -260,20 +260,18 @@ for (const m of MAGE_TINTS) {
   });
 }
 
-test('committed velociraptor.glb parses with all six clips', async () => {
+test('velociraptor.glb: bite is the attack clip, run doubles as walk', () => {
   const file = path.join(process.cwd(), 'public', 'models', 'velociraptor.glb');
   assert.ok(existsSync(file), 'public/models/velociraptor.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
   const buf = readFileSync(file);
-  const gltf = await new GLTFLoader().parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, '');
-  const names = gltf.animations.map((a) => a.name);
-  for (const state of ['idle', 'walk', 'run', 'attack', 'death', 'jump'] as const) {
-    assert.ok(pickClipName(names, state), `no clip for ${state} in ${names.join(', ')}`);
-  }
-  gltf.scene.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(gltf.scene);
-  const size = box.getSize(new THREE.Vector3());
-  assert.ok(size.y > 1 && size.y < 30, `rest height ${size.y} m is plausible before normalisation`);
-  assert.ok(box.min.y < 0.5, 'feet near the authored origin so grounding only lifts');
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Bite');
+  assert.equal(pickClipName(names, 'idle'), 'Idle');
+  assert.equal(pickClipName(names, 'walk'), 'Run');
+  assert.equal(pickClipName(names, 'run'), 'Run');
+  assert.equal(pickClipName(names, 'death'), 'Death');
 });
 
 const EXTRA_DINOS = [
@@ -441,6 +439,10 @@ test('elephant yaw corrections map the snout onto engine forward +Z', () => {
     ['/models/khung-long-bay.glb', -1, Math.PI / 2],
     ['/models/rong%20lua.glb', -1, Math.PI / 2],
     ['/models/triceratops.glb', 1, -Math.PI / 2],
+    ['/models/velociraptor.glb', -1, Math.PI / 2],
+    ['/models/t-rex.glb', -1, Math.PI / 2],
+    ['/models/parasaurolophus.glb', -1, Math.PI / 2],
+    ['/models/dragon-avatar.glb', -1, Math.PI / 2],
   ];
   for (const [url, headX, corr] of cases) {
     assert.equal(yawCorrectionFor(url), corr, url);
@@ -452,7 +454,7 @@ test('elephant yaw corrections map the snout onto engine forward +Z', () => {
 });
 
 test('other skinned packs keep yaw 0 (already face +Z)', () => {
-  for (const url of ['/models/velociraptor.glb', '/models/ninja.glb', '/models/rong-xanh.glb', '/models/phap-su.glb']) {
+  for (const url of ['/models/ninja.glb', '/models/rong-xanh.glb', '/models/phap-su.glb']) {
     assert.equal(yawCorrectionFor(url), 0, url);
   }
 });
@@ -554,12 +556,25 @@ test('parasaurolophus.glb: bite is the attack clip', () => {
   const names = json.animations.map((a) => a.name);
   assert.equal(pickClipName(names, 'attack'), 'Attack_Bite');
   assert.equal(pickClipName(names, 'idle'), 'Idle');
-  assert.equal(pickClipName(names, 'walk'), 'Walk');
+  assert.equal(pickClipName(names, 'walk'), 'Run');
   assert.equal(pickClipName(names, 'run'), 'Run');
   assert.equal(pickClipName(names, 'death'), 'Death');
 });
 
-test('t-rex.glb: bite shake is the attack clip', () => {
+test('dragon-avatar.glb (Rồng trắng): Fly is idle and locomotion, Attack_Breath the attack', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'dragon-avatar.glb');
+  assert.ok(existsSync(file), 'public/models/dragon-avatar.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  for (const state of ['idle', 'walk', 'run', 'fly'] as const) assert.equal(pickClipName(names, state), 'Fly', state);
+  assert.equal(pickClipName(names, 'attack'), 'Attack_Breath');
+  assert.equal(pickClipName(names, 'palm'), null, 'palm cast falls back to the attack clip');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+});
+
+test('t-rex.glb: bite shake is the attack clip, Interact_Eat the eat skill clip', () => {
   const file = path.join(process.cwd(), 'public', 'models', 't-rex.glb');
   assert.ok(existsSync(file), 'public/models/t-rex.glb is committed');
   // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
@@ -567,6 +582,7 @@ test('t-rex.glb: bite shake is the attack clip', () => {
   const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
   const names = json.animations.map((a) => a.name);
   assert.equal(pickClipName(names, 'attack'), 'Attack_BiteShake');
+  assert.equal(pickClipName(names, 'eat'), 'Interact_Eat');
   assert.equal(pickClipName(names, 'idle'), 'Idle');
   assert.equal(pickClipName(names, 'walk'), 'Walk');
   assert.equal(pickClipName(names, 'run'), 'Run');
@@ -608,4 +624,19 @@ test('death clips that lift the root lose it; slumping ones keep it', () => {
   assert.deepEqual(stripRisingDeath(clip('Death', -0.316, 0.407)).tracks.map((t) => t.name), ['Root.quaternion']);
   assert.equal(stripRisingDeath(clip('Death', 0.5, 0)).tracks.length, 2);
   assert.equal(stripRisingDeath(clip('Swim', -0.3, 0.4)).tracks.length, 2);
+});
+
+test('rhino-avtar.glb (Tê giác sao Hoả): Attack_Headbutt is the headbutt clip, head at +X', () => {
+  const file = path.join(process.cwd(), 'public', 'models', 'rhino-avtar.glb');
+  assert.ok(existsSync(file), 'public/models/rhino-avtar.glb is committed');
+  // Draco-compressed mesh: read clip names from the GLB JSON chunk instead of decoding it.
+  const buf = readFileSync(file);
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as { animations: { name: string }[] };
+  const names = json.animations.map((a) => a.name);
+  assert.equal(pickClipName(names, 'headbutt'), 'Attack_Headbutt');
+  assert.equal(pickClipName(names, 'idle'), 'Idle');
+  assert.equal(pickClipName(names, 'walk'), 'Walk');
+  assert.equal(pickClipName(names, 'run'), 'Walk');
+  assert.equal(pickClipName(names, 'death'), 'Death');
+  assert.equal(yawCorrectionFor('/models/rhino-avtar.glb'), -Math.PI / 2);
 });

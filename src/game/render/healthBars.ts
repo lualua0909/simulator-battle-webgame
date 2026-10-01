@@ -7,12 +7,12 @@ import { ALL_SIDES, type Side } from '../sim/terrain';
 import type { BattleSim } from '../sim/world';
 import { commitInstances } from './instancing';
 
-const BAR_HEIGHT = 0.2;
+const BAR_HEIGHT = 0.12;
 /** Bars grow with camera distance (up to this factor) so they stay readable zoomed out. */
-const MAX_ZOOM_SCALE = 3;
-const BAR_GAP = 0.35;
+const MAX_ZOOM_SCALE = 2.2;
+const BAR_GAP = 0.3;
 /** Track rim around the fill, as a share of the bar height. */
-const RIM = 0.18;
+const RIM = 0.15;
 const START_CAPACITY = 256;
 
 /** Texture size: the pill's ends are semicircles of radius TEX_H / 2 (u 0..CAP_U and 1−CAP_U..1). */
@@ -39,7 +39,7 @@ function pillTexture(stops: [number, string][], shine: boolean): THREE.CanvasTex
     g.beginPath();
     g.roundRect(r * 0.5, top, TEX_W - r, h, h / 2);
     const s = g.createLinearGradient(0, top, 0, top + h);
-    s.addColorStop(0, 'rgba(255,255,255,0.55)');
+    s.addColorStop(0, 'rgba(255,255,255,0.3)');
     s.addColorStop(1, 'rgba(255,255,255,0.05)');
     g.fillStyle = s;
     g.fill();
@@ -90,9 +90,9 @@ export class HealthBars {
   constructor() {
     this.group.name = 'healthBars';
     const opts = { fog: false, toneMapped: false, depthTest: false, depthWrite: false, transparent: true };
-    this.trackMat = new THREE.MeshBasicMaterial({ ...opts, map: pillTexture([[0, '#2a0f10'], [1, '#0c0405']], false) });
+    this.trackMat = new THREE.MeshBasicMaterial({ ...opts, map: pillTexture([[0, '#2a0f10'], [1, '#0c0405']], false), opacity: 0.4 });
     this.fillMat = {} as Record<Side, THREE.MeshBasicMaterial>;
-    for (const side of ALL_SIDES) this.fillMat[side] = new THREE.MeshBasicMaterial({ ...opts, map: pillTexture(FILL_STOPS[side], true) });
+    for (const side of ALL_SIDES) this.fillMat[side] = new THREE.MeshBasicMaterial({ ...opts, map: pillTexture(FILL_STOPS[side], true), opacity: 0.7 });
     this.grow(START_CAPACITY);
   }
 
@@ -111,7 +111,7 @@ export class HealthBars {
       const y = u.py + (u.y - u.py) * alpha + u.def.height + BAR_GAP;
       const z = u.pz + (u.z - u.pz) * alpha;
       const zoom = Math.min(MAX_ZOOM_SCALE, Math.max(1, this.eye.distanceTo(this.c.set(x, y, z)) / 20));
-      const width = Math.min(2.5, Math.max(0.9, u.def.radius * 1.6)) * zoom;
+      const width = Math.min(1.6, Math.max(0.6, u.def.radius * 1.1)) * zoom;
       const height = BAR_HEIGHT * zoom;
       const rim = height * RIM;
       this.place(this.track, n, width, height, 0);

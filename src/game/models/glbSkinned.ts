@@ -12,7 +12,7 @@ import { swungWeapon, type EquipItem } from './equipment';
 import { mountOnBones, solveGrips, type GripSet } from './glbEquipment';
 import { getGLTFLoader } from './gltfLoader';
 
-export type SkinState = 'idle' | 'walk' | 'run' | 'fly' | 'attack' | 'leap' | 'death' | 'jump' | 'stomp' | 'sweep' | 'toss' | 'palm';
+export type SkinState = 'idle' | 'walk' | 'run' | 'fly' | 'attack' | 'leap' | 'death' | 'jump' | 'stomp' | 'sweep' | 'toss' | 'palm' | 'eat' | 'headbutt';
 
 /** Rest height (m) every skinned file is normalised to at scale 1. */
 export const NORMALIZED_HEIGHT = 2;
@@ -26,8 +26,10 @@ export const NORMALIZED_HEIGHT = 2;
  * voi-trang.glb is authored with forward +X and needs -90°; khunng long co dai.glb (long-neck)
  * has its neck along -X and needs +90°; khung-long-bay.glb (Rồng Xanh) has its head at -X and
  * needs +90°; rong lua.glb (Rồng lửa) likewise has its head at -X and needs +90°; triceratops.glb
- * has its head at +X and needs -90°. Without it they walk sideways. Matched by URL suffix so tint/hide
- * variants and re-uploads under a new path with the same file name keep the fix.
+ * has its head at +X and needs -90°; velociraptor.glb, t-rex.glb, parasaurolophus.glb and
+ * dragon-avatar.glb (Rồng trắng) have their head at -X and need +90°; rhino-avtar.glb (Tê giác sao Hoả)
+ * has its head at +X and needs -90°. Without it they walk sideways. Matched by URL suffix so tint/hide variants and re-uploads under a new
+ * path with the same file name keep the fix.
  */
 const YAW_CORRECTIONS: Array<[string, number]> = [
   ['voi-mamut.glb', Math.PI / 2],
@@ -36,6 +38,11 @@ const YAW_CORRECTIONS: Array<[string, number]> = [
   ['khung-long-bay.glb', Math.PI / 2],
   ['rong lua.glb', Math.PI / 2],
   ['triceratops.glb', -Math.PI / 2],
+  ['velociraptor.glb', Math.PI / 2],
+  ['t-rex.glb', Math.PI / 2],
+  ['parasaurolophus.glb', Math.PI / 2],
+  ['dragon-avatar.glb', Math.PI / 2],
+  ['rhino-avtar.glb', -Math.PI / 2],
 ];
 
 /** Yaw correction for `url` in radians (0 when the file already faces +Z). Pure — unit-tested. */
@@ -107,7 +114,9 @@ const loader = getGLTFLoader();
 /** Clip keywords per battle state; matches Quaternius-style names like "Armature|Velociraptor_Run". */
 const KEYWORDS: Record<SkinState, string[]> = {
   idle: ['idle', 'hover', 'fly', 'swim'],
-  walk: ['walk', 'fly', 'swim'],
+  // No 'walk' clip in some packs (e.g. velociraptor.glb ships only Run): use the run cycle
+  // so a slow unit never glides in the idle pose.
+  walk: ['walk', 'fly', 'swim', 'run'],
   // No 'run' clip in some packs (e.g. voi-mamut.glb ships only Walk): fall back to
   // the walk cycle so a fast unit never glides in the idle pose.
   run: ['run', 'walk', 'fly', 'swim'],
@@ -131,10 +140,14 @@ const KEYWORDS: Record<SkinState, string[]> = {
   toss: ['attack_trunktoss', 'toss', 'attack_trunksweep', 'trunksweep', 'sweep', 'attack_slash', 'slash'],
   // Palm strike (linh-melee.glb Attack_Palm, the chưởng skill).
   palm: ['attack_palm', 'palm'],
+  // Head-down feed (t-rex.glb Interact_Eat, the Cúi ăn skill).
+  eat: ['interact_eat', 'eat'],
+  // Horn charge (rhino-avtar.glb Attack_Headbutt, Tê giác sao Hoả).
+  headbutt: ['attack_headbutt', 'headbutt'],
 };
 
 /** Skill states that fall back to the attack clip (not idle) when the file lacks a match. */
-const ATTACK_LIKE: readonly SkinState[] = ['stomp', 'sweep', 'toss', 'palm'];
+const ATTACK_LIKE: readonly SkinState[] = ['stomp', 'sweep', 'toss', 'palm', 'eat', 'headbutt'];
 
 /**
  * Best clip name in `names` for `state` (case-insensitive, keyword must start a word so 'run'

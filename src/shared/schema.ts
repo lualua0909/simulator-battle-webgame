@@ -9,7 +9,7 @@ export const ROLES = ['melee', 'ranged', 'support', 'siege'] as const;
 export const RARITIES = ['common', 'rare', 'epic', 'legendary'] as const;
 export const ATTACK_KINDS = ['melee', 'projectile', 'breath', 'heal', 'chain', 'strike', 'vortex', 'nova', 'dash'] as const;
 /** Body animation while winding up / releasing an ability ('auto' = derived from the kind and the held weapon). */
-export const CAST_STYLES = ['auto', 'swing', 'thrust', 'bow', 'throw', 'cast', 'gun', 'raise', 'palm', 'slam'] as const;
+export const CAST_STYLES = ['auto', 'swing', 'thrust', 'bow', 'throw', 'cast', 'gun', 'raise', 'palm', 'slam', 'eat', 'headbutt'] as const;
 export const STRIKE_VFX = ['lightning', 'meteor'] as const;
 export const UNIT_ASSET_KINDS = ['humanoid', 'horse', 'elephant', 'dragon', 'bird', 'raptor', 'catapult', 'structure'] as const;
 export const ENV_ASSET_KINDS = ['tree', 'rock', 'bush'] as const;
@@ -86,8 +86,10 @@ export const unitSchema = z.object({
   height: z.number().min(0.3).max(20),
   armorClass: z.enum(ARMOR_CLASSES),
   weaponId: idSchema,
-  /** Extra abilities (documents of `weapons`), cast automatically in list order when ready. */
+  /** Extra abilities (documents of `weapons`); a random ready one is cast automatically. */
   skillIds: z.array(idSchema).max(6).default([]),
+  /** Random pause (s, min → max) after a skill before the next skill may start. */
+  skillDelay: range2.default(() => [0, 0] as [number, number]),
   /** Basic attack rate multiplier: cooldown and windup are divided by it. */
   attackSpeed: z.number().min(0.1).max(10).default(1),
   /** Skill rate multiplier: skill cooldown, cast time and channel interval are divided by it. */
@@ -144,6 +146,8 @@ export const weaponSchema = z.object({
   name,
   attack: z.enum(ATTACK_KINDS),
   damage: z.number().min(0).max(100000),
+  /** Each hit rolls damage in [damage, damageMax]; 0 (or ≤ damage) = fixed damage. */
+  damageMax: z.number().min(0).max(100000).default(0),
   damageType: z.enum(DAMAGE_TYPES),
   range: z.number().min(0.3).max(200),
   minRange: z.number().min(0).max(100).default(0),

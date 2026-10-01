@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { WeaponDef } from '@/shared/schema';
 import type { ModelTemplate, SegmentTemplate } from '../models/bake';
 
-export type AttackStyle = 'swing' | 'thrust' | 'bow' | 'throw' | 'cast' | 'gun' | 'raise' | 'palm' | 'slam' | 'breath' | 'none';
+export type AttackStyle = 'swing' | 'thrust' | 'bow' | 'throw' | 'cast' | 'gun' | 'raise' | 'palm' | 'slam' | 'eat' | 'headbutt' | 'breath' | 'none';
 
 export interface AnimInput {
   time: number;
