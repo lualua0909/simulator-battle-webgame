@@ -68,3 +68,8 @@ export class FrameRateGovernor {
     this.slow = 0;
   }
 }
+
+/** Phones and tablets (touch-first, or a viewport ≤ 1024 px): battle maps drop trees, rocks, bushes and grass there. */
+export function isCompactDevice(): boolean {
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse), (max-width: 1024px)').matches;
+}

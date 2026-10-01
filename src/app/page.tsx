@@ -90,7 +90,7 @@ export default function Home() {
             <span className="bounce-soft inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#2d3232] bg-gradient-to-b from-[#ffd76a] to-[#f59e0b] text-2xl shadow-[0_3px_0_0_#2d3232]">
               <Swords />
             </span>
-            <span className="min-w-0 leading-none">
+            <span className="hidden min-w-0 leading-none min-[400px]:block">
               <span className="block truncate text-base tracking-wide sm:text-lg">CLAY BATTLE</span>
               <span className="block truncate text-sm text-[#b25b00]">ĐẠI CHIẾN ĐẤT SÉT</span>
             </span>

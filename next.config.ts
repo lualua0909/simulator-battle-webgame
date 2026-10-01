@@ -16,6 +16,12 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['better-sqlite3'],
   // Page routes are English; keep the old Vietnamese top-up URL working for shared links.
   redirects: async () => [{ source: '/nap-xu', destination: '/topup', permanent: true }],
+  // Battle GLBs come from the browser cache once the home page has warmed them: shipped models are
+  // fresh for a day then served stale while revalidating; uploads are timestamped, so never change.
+  headers: async () => [
+    { source: '/models/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=31536000' }] },
+    { source: '/uploads/models/:path*', headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }] },
+  ],
   // One value per build (per start in dev): client caches keyed by it drop what older code produced.
   // HERO_BANNER: hero image slot filled? Checked per build/start so a missing file never hits the image optimizer.
   env: {

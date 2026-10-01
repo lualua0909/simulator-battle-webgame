@@ -40,17 +40,20 @@ export default function UnitPalette({ bundle, thumbs, selected, onSelect, onDrag
 
   return (
     // Fixed height: a faction tab with few units must not shrink the tray and shift the map framed above it.
-    <div className="panel pointer-events-auto flex h-[32dvh] min-h-[150px] w-full min-w-0 flex-col gap-1.5 overflow-hidden overscroll-contain p-1.5 sm:h-[42vh] sm:gap-2 sm:p-2 landscape:h-[48dvh] landscape:min-h-[120px]">
-      <div className="flex shrink-0 flex-nowrap items-center gap-1 overflow-x-auto overscroll-contain py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <Tab active={tab === 'all'} onClick={() => setTab('all')}>
-          {t('palette.all')}
-        </Tab>
-        {factions.map((f) => (
-          <Tab key={f.id} active={tab === f.id} onClick={() => setTab(f.id)} color={f.color} label={factionName(f.id, f.name)}>
-            {factionName(f.id, f.name)}
+    <div className="panel pointer-events-auto flex h-[32dvh] min-h-[210px] w-full min-w-0 flex-col gap-1.5 overflow-hidden overscroll-contain p-1.5 sm:h-[42vh] sm:gap-2 sm:p-2 landscape:h-[48dvh] landscape:min-h-[120px]">
+      {/* Below 2xl the tools get their own row: at the end of the scrolling tab strip they sat off-screen. */}
+      <div className="flex shrink-0 flex-col gap-1 2xl:flex-row 2xl:items-center">
+        <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto overscroll-contain py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <Tab active={tab === 'all'} onClick={() => setTab('all')}>
+            {t('palette.all')}
           </Tab>
-        ))}
-        {action && <div className="ml-auto shrink-0">{action}</div>}
+          {factions.map((f) => (
+            <Tab key={f.id} active={tab === f.id} onClick={() => setTab(f.id)} color={f.color} label={factionName(f.id, f.name)}>
+              {factionName(f.id, f.name)}
+            </Tab>
+          ))}
+        </div>
+        {action && <div className="shrink-0 overflow-x-auto overscroll-contain [scrollbar-width:none] 2xl:ml-auto [&::-webkit-scrollbar]:hidden">{action}</div>}
       </div>
       <div className="flex min-h-0 flex-1 gap-2">
         <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(84px,1fr))] content-start gap-2 overflow-y-auto overscroll-contain px-1.5 pb-2 pt-2 sm:grid-cols-[repeat(auto-fill,minmax(108px,1fr))] sm:gap-1.5">

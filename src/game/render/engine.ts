@@ -23,7 +23,7 @@ import { HeightField } from './heightField';
 import { Glow } from './glow';
 import { ParticleSystem } from './particles';
 import { ProjectileRenderer } from './projectiles';
-import { FrameRateGovernor, LOWER_TIER, QUALITY, type QualityTier } from './quality';
+import { FrameRateGovernor, isCompactDevice, LOWER_TIER, QUALITY, type QualityTier } from './quality';
 import { loadRapier, RagdollWorld } from './ragdoll';
 import { createIsland, createPlateau } from './island';
 import { createScenery } from './scenery';
@@ -380,9 +380,12 @@ export class BattleEngine {
     this.mapGroup.add(terrain.island ? createIsland(terrain) : createPlateau(terrain));
     this.water = createWater(terrain, this.gpu?.waterMaterial);
     if (this.water) this.mapGroup.add(this.water.mesh);
-    const scenery = createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a])));
-    this.trees = scenery.trees;
-    this.mapGroup.add(scenery);
+    // Phones/tablets skip the scenery render (obstacles still block in the sim, which must match other players).
+    if (!isCompactDevice()) {
+      const scenery = createScenery(terrain, new Map(this.bundle.assets.map((a) => [a.id, a])));
+      this.trees = scenery.trees;
+      this.mapGroup.add(scenery);
+    }
     const weather = map.id === 'thanh-tuyet' ? 'snow' : map.id === 'sa-mac' ? 'sand' : null;
     if (weather) {
       this.weather = createWeather(weather, terrain, this.particles, this.bundle.particles.find((p) => p.id === 'whirl-dust') ?? null);

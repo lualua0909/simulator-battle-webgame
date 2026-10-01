@@ -133,7 +133,7 @@ export default function TopupClient() {
             <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#2d3232] bg-gradient-to-b from-[#ffd76a] to-[#f59e0b] text-2xl">
               <Swords />
             </span>
-            <span className="min-w-0 leading-none">
+            <span className="hidden min-w-0 leading-none min-[400px]:block">
               <span className="block truncate text-base tracking-wide sm:text-lg">CLAY BATTLE</span>
               <span className="block truncate text-sm text-[#b25b00]">{t('topup.navTitle')}</span>
             </span>
@@ -149,7 +149,9 @@ export default function TopupClient() {
               {t('nav.features')}
             </Link>
           </nav>
-          <PlayerHud />
+          <div className="flex min-w-0 shrink-0 items-center gap-2">
+            <PlayerHud />
+          </div>
         </div>
       </header>
 
@@ -186,20 +188,20 @@ export default function TopupClient() {
                   <dt className="shrink-0 text-white/70">{t('topup.accountHolder')}</dt>
                   <dd className="min-w-0 break-words text-right font-bold text-white">{bank.accountName}</dd>
                 </div>
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                   <dt className="shrink-0 text-white/70">{t('topup.accountNumber')}</dt>
-                  <dd className="flex min-w-0 flex-1 items-center justify-end gap-2 break-all text-right font-bold tracking-wider text-white">
-                    {bank.accountNo}
+                  <dd className="ml-auto flex max-w-full items-center justify-end gap-2 text-right font-bold tracking-wider text-white">
+                    <span className="min-w-0 break-all">{bank.accountNo}</span>
                     <button onClick={() => void onCopy('stk', bank.accountNo)} className="min-h-[36px] shrink-0 rounded-md border border-white/15 px-1.5 py-0.5 text-sm text-white/70 hover:bg-white/10" title="Sao chép STK">
                       {copied === 'stk' ? <><Check /> {t('topup.copied')}</> : t('topup.copy')}
                     </button>
                   </dd>
                 </div>
                 {order && (
-                  <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-2">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-white/10 pt-2">
                     <dt className="shrink-0 text-white/70">{t('topup.transferContent')}</dt>
-                    <dd className="flex min-w-0 flex-1 items-center justify-end gap-2 break-all text-right font-bold tracking-widest text-[#ffd76a]">
-                      {order.content}
+                    <dd className="ml-auto flex max-w-full items-center justify-end gap-2 text-right font-bold tracking-widest text-[#ffd76a]">
+                      <span className="min-w-0 break-all">{order.content}</span>
                       <button onClick={() => void onCopy('content', order.content)} className="min-h-[36px] shrink-0 rounded-md border border-[#e8b34a]/40 px-1.5 py-0.5 text-sm text-[#ffd76a] hover:bg-[#e8b34a]/10" title="Sao chép nội dung">
                         {copied === 'content' ? <><Check /> {t('topup.copied')}</> : t('topup.copy')}
                       </button>

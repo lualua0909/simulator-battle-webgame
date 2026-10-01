@@ -22,11 +22,18 @@ import PlayerAvatar from './PlayerAvatar';
 import { usePlayer, useTick } from './PlayerProvider';
 import RiveDailyBonus from './RiveDailyBonus';
 
+const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+
+/** Five digits in full; beyond that compact (123K, 1.2M): the bar only fits about six characters. */
+function shortCoins(n: number): string {
+  return n >= 100_000 ? COMPACT.format(n) : formatCoins(n);
+}
+
 export function CoinBar({ value, loading }: { value: number; loading?: boolean }) {
   const { t } = useLanguage();
   return (
     <Link href="/topup" className="coin-bar w-28 min-w-28" title={t('hud.topupTitle')}>
-      <span className="text-outline ml-auto truncate text-xl leading-none tabular-nums">{loading ? '…' : formatCoins(value)}</span>
+      <span className="text-outline ml-auto truncate text-xl leading-none tabular-nums" title={formatCoins(value)}>{loading ? '…' : shortCoins(value)}</span>
       <CoinIcon size={42} className="absolute -right-4 top-1/2 -translate-y-1/2 shrink-0 drop-shadow" />
     </Link>
   );
@@ -67,8 +74,9 @@ export default function PlayerHud({ bundle: externalBundle }: { bundle?: ConfigB
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   // undefined (home page: no prop passed) = load our own; a value (GameClient's own bundle,
   // already loaded there) = use it and skip our own fetch entirely.
+  // Our own load also warms the battle GLBs in the background, so entering a game clones from cache.
   const external = externalBundle !== undefined;
-  const selfConfig = useConfig(!external);
+  const selfConfig = useConfig(!external, { background: true, battle: true });
   const bundle = external ? externalBundle : selfConfig.bundle;
   useTick(1000);
 

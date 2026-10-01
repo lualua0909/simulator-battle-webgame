@@ -9,8 +9,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await cmsUser();
   if (!user) redirect('/admin/login');
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-60 shrink-0 border-r-2 border-ink bg-parch p-3">
+    // Phones/tablets: the sidebar becomes a top bar (its nav a scrolling strip) so content keeps the full width.
+    <div className="flex min-h-screen flex-col md:flex-row">
+      <aside className="w-full shrink-0 border-b-2 border-ink bg-parch p-3 md:w-60 md:border-b-0 md:border-r-2">
         <div className="mb-3 font-display text-lg leading-tight">
           Clay Battle <span className="text-xs">CMS</span>
           <br />

@@ -62,7 +62,7 @@ export default function SettingsEditor() {
           {status.ok && <Check />} {status.text}
         </div>
       )}
-      <div className="grid items-start gap-3 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
         <div className="panel p-4">
           <DocForm fields={FIELDS} doc={settings as unknown as Record<string, unknown>} onChange={(d) => setSettings(d as unknown as Settings)} bundle={bundle} errors={errors} />
         </div>

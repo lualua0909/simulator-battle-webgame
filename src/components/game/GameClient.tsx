@@ -51,7 +51,7 @@ const RANDOM_FILL: BotDef = {
 };
 
 export default function GameClient({ mode, initialRoom }: { mode: Mode; initialRoom?: string }) {
-  const { bundle, error } = useConfig();
+  const { bundle, error } = useConfig(true, { battle: true });
   if (error) return <p className="p-6 text-red-700">Could not load game config: {error}</p>;
   return <Game mode={mode} initialRoom={initialRoom} bundle={bundle} />;
 }
@@ -892,9 +892,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             <div className={`flex min-h-0 flex-1 items-end justify-end py-2 ${cine ? 'invisible' : ''}`}>
               <GameChat className="max-h-[22rem]" />
             </div>
-            <div ref={trayRef} className={`mt-auto flex items-end gap-1.5 sm:gap-2 ${cine ? 'invisible' : ''}`}>
+            {/* Phones: the help button sits above the tray so the tray (and its tool row) gets the full width. */}
+            <div ref={trayRef} className={`mt-auto flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:gap-2 ${cine ? 'invisible' : ''}`}>
               <HelpHint text={t('game.deployHelp')} />
-              <div className="min-w-0 flex-1">
+              <div className="w-full min-w-0 flex-1">
                 <UnitPalette
                   bundle={bundle}
                   thumbs={thumbs}
@@ -911,28 +912,28 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                   player={player}
                   stars={mode === 'bot' || (online && net.room?.useStars) ? player?.stars : undefined}
                   action={
-                    <div className="flex items-center gap-1 sm:gap-2">
+                    <div className="deploy-tools flex items-center gap-1 whitespace-nowrap sm:gap-2">
                       <div className="flex items-center gap-1 sm:gap-2">
                         <button className="btn px-2 py-0.5 text-xs sm:text-sm" onClick={online ? backToLobby : backToSetup} aria-label={t('game.back')}>
                           <ArrowLeft />
                         </button>
                         <span className={`rounded-lg px-1.5 py-0.5 text-xs font-display sm:text-sm text-white sm:px-2 ${SIDE_BG[mySide]}`}>
-                          <span className="hidden sm:inline">{t('game.side')} </span>
+                          <span className="hidden min-[1000px]:inline">{t('game.side')} </span>
                           {sideName(mySide, locale)}
-                          {defense && <span className="hidden sm:inline">{defense === mySide ? <> · <Castle /> {t('panels.defendYou')}</> : <> · <Flame /> {t('panels.attackYou')}</>}</span>}
+                          {defense && <span className="hidden min-[1000px]:inline">{defense === mySide ? <> · <Castle /> {t('panels.defendYou')}</> : <> · <Flame /> {t('panels.attackYou')}</>}</span>}
                         </span>
                         <span className="whitespace-nowrap text-xs font-bold">
-                          {myArmy.length - wallBlocks}/{maxUnits} {t('game.units')}
+                          {myArmy.length - wallBlocks}/{maxUnits}<span className="hidden sm:inline"> {t('game.units')}</span>
                           {wallBlocks > 0 && ` · ${wallBlocks} ${t('game.wallBlocks')}`}
                         </span>
                         <button className={`btn px-2 py-0.5 text-xs sm:text-sm ${tool === 'place' ? 'btn-gold' : ''}`} onClick={() => setTool('place')} title={t('game.place')} aria-label={t('game.place')}>
-                          <Plus /><span className="hidden sm:inline"> {t('game.place')}</span>
+                          <Plus /><span className="hidden min-[1000px]:inline"> {t('game.place')}</span>
                         </button>
                         <button className={`btn px-2 py-0.5 text-xs sm:text-sm ${tool === 'erase' ? 'btn-gold' : ''}`} onClick={() => setTool('erase')} title={`${t('game.erase')} (X)`} aria-label={t('game.erase')}>
-                          <X /><span className="hidden sm:inline"> {t('game.erase')}</span>
+                          <X /><span className="hidden min-[1000px]:inline"> {t('game.erase')}</span>
                         </button>
                         <button className="btn px-2 py-0.5 text-xs sm:text-sm" disabled={locked} onClick={fillRandom} title={t('game.randomDeploy')} aria-label={t('game.randomDeploy')}>
-                          <Dices /><span className="hidden sm:inline"> {t('game.random')}</span>
+                          <Dices /><span className="hidden min-[1000px]:inline"> {t('game.random')}</span>
                         </button>
                         <button
                           className="btn px-2 py-0.5 text-xs sm:text-sm"
@@ -944,11 +945,11 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
                           title={t('game.clearAll')}
                           aria-label={t('game.clearAll')}
                         >
-                          <Trash2 /><span className="hidden sm:inline"> {t('game.clearAll')}</span>
+                          <Trash2 /><span className="hidden min-[1000px]:inline"> {t('game.clearAll')}</span>
                         </button>
                       </div>
                       <button className="btn px-2 py-0.5 text-xs sm:text-sm" onClick={() => engine?.frameDeploy(mySide)} title={t('game.recenterTitle')} aria-label={t('game.recenter')}>
-                        <LocateFixed /> {t('game.recenter')}
+                        <LocateFixed /><span className="hidden min-[1000px]:inline"> {t('game.recenter')}</span>
                       </button>
                     </div>
                   }
@@ -980,9 +981,10 @@ function Game({ mode, initialRoom, bundle }: { mode: Mode; initialRoom?: string;
             onVR={vrOk ? () => (view.vr ? engine?.exitVR() : void engine?.enterVR().catch((err) => flash(`${t('game.vrError')} ${err instanceof Error ? err.message : err}`))) : undefined}
           />
         )}
+        {/* Phones (portrait or landscape): below the setup panel in the column flow, so it never covers the panel's buttons. */}
         {bundle && (phase === 'setup' || phase === 'lobby') && (
-          <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-3">
-            <GameChat className="max-h-[40vh]" />
+          <div className="mt-2 flex shrink-0 justify-end roomy:absolute roomy:bottom-[max(0.75rem,env(safe-area-inset-bottom))] roomy:right-3 roomy:mt-0">
+            <GameChat className="max-h-[25vh] roomy:max-h-[40vh]" />
           </div>
         )}
         {bundle && phase === 'battle' && !cine && (

@@ -19,16 +19,16 @@ export function AdminNav() {
   const item = (href: string, icon: ReactNode, label: string, exact = false) => {
     const active = exact ? path === href : path.startsWith(href);
     return (
-      <Link key={href} href={href} className={`block rounded-lg px-2 py-1.5 text-sm font-bold ${active ? 'bg-ink text-white' : 'hover:bg-white'}`}>
+      <Link key={href} href={href} className={`block shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-bold ${active ? 'bg-ink text-white' : 'hover:bg-white'}`}>
         {icon} {label}
       </Link>
     );
   };
   return (
-    <nav className="flex flex-col gap-0.5">
+    <nav className="-mx-3 flex gap-0.5 overflow-x-auto px-3 md:mx-0 md:flex-col md:overflow-visible md:px-0">
       {item('/admin', <House />, 'Tổng quan', true)}
       {!IS_VERCEL && item('/admin/monitoring', <TrendingUp />, 'Giám sát máy chủ')}
-      <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Nội dung game</div>
+      <div className="mt-2 hidden px-2 text-[11px] font-extrabold uppercase opacity-50 md:block">Nội dung game</div>
       {item('/models', <HardHat />, 'Nhân vật & mô hình')}
       {COLLECTIONS.filter((c) => c !== 'units').map((c) => item(`/admin/c/${c}`, <NamedIcon name={COLLECTION_SPECS[c].icon} />, COLLECTION_SPECS[c].label))}
       {item('/admin/settings', <Settings />, 'Cài đặt & khắc chế')}
@@ -36,10 +36,10 @@ export function AdminNav() {
       {item('/admin/unit-requests', <Users />, 'Yêu cầu lính mới')}
       {item('/admin/topups', <CreditCard />, 'Nạp xu')}
       {!IS_VERCEL && item('/admin/ranked', <Trophy />, 'Xếp hạng & gian lận')}
-      <div className="mt-2 px-2 text-[11px] font-extrabold uppercase opacity-50">Khác</div>
+      <div className="mt-2 hidden px-2 text-[11px] font-extrabold uppercase opacity-50 md:block">Khác</div>
       {item('/play?mode=bot', <Swords />, 'Mở game')}
       <button
-        className="mt-2 rounded-lg px-2 py-1.5 text-left text-sm font-bold hover:bg-white"
+        className="shrink-0 whitespace-nowrap rounded-lg px-2 py-1.5 text-left text-sm font-bold hover:bg-white md:mt-2"
         onClick={async () => {
           await signOut();
           router.push('/admin/login');

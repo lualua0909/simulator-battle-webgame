@@ -75,7 +75,7 @@ export default function Collection({ bundle, thumbs, selectedId, onSelect: setSe
           <button className="btn order-2 shrink-0 px-2.5 py-1 text-xl" onClick={onClose} aria-label={t('common.close')}>
             <X />
           </button>
-          <div className="order-3 flex max-w-full basis-full flex-nowrap gap-1 overflow-x-auto pb-1 md:order-none md:basis-auto md:flex-1 md:flex-wrap md:overflow-visible md:pb-0">
+          <div className="order-3 flex max-w-full basis-full flex-nowrap gap-1 overflow-x-auto pb-1 md:order-none md:min-w-0 md:basis-0 md:flex-1 md:flex-wrap md:overflow-visible md:pb-0">
             {[{ id: 'all', name: t('collection.all'), icon: '', color: '' }, ...factions].map((f) => (
               <button key={f.id} className={`shrink-0 rounded-full border-2 border-[#16181b] px-3 py-0.5 ${tab === f.id ? 'bg-gold' : 'bg-white/85'}`} onClick={() => { setTab(f.id); setSelectedId(null); }}>
                 {f.id === 'all' ? f.name : factionName(f.id, f.name)}
@@ -118,14 +118,18 @@ export default function Collection({ bundle, thumbs, selectedId, onSelect: setSe
               className="panel glass-popup unit-detail-sheet sheet-in pointer-events-auto relative mx-0 flex min-h-0 w-full max-w-full max-h-[85vh] flex-col overflow-hidden rounded-b-none p-4 pt-2"
               style={{ maxHeight: '85dvh' }}
             >
-              <div className="relative flex shrink-0 items-center justify-center pb-2">
-                <span className="h-1.5 w-12 rounded-full bg-ink/20" />
+              {/* Tall enough for the close button, so the card below never slides over it. */}
+              <div className="relative z-10 flex min-h-[48px] shrink-0 items-start justify-center pb-2">
+                <span className="mt-1 h-1.5 w-12 rounded-full bg-ink/20" />
                 <button className="btn absolute right-0 top-0 px-2.5 py-1 text-xl" onClick={() => setSelectedId(null)} aria-label={t('common.close')}>
                   <X />
                 </button>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
-                <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} />
+                {/* Capped by the viewport height too: in landscape a full-width card was taller than the sheet. */}
+                <div className="mx-auto w-full max-w-[min(24rem,60dvh)]">
+                  <UnitDetail key={selected.id} bundle={bundle} unit={selected} thumb={thumbs[selected.id]} />
+                </div>
               </div>
             </div>
           </div>
